@@ -61,6 +61,7 @@ set(SRCS
     Renderer/RenderHealth.c
     Renderer/RenderMob.c
     Renderer/RenderPetal.c
+    Renderer/RenderPortal.c
     Renderer/RenderWeb.c
     Storage.c
     System/DeletionAnimation.c
@@ -116,6 +117,7 @@ set(SRCS
     ../Shared/Component/Petal.c
     ../Shared/Component/Physical.c
     ../Shared/Component/PlayerInfo.c
+    ../Shared/Component/Portal.c
     ../Shared/Component/Relations.c
     ../Shared/Component/Web.c
     ../Shared/Bitset.c

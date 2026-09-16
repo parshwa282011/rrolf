@@ -29,9 +29,8 @@
 #include <Shared/Component/PlayerInfo.h>
 #include <Shared/Crypto.h>
 #include <Shared/Entity.h>
+#include <Shared/Utilities.h>
 #include <Shared/pb.h>
-
-double CRAFT_XP_GAINS[rr_rarity_id_max - 1] = {1, 8, 60, 750, 25000, 1000000};
 
 void rr_server_client_init(struct rr_server_client *this)
 {
@@ -40,6 +39,7 @@ void rr_server_client_init(struct rr_server_client *this)
     this->serverbound_encryption_key = rr_get_rand();
     this->requested_verification = rr_get_rand();
     this->speed_percent = 1;
+    this->rotation_percent = 1;
 }
 
 void rr_server_client_create_flower(struct rr_server_client *this)
@@ -51,17 +51,31 @@ void rr_server_client_create_flower(struct rr_server_client *this)
     struct rr_simulation *simulation = &this->server->simulation;
     EntityIdx p =
         rr_simulation_alloc_player(simulation, 1, this->player_info->parent_id);
-    uint32_t spawn_zone =
-        this->player_info->level / 25 > 3 ? 3 : this->player_info->level / 25;
     struct rr_component_physical *physical =
         rr_simulation_get_physical(simulation, p);
     struct rr_maze_declaration *decl = &RR_MAZES[RR_GLOBAL_BIOME];
-    rr_component_physical_set_x(
-        physical,
-        2 * decl->grid_size * (decl->spawn_zones[spawn_zone].x + rr_frand()));
-    rr_component_physical_set_y(
-        physical,
-        2 * decl->grid_size * (decl->spawn_zones[spawn_zone].y + rr_frand()));
+    if (decl->checkpoint_count > 0)
+    {
+        struct rr_checkpoint *checkpoint = &decl->checkpoints[this->checkpoint];
+        rr_component_physical_set_x(
+            physical,
+            2 * decl->grid_size * (checkpoint->spawn_x + rr_frand()));
+        rr_component_physical_set_y(
+            physical,
+            2 * decl->grid_size * (checkpoint->spawn_y + rr_frand()));
+    }
+    else
+    {
+        uint32_t spawn_zone = this->player_info->level / 25 > 3
+                                  ? 3
+                                  : this->player_info->level / 25;
+        rr_component_physical_set_x(
+            physical, 2 * decl->grid_size *
+                          (decl->spawn_zones[spawn_zone].x + rr_frand()));
+        rr_component_physical_set_y(
+            physical, 2 * decl->grid_size *
+                          (decl->spawn_zones[spawn_zone].y + rr_frand()));
+    }
     struct rr_binary_encoder encoder;
     rr_binary_encoder_init(&encoder, outgoing_message);
     rr_binary_encoder_write_uint8(&encoder, 3);
@@ -202,6 +216,9 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     if (strcmp(uuid, this->rivet_account.uuid))
         return 0;
     this->experience = rr_binary_encoder_read_float64(encoder);
+    this->checkpoint = rr_binary_encoder_read_uint8(encoder);
+    if (this->checkpoint >= RR_MAZES[RR_GLOBAL_BIOME].checkpoint_count)
+        this->checkpoint = 0;
     uint8_t id = rr_binary_encoder_read_uint8(encoder);
     while (id)
     {
@@ -230,6 +247,7 @@ void rr_server_client_write_to_api(struct rr_server_client *this)
     rr_binary_encoder_write_uint8(&encoder, 2);
     rr_binary_encoder_write_nt_string(&encoder, this->rivet_account.uuid);
     rr_binary_encoder_write_float64(&encoder, this->experience);
+    rr_binary_encoder_write_uint8(&encoder, this->checkpoint);
     for (uint8_t id = 1; id < rr_petal_id_max; ++id)
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
         {

@@ -41,6 +41,9 @@ enum rr_serverbound_packet_header
 
     // cheats
     rr_serverbound_dev_summon,
+    rr_serverbound_dev_give_petal,
+    rr_serverbound_dev_set_slot_count,
+    rr_serverbound_dev_summon_portal,
 };
 
 enum rr_clientbound_packet_header
@@ -51,15 +54,19 @@ enum rr_clientbound_packet_header
     rr_clientbound_squad_fail,
     rr_clientbound_squad_leave,
     rr_clientbound_account_result,
-    rr_clientbound_craft_result
+    rr_clientbound_craft_result,
+    rr_clientbound_redirect
 };
 
 #define RR_SLOT_COUNT_FROM_LEVEL(level) (level < 100 ? 5 + (level) / 20 : 10)
 #define RR_PLAYER_SPEED (4.0f)
+// portal radius at common rarity; scaled per-rarity via RR_MOB_RARITY_SCALING
+#define RR_PORTAL_BASE_RADIUS (80.0f)
 
 enum rr_biome_id
 {
-    rr_biome_id_hell_creek,
+    rr_biome_id_hell_creek_easy,
+    rr_biome_id_hell_creek_med,
     rr_biome_id_garden,
     rr_biome_id_beehive,
     rr_biome_id_max
@@ -75,6 +82,16 @@ enum rr_rarity_id
     rr_rarity_id_mythic,
     rr_rarity_id_exotic,
     rr_rarity_id_ultimate,
+    rr_rarity_id_divine,
+    rr_rarity_id_celestial,
+    rr_rarity_id_primal,
+    rr_rarity_id_ancient,
+    rr_rarity_id_arcane,
+    rr_rarity_id_radiant,
+    rr_rarity_id_astral,
+    rr_rarity_id_ethereal,
+    rr_rarity_id_eternal,
+    rr_rarity_id_cosmic,
     rr_rarity_id_max
 };
 
@@ -196,11 +213,12 @@ extern char const *RR_MOB_NAMES[rr_mob_id_max];
 extern struct rr_mob_rarity_scale RR_MOB_RARITY_SCALING[rr_rarity_id_max];
 extern struct rr_petal_rarity_scale RR_PETAL_RARITY_SCALE[rr_rarity_id_max];
 extern double RR_MOB_LOOT_RARITY_COEFFICIENTS[rr_rarity_id_max];
-extern double RR_DROP_RARITY_COEFFICIENTS[rr_rarity_id_exotic + 2];
+extern double RR_DROP_RARITY_COEFFICIENTS[rr_rarity_id_max];
 extern double RR_MOB_WAVE_RARITY_COEFFICIENTS[rr_rarity_id_max + 1];
 
 extern uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max];
-extern double RR_HELL_CREEK_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max];
+extern double RR_HELL_CREEK_EASY_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max];
+extern double RR_HELL_CREEK_MED_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max];
 extern double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max];
 
 extern uint32_t RR_RARITY_COLORS[rr_rarity_id_max];
@@ -210,14 +228,23 @@ struct rr_maze_grid
 {
 #ifdef RR_SERVER
     uint8_t (*spawn_function)();
-    float difficulty;
     uint32_t spawn_timer;
     uint32_t player_count;
-    uint32_t grid_points;
+    // recomputed from scratch every tick (see despawn_mob in
+    // Server/Simulation.c) from mobs currently within FOV of this cell, so
+    // a mob that wandered off-screen stops counting against the cap here
+    // instead of holding it down until it despawns
+    uint32_t live_points;
     float local_difficulty;
     float overload_factor;
+    // tick id (see Server/Simulation.c's current_maze_tick) this cell's
+    // player_count/local_difficulty/live_points were last reset and touched
+    // on - lets tick_maze() lazily "clear" only cells it actually visits
+    // instead of sweeping the whole maze every tick
+    uint32_t touch_tick;
 #endif
     uint8_t value;
+    float difficulty;
 };
 
 struct rr_spawn_zone
@@ -226,20 +253,40 @@ struct rr_spawn_zone
     float y;
 };
 
+// a discoverable respawn waypoint (cloned from rysteria,
+// github.com/maxnest0x0/rysteria): walking into the (x, y, w, h) box (in
+// half-resolution template coordinates, like rr_spawn_zone) while at or
+// above min_level moves the player's respawn point to (spawn_x, spawn_y).
+// only used by biomes with checkpoint_count > 0 - see
+// Server/System/Checkpoints.c; others keep using spawn_zones above.
+struct rr_checkpoint
+{
+    uint32_t x;
+    uint32_t y;
+    uint32_t w;
+    uint32_t h;
+    uint32_t spawn_x;
+    uint32_t spawn_y;
+    uint32_t min_level;
+};
+
 struct rr_maze_declaration
 {
     uint32_t maze_dim;
     float grid_size;
     struct rr_maze_grid *maze;
     struct rr_spawn_zone spawn_zones[4];
+    uint8_t checkpoint_count;
+    struct rr_checkpoint checkpoints[9];
 };
 
 #define RR_DECLARE_MAZE(name, size)                                            \
     extern uint8_t RR_MAZE_TEMPLATE_##name[size / 2][size / 2];                \
     extern struct rr_maze_grid RR_MAZE_##name[size][size];
 
-// RR_DECLARE_MAZE(HELL_CREEK, 54)
-RR_DECLARE_MAZE(HELL_CREEK, 80)
+// RR_DECLARE_MAZE(HELL_CREEK_EASY, 54)
+RR_DECLARE_MAZE(HELL_CREEK_EASY, 80)
+RR_DECLARE_MAZE(HELL_CREEK_MED, 240)
 RR_DECLARE_MAZE(BURROW, 4)
 
 extern struct rr_maze_declaration RR_MAZES[rr_biome_id_max];
@@ -248,6 +295,10 @@ extern uint8_t RR_GLOBAL_BIOME;
 
 extern double RR_BASE_CRAFT_CHANCES[rr_rarity_id_max - 1];
 extern double RR_CRAFT_CHANCES[rr_rarity_id_max - 1];
+// xp granted per craft attempt made *from* a given rarity (indexed by the
+// source rarity being crafted up from); used by both the server (actually
+// grants it) and the client (Crafting.c, to display it).
+extern double CRAFT_XP_GAINS[rr_rarity_id_max - 1];
 
 void rr_static_data_init();
 

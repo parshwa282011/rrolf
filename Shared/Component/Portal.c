@@ -1,0 +1,75 @@
+// Copyright (C) 2024  Paul Johnson
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#include <Shared/Component/Portal.h>
+
+#include <stdio.h>
+#include <string.h>
+
+#include <Shared/Entity.h>
+#include <Shared/SimulationCommon.h>
+#include <Shared/pb.h>
+
+#define FOR_EACH_PUBLIC_FIELD X(rarity, uint8)
+
+enum
+{
+    state_flags_rarity = 0b01,
+    state_flags_target_dimension = 0b10,
+    state_flags_all = 0b11
+};
+
+void rr_component_portal_init(struct rr_component_portal *this,
+                              struct rr_simulation *simulation)
+{
+    memset(this, 0, sizeof *this);
+}
+
+void rr_component_portal_free(struct rr_component_portal *this,
+                              struct rr_simulation *simulation)
+{
+}
+
+#ifdef RR_SERVER
+void rr_component_portal_write(struct rr_component_portal *this,
+                               struct proto_bug *encoder, int is_creation,
+                               struct rr_component_player_info *client)
+{
+    uint64_t state = this->protocol_state | (state_flags_all * is_creation);
+    proto_bug_write_varuint(encoder, state, "portal component state");
+#define X(NAME, TYPE) RR_ENCODE_PUBLIC_FIELD(NAME, TYPE);
+    FOR_EACH_PUBLIC_FIELD
+#undef X
+    if (state & state_flags_target_dimension)
+        proto_bug_write_string(encoder, this->target_dimension, 24,
+                               "target dimension");
+}
+
+RR_DEFINE_PUBLIC_FIELD(portal, uint8_t, rarity)
+#endif
+
+#ifdef RR_CLIENT
+void rr_component_portal_read(struct rr_component_portal *this,
+                              struct proto_bug *encoder)
+{
+    uint64_t state = proto_bug_read_varuint(encoder, "portal component state");
+#define X(NAME, TYPE) RR_DECODE_PUBLIC_FIELD(NAME, TYPE);
+    FOR_EACH_PUBLIC_FIELD
+#undef X
+    if (state & state_flags_target_dimension)
+        proto_bug_read_string(encoder, this->target_dimension, 24,
+                              "target dimension");
+}
+#endif

@@ -132,29 +132,362 @@ struct rr_ui_element *rr_ui_dev_panel_toggle_button_init()
     return this;
 }
 
-static void summon_edmonto(struct rr_ui_element *this, struct rr_game *game)
+// ---- mob summoning ----
+
+static void summon_mob_id_dec(struct rr_ui_element *this, struct rr_game *game)
 {
     if (!(game->input_data->mouse_buttons_up_this_tick & 1))
         return;
-    puts("edmonto summon");
+    game->developer_cheats.summon_mob_id =
+        (game->developer_cheats.summon_mob_id + rr_mob_id_max - 1) %
+        rr_mob_id_max;
+}
+
+static void summon_mob_id_inc(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.summon_mob_id =
+        (game->developer_cheats.summon_mob_id + 1) % rr_mob_id_max;
+}
+
+static void summon_mob_id_text(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Mob: %s",
+            RR_MOB_NAMES[game->developer_cheats.summon_mob_id]);
+}
+
+static void summon_rarity_dec(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.summon_rarity =
+        (game->developer_cheats.summon_rarity + rr_rarity_id_max - 1) %
+        rr_rarity_id_max;
+}
+
+static void summon_rarity_inc(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.summon_rarity =
+        (game->developer_cheats.summon_rarity + 1) % rr_rarity_id_max;
+}
+
+static void summon_rarity_text(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Rarity: %s",
+            RR_RARITY_NAMES[game->developer_cheats.summon_rarity]);
+}
+
+static void summon_mob(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
     struct proto_bug encoder;
     proto_bug_init(&encoder, RR_OUTGOING_PACKET);
     proto_bug_write_uint8(&encoder, rr_serverbound_dev_summon, "header");
-    proto_bug_write_uint8(&encoder, rand() % rr_mob_id_ant, "id");
-    proto_bug_write_uint8(&encoder, rr_rarity_id_ultimate, "rarity");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.summon_mob_id, "id");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.summon_rarity,
+                          "rarity");
 
     rr_websocket_send(&game->socket, encoder.current - encoder.start);
 }
 
-static struct rr_ui_element *summon_mob_button_init()
+static struct rr_ui_element *summon_mob_row_init(struct rr_game *game)
 {
-    struct rr_ui_element *element = rr_ui_labeled_button_init("Summon", 20, 0);
-    element->fill = 0x80ffffff;
-    element->on_event = summon_edmonto;
-    element->animate = rr_ui_default_animate;
+    game->developer_cheats.summon_rarity = rr_rarity_id_ultimate;
 
-    return element;
+    struct rr_ui_element *id_dec = rr_ui_labeled_button_init("-", 20, 0);
+    id_dec->on_event = summon_mob_id_dec;
+    struct rr_ui_element *id_inc = rr_ui_labeled_button_init("+", 20, 0);
+    id_inc->on_event = summon_mob_id_inc;
+    struct rr_ui_element *rarity_dec = rr_ui_labeled_button_init("-", 20, 0);
+    rarity_dec->on_event = summon_rarity_dec;
+    struct rr_ui_element *rarity_inc = rr_ui_labeled_button_init("+", 20, 0);
+    rarity_inc->on_event = summon_rarity_inc;
+    struct rr_ui_element *summon_button =
+        rr_ui_labeled_button_init("Summon", 20, 0);
+    summon_button->fill = 0x80ffffff;
+    summon_button->on_event = summon_mob;
+
+    return rr_ui_set_justify(
+        rr_ui_h_container_init(
+            rr_ui_container_init(), 0, 6, id_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, summon_mob_id_text),
+            id_inc, rarity_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, summon_rarity_text),
+            rarity_inc, summon_button, NULL),
+        -1, -1);
 }
+
+// ---- portal summoning ----
+
+static void summon_portal_rarity_dec(struct rr_ui_element *this,
+                                     struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.summon_portal_rarity =
+        (game->developer_cheats.summon_portal_rarity + rr_rarity_id_max - 1) %
+        rr_rarity_id_max;
+}
+
+static void summon_portal_rarity_inc(struct rr_ui_element *this,
+                                     struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.summon_portal_rarity =
+        (game->developer_cheats.summon_portal_rarity + 1) % rr_rarity_id_max;
+}
+
+static void summon_portal_rarity_text(struct rr_ui_element *this,
+                                      struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Rarity: %s",
+            RR_RARITY_NAMES[game->developer_cheats.summon_portal_rarity]);
+}
+
+static void summon_portal(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(&encoder, rr_serverbound_dev_summon_portal,
+                          "header");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.summon_portal_rarity,
+                          "rarity");
+    proto_bug_write_string(&encoder, game->developer_cheats.summon_portal_dimension,
+                           24, "target dimension");
+    proto_bug_write_string(&encoder, game->developer_cheats.summon_portal_url,
+                           64, "target server url");
+
+    rr_websocket_send(&game->socket, encoder.current - encoder.start);
+}
+
+static struct rr_ui_element *summon_portal_row_init(struct rr_game *game)
+{
+    game->developer_cheats.summon_portal_rarity = rr_rarity_id_common;
+    strcpy(game->developer_cheats.summon_portal_dimension, "Hell Creek Med");
+    strcpy(game->developer_cheats.summon_portal_url, "ws://127.0.0.1:6768");
+
+    struct rr_ui_element *dimension_input = rr_ui_text_input_init(
+        140, 24, &game->developer_cheats.summon_portal_dimension[0], 24,
+        "_0x4348");
+    struct rr_ui_element *url_input = rr_ui_text_input_init(
+        170, 24, &game->developer_cheats.summon_portal_url[0], 64, "_0x4349");
+    struct rr_ui_element *rarity_dec = rr_ui_labeled_button_init("-", 20, 0);
+    rarity_dec->on_event = summon_portal_rarity_dec;
+    struct rr_ui_element *rarity_inc = rr_ui_labeled_button_init("+", 20, 0);
+    rarity_inc->on_event = summon_portal_rarity_inc;
+    struct rr_ui_element *summon_button =
+        rr_ui_labeled_button_init("Summon", 20, 0);
+    summon_button->fill = 0x80ffffff;
+    summon_button->on_event = summon_portal;
+
+    return rr_ui_set_justify(
+        rr_ui_h_container_init(
+            rr_ui_container_init(), 0, 6,
+            rr_ui_text_init("Portal:", 16, 0xffffffff), dimension_input,
+            url_input, rarity_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, summon_portal_rarity_text),
+            rarity_inc, summon_button, NULL),
+        -1, -1);
+}
+
+// ---- petal granting ----
+
+static void give_petal_id_dec(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    uint8_t id = game->developer_cheats.give_petal_id;
+    game->developer_cheats.give_petal_id = id <= 1 ? rr_petal_id_max - 1 : id - 1;
+}
+
+static void give_petal_id_inc(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    uint8_t id = game->developer_cheats.give_petal_id;
+    game->developer_cheats.give_petal_id = id >= rr_petal_id_max - 1 ? 1 : id + 1;
+}
+
+static void give_petal_id_text(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Petal: %s",
+            RR_PETAL_NAMES[game->developer_cheats.give_petal_id]);
+}
+
+static void give_petal_rarity_dec(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.give_petal_rarity =
+        (game->developer_cheats.give_petal_rarity + rr_rarity_id_max - 1) %
+        rr_rarity_id_max;
+}
+
+static void give_petal_rarity_inc(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.give_petal_rarity =
+        (game->developer_cheats.give_petal_rarity + 1) % rr_rarity_id_max;
+}
+
+static void give_petal_rarity_text(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Rarity: %s",
+            RR_RARITY_NAMES[game->developer_cheats.give_petal_rarity]);
+}
+
+static void give_petal_count_dec(struct rr_ui_element *this,
+                                 struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    uint32_t count = game->developer_cheats.give_petal_count;
+    game->developer_cheats.give_petal_count = count > 10 ? count - 10 : 1;
+}
+
+static void give_petal_count_inc(struct rr_ui_element *this,
+                                 struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    game->developer_cheats.give_petal_count += 10;
+}
+
+static void give_petal_count_text(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Count: %u",
+            game->developer_cheats.give_petal_count);
+}
+
+static void give_petal(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(&encoder, rr_serverbound_dev_give_petal, "header");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.give_petal_id, "id");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.give_petal_rarity,
+                          "rarity");
+    proto_bug_write_varuint(&encoder, game->developer_cheats.give_petal_count,
+                            "count");
+
+    rr_websocket_send(&game->socket, encoder.current - encoder.start);
+}
+
+static struct rr_ui_element *give_petal_row_init(struct rr_game *game)
+{
+    game->developer_cheats.give_petal_id = rr_petal_id_basic;
+    game->developer_cheats.give_petal_rarity = rr_rarity_id_ultimate;
+    game->developer_cheats.give_petal_count = 10;
+
+    struct rr_ui_element *id_dec = rr_ui_labeled_button_init("-", 20, 0);
+    id_dec->on_event = give_petal_id_dec;
+    struct rr_ui_element *id_inc = rr_ui_labeled_button_init("+", 20, 0);
+    id_inc->on_event = give_petal_id_inc;
+    struct rr_ui_element *rarity_dec = rr_ui_labeled_button_init("-", 20, 0);
+    rarity_dec->on_event = give_petal_rarity_dec;
+    struct rr_ui_element *rarity_inc = rr_ui_labeled_button_init("+", 20, 0);
+    rarity_inc->on_event = give_petal_rarity_inc;
+    struct rr_ui_element *count_dec = rr_ui_labeled_button_init("-", 20, 0);
+    count_dec->on_event = give_petal_count_dec;
+    struct rr_ui_element *count_inc = rr_ui_labeled_button_init("+", 20, 0);
+    count_inc->on_event = give_petal_count_inc;
+    struct rr_ui_element *give_button =
+        rr_ui_labeled_button_init("Give Petal", 20, 0);
+    give_button->fill = 0x80ffffff;
+    give_button->on_event = give_petal;
+
+    return rr_ui_set_justify(
+        rr_ui_h_container_init(
+            rr_ui_container_init(), 0, 6, id_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, give_petal_id_text),
+            id_inc, rarity_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, give_petal_rarity_text),
+            rarity_inc, count_dec,
+            rr_ui_dynamic_text_init(16, 0xffffffff, give_petal_count_text),
+            count_inc, give_button, NULL),
+        -1, -1);
+}
+
+// ---- slot count ----
+
+static void slot_count_dec(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    if (game->developer_cheats.slot_count > 1)
+        --game->developer_cheats.slot_count;
+}
+
+static void slot_count_inc(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    if (game->developer_cheats.slot_count < 10)
+        ++game->developer_cheats.slot_count;
+}
+
+static void slot_count_text(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_dynamic_text_metadata *data = this->data;
+    snprintf(data->text, 32, "Slots: %u", game->developer_cheats.slot_count);
+}
+
+static void apply_slot_count(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (!(game->input_data->mouse_buttons_up_this_tick & 1))
+        return;
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(&encoder, rr_serverbound_dev_set_slot_count,
+                          "header");
+    proto_bug_write_uint8(&encoder, game->developer_cheats.slot_count,
+                          "count");
+
+    rr_websocket_send(&game->socket, encoder.current - encoder.start);
+}
+
+static struct rr_ui_element *slot_count_row_init(struct rr_game *game)
+{
+    game->developer_cheats.slot_count = 10;
+
+    struct rr_ui_element *dec = rr_ui_labeled_button_init("-", 20, 0);
+    dec->on_event = slot_count_dec;
+    struct rr_ui_element *inc = rr_ui_labeled_button_init("+", 20, 0);
+    inc->on_event = slot_count_inc;
+    struct rr_ui_element *apply_button =
+        rr_ui_labeled_button_init("Set Slots", 20, 0);
+    apply_button->fill = 0x80ffffff;
+    apply_button->on_event = apply_slot_count;
+
+    return rr_ui_set_justify(
+        rr_ui_h_container_init(rr_ui_container_init(), 0, 6, dec,
+                               rr_ui_dynamic_text_init(16, 0xffffffff,
+                                                       slot_count_text),
+                               inc, apply_button, NULL),
+        -1, -1);
+}
+
+// ---- misc sliders ----
 
 static struct rr_ui_element *speed_slider_init(struct rr_game *game)
 {
@@ -165,14 +498,31 @@ static struct rr_ui_element *speed_slider_init(struct rr_game *game)
     return element;
 }
 
+static struct rr_ui_element *rotation_slider_init(struct rr_game *game)
+{
+    struct rr_ui_element *element = rr_ui_h_slider_init(
+        100, 20, &game->developer_cheats.rotation_percent, 1);
+    game->developer_cheats.rotation_percent = 0.05;
+
+    return element;
+}
+
 struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
 {
     struct rr_ui_element *inner = rr_ui_v_container_init(
-        rr_ui_container_init(), 10, 10, summon_mob_button_init(),
+        rr_ui_container_init(), 10, 10, summon_mob_row_init(game),
+        summon_portal_row_init(game),
+        give_petal_row_init(game), slot_count_row_init(game),
         rr_ui_set_justify(
             rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                                    rr_ui_text_init("Speed:", 20, 0xffffffff),
                                    speed_slider_init(game), NULL),
+            -1, -1),
+        rr_ui_set_justify(
+            rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
+                                   rr_ui_text_init("Rotation:", 20,
+                                                   0xffffffff),
+                                   rotation_slider_init(game), NULL),
             -1, -1),
         NULL);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)

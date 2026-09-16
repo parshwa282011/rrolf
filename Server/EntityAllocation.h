@@ -25,3 +25,6 @@ EntityIdx rr_simulation_alloc_mob(struct rr_simulation *, EntityIdx, float,
                                   enum rr_simulation_team_id);
 EntityIdx rr_simulation_alloc_player(struct rr_simulation *, EntityIdx,
                                      EntityIdx);
+EntityIdx rr_simulation_alloc_portal(struct rr_simulation *, EntityIdx, float,
+                                     float, uint8_t, char const *,
+                                     char const *);

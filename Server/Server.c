@@ -44,6 +44,24 @@
 uint8_t lws_message_data[MESSAGE_BUFFER_SIZE];
 uint8_t *outgoing_message = lws_message_data + LWS_PRE;
 
+// hell_creek_med is a higher-difficulty server; only let leveled-up players in
+#define RR_HELL_CREEK_MED_MIN_LEVEL 150
+
+// rivet account uuids that are granted dev status on connect.
+// add more uuids here to promote additional accounts.
+static const char *const RR_DEV_UUIDS[] = {
+    "b5f62776-ef1c-472d-8ccd-b329edee545b",
+};
+#define RR_DEV_UUID_COUNT (sizeof(RR_DEV_UUIDS) / sizeof(*RR_DEV_UUIDS))
+
+static int rr_uuid_is_dev(char const *uuid)
+{
+    for (uint32_t i = 0; i < RR_DEV_UUID_COUNT; ++i)
+        if (strcmp(uuid, RR_DEV_UUIDS[i]) == 0)
+            return 1;
+    return 0;
+}
+
 struct connected_captures
 {
     char *token;
@@ -79,6 +97,7 @@ static void rr_server_client_create_player_info(struct rr_server *server,
         rr_simulation_add_player_info(
             &server->simulation,
             rr_simulation_alloc_entity(&server->simulation));
+    player_info->client = client;
     player_info->squad = client->squad;
     struct rr_squad_member *member = player_info->squad_member =
         rr_squad_get_client_slot(server, client);
@@ -421,7 +440,8 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 }
             }
 #endif
-            if (proto_bug_read_varuint(&encoder, "dev_flag") == 49453864343)
+            proto_bug_read_varuint(&encoder, "dev_flag"); // legacy field, no longer trusted
+            if (rr_uuid_is_dev(client->rivet_account.uuid))
                 client->dev = 1;
 
 #ifdef RIVET_BUILD
@@ -457,8 +477,12 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             if (client->player_info->flower_id == RR_NULL_ENTITY)
                 break;
             if (client->dev)
+            {
                 client->speed_percent =
                     20 * proto_bug_read_float32(&encoder, "speed_percent");
+                client->rotation_percent =
+                    20 * proto_bug_read_float32(&encoder, "rotation_percent");
+            }
             uint8_t movementFlags =
                 proto_bug_read_uint8(&encoder, "movement kb flags");
             float x = 0;
@@ -797,14 +821,14 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
         }
         case rr_serverbound_dev_summon:
         {
-            puts("edmonto requested");
             if (!client->dev)
                 break;
-
-            puts("edmonto has been summoned by the gods");
-
             uint8_t id = proto_bug_read_uint8(&encoder, "id");
             uint8_t rarity = proto_bug_read_uint8(&encoder, "rarity");
+            if (client->player_info == NULL)
+                break;
+            if (id >= rr_mob_id_max || rarity >= rr_rarity_id_max)
+                break;
 
             EntityIdx e = rr_simulation_alloc_mob(
                 &this->simulation, client->player_info->arena,
@@ -813,6 +837,57 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             struct rr_component_mob *mob =
                 rr_simulation_get_mob(&this->simulation, e);
             mob->no_drop = 1;
+            break;
+        }
+        case rr_serverbound_dev_give_petal:
+        {
+            if (!client->dev)
+                break;
+            uint8_t id = proto_bug_read_uint8(&encoder, "id");
+            uint8_t rarity = proto_bug_read_uint8(&encoder, "rarity");
+            uint32_t count = proto_bug_read_varuint(&encoder, "count");
+            if (id == 0 || id >= rr_petal_id_max || rarity >= rr_rarity_id_max)
+                break;
+            client->inventory[id][rarity] += count;
+            rr_server_client_write_to_api(client);
+            rr_server_client_write_account(client);
+            break;
+        }
+        case rr_serverbound_dev_set_slot_count:
+        {
+            if (!client->dev)
+                break;
+            uint8_t count = proto_bug_read_uint8(&encoder, "slot count");
+            if (client->player_info == NULL)
+                break;
+            if (count < 1)
+                count = 1;
+            if (count > 10)
+                count = 10;
+            rr_component_player_info_set_slot_count(client->player_info,
+                                                     count);
+            break;
+        }
+        case rr_serverbound_dev_summon_portal:
+        {
+            if (!client->dev)
+                break;
+            uint8_t rarity = proto_bug_read_uint8(&encoder, "rarity");
+            char target_dimension[24];
+            char target_server_url[64];
+            proto_bug_read_string(&encoder, target_dimension,
+                                  sizeof target_dimension, "target dimension");
+            proto_bug_read_string(&encoder, target_server_url,
+                                  sizeof target_server_url,
+                                  "target server url");
+            if (client->player_info == NULL)
+                break;
+            if (rarity >= rr_rarity_id_max)
+                break;
+            rr_simulation_alloc_portal(
+                &this->simulation, client->player_info->arena,
+                client->player_info->camera_x, client->player_info->camera_y,
+                rarity, target_dimension, target_server_url);
             break;
         }
         default:
@@ -884,6 +959,14 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
             if (!rr_server_client_read_from_api(client, &decoder))
             {
                 printf("<rr_server::account_failed_read::%s>\n",
+                       client->rivet_account.uuid);
+                client->pending_kick = 1;
+                break;
+            }
+            if (RR_GLOBAL_BIOME == rr_biome_id_hell_creek_med &&
+                level_from_xp(client->experience) < RR_HELL_CREEK_MED_MIN_LEVEL)
+            {
+                printf("<rr_server::level_too_low_for_biome::%s>\n",
                        client->rivet_account.uuid);
                 client->pending_kick = 1;
                 break;
@@ -1075,7 +1158,11 @@ void rr_server_run(struct rr_server *this)
                                       MESSAGE_BUFFER_SIZE, 0, NULL, 0},
                                      {0}};
 
-        info.port = 1234;
+        int port = 6767;
+        char const *port_env = getenv("RR_PORT");
+        if (port_env)
+            port = atoi(port_env);
+        info.port = port;
         info.user = this;
         info.pt_serv_buf_size = MESSAGE_BUFFER_SIZE;
 

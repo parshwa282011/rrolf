@@ -27,46 +27,105 @@
 
 struct rr_renderer minimap;
 
-static uint8_t previous_biome = 255;
+// by default the minimap only shows an RR_MINIMAP_WINDOW_DIM x
+// RR_MINIMAP_WINDOW_DIM window of maze cells centered on the player -
+// cheap enough to redraw whenever that window shifts. hovering the
+// minimap instead shows the whole maze (see minimap_on_render). drawing
+// the whole maze (up to maze_dim^2 canvas calls) in a single frame is
+// what used to freeze the client for a moment on the med map (240x240 =
+// 9x the cells of the old 80x80 map) the instant a player's biome
+// resolved, so whichever view is active fills in over a bounded number
+// of rows per frame rather than blocking one.
+#define RR_MINIMAP_WINDOW_DIM 80
+#define RR_MINIMAP_CELLS_PER_FRAME (6400)
 
-#define DRAW_MINIMAP(renderer, grid)                                           \
-    if (arena->biome != previous_biome)                                        \
-    {                                                                          \
-        previous_biome = arena->biome;                                         \
-        float s = floorf(this->abs_width / maze_dim);                          \
-        rr_renderer_set_dimensions(renderer, s *maze_dim, s *maze_dim);        \
-        rr_renderer_set_fill(renderer, 0xffffffff);                            \
-        for (uint32_t x = 0; x < maze_dim; ++x)                                \
-            for (uint32_t y = 0; y < maze_dim; ++y)                            \
-            {                                                                  \
-                uint8_t at = grid[y * maze_dim + x].value;                     \
-                if (at == 1)                                                   \
-                {                                                              \
-                    rr_renderer_begin_path(renderer);                          \
-                    rr_renderer_fill_rect(renderer, x *s, y *s, s, s);         \
-                }                                                              \
-                else if (at != 0)                                              \
-                {                                                              \
-                    uint8_t left = (at >> 1) & 1;                              \
-                    uint8_t top = at & 1;                                      \
-                    uint8_t inverse = (at >> 3) & 1;                           \
-                    rr_renderer_begin_path(renderer);                          \
-                    rr_renderer_move_to(renderer, (x + inverse ^ left) * s,    \
-                                        (y + inverse ^ top) * s);              \
-                    float start_angle = 0;                                     \
-                    if (top == 0 && left == 1)                                 \
-                        start_angle = M_PI / 2;                                \
-                    else if (top == 1 && left == 1)                            \
-                        start_angle = M_PI;                                    \
-                    else if (top == 1 && left == 0)                            \
-                        start_angle = M_PI * 3 / 2;                            \
-                    rr_renderer_partial_arc(renderer, (x + left) * s,          \
-                                            (y + top) * s, s, start_angle,     \
-                                            start_angle + M_PI / 2, 0);        \
-                    rr_renderer_fill(renderer);                                \
-                }                                                              \
-            }                                                                  \
+static uint8_t previous_biome = 255;
+static int32_t minimap_draw_row = -1; // next local row to draw, -1 = idle
+static int32_t minimap_view_dim = 0;  // width/height of the active view
+static int32_t minimap_origin_x = 0;  // top-left of the active view, in
+static int32_t minimap_origin_y = 0;  // absolute maze grid coordinates
+static float minimap_cell_size = 0;
+
+static void minimap_draw_cell(struct rr_renderer *renderer,
+                              struct rr_maze_grid *grid, int32_t maze_dim,
+                              int32_t grid_x, int32_t grid_y,
+                              int32_t canvas_x, int32_t canvas_y, float s)
+{
+    uint8_t at = grid[grid_y * maze_dim + grid_x].value;
+    uint8_t difficulty = grid[grid_y * maze_dim + grid_x].difficulty / 4;
+    if (at == 1)
+    {
+        if (difficulty % 2 == 0)
+            renderer->state.filter.amount =
+                (difficulty >= 4 && difficulty <= 8) || difficulty == 12
+                    ? 0.3
+                    : 0.5;
+        rr_renderer_set_fill(renderer, RR_RARITY_COLORS[difficulty / 2]);
+        rr_renderer_begin_path(renderer);
+        rr_renderer_fill_rect(renderer, canvas_x * s, canvas_y * s, s, s);
     }
+    else if (at != 0)
+    {
+        for (int8_t i = -1; i <= 1; ++i)
+            for (int8_t j = -1; j <= 1; ++j)
+            {
+                if (grid_x + i < 0 || grid_x + i >= maze_dim ||
+                    grid_y + j < 0 || grid_y + j >= maze_dim)
+                    continue;
+                uint8_t potential =
+                    grid[(grid_y + j) * maze_dim + (grid_x + i)].difficulty /
+                    4;
+                if (potential > difficulty)
+                    difficulty = potential;
+            }
+        uint8_t left = (at >> 1) & 1;
+        uint8_t top = at & 1;
+        uint8_t inverse = (at >> 3) & 1;
+        if (difficulty % 2 == 0)
+            renderer->state.filter.amount =
+                (difficulty >= 4 && difficulty <= 8) || difficulty == 12
+                    ? 0.3
+                    : 0.5;
+        rr_renderer_set_fill(renderer, RR_RARITY_COLORS[difficulty / 2]);
+        rr_renderer_begin_path(renderer);
+        rr_renderer_move_to(renderer, (canvas_x + inverse ^ left) * s,
+                            (canvas_y + inverse ^ top) * s);
+        float start_angle = 0;
+        if (top == 0 && left == 1)
+            start_angle = M_PI / 2;
+        else if (top == 1 && left == 1)
+            start_angle = M_PI;
+        else if (top == 1 && left == 0)
+            start_angle = M_PI * 3 / 2;
+        rr_renderer_partial_arc(renderer, (canvas_x + left) * s,
+                                (canvas_y + top) * s, s, start_angle,
+                                start_angle + M_PI / 2, 0);
+        rr_renderer_fill(renderer);
+    }
+    renderer->state.filter.amount = 0;
+}
+
+// call once per frame. resumes drawing wherever the last call left off, so
+// the active view (window or whole map) fills in over a handful of
+// frames instead of blocking one.
+static void minimap_draw_step(struct rr_renderer *renderer,
+                              struct rr_maze_grid *grid, int32_t maze_dim)
+{
+    if (minimap_draw_row < 0)
+        return;
+    int32_t rows_per_frame = RR_MINIMAP_CELLS_PER_FRAME / minimap_view_dim;
+    if (rows_per_frame < 1)
+        rows_per_frame = 1;
+    int32_t end_row = minimap_draw_row + rows_per_frame;
+    if (end_row > minimap_view_dim)
+        end_row = minimap_view_dim;
+    for (int32_t lx = minimap_draw_row; lx < end_row; ++lx)
+        for (int32_t ly = 0; ly < minimap_view_dim; ++ly)
+            minimap_draw_cell(renderer, grid, maze_dim,
+                              minimap_origin_x + lx, minimap_origin_y + ly,
+                              lx, ly, minimap_cell_size);
+    minimap_draw_row = end_row >= minimap_view_dim ? -1 : end_row;
+}
 
 static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
 {
@@ -84,15 +143,52 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     float grid_size = RR_MAZES[arena->biome].grid_size;
     uint32_t maze_dim = RR_MAZES[arena->biome].maze_dim;
     struct rr_maze_grid *grid = RR_MAZES[arena->biome].maze;
-    DRAW_MINIMAP(&minimap, grid);
-    double midX = (player_info->lerp_camera_x / (grid_size * maze_dim) - 0.5) *
+
+    uint8_t hovering = rr_ui_mouse_over(this, game);
+    int32_t view_dim =
+        hovering || (int32_t)maze_dim < RR_MINIMAP_WINDOW_DIM
+            ? (int32_t)maze_dim
+            : RR_MINIMAP_WINDOW_DIM;
+    int32_t origin_x = 0, origin_y = 0;
+    if (!hovering)
+    {
+        origin_x =
+            (int32_t)(player_info->lerp_camera_x / grid_size) - view_dim / 2;
+        origin_y =
+            (int32_t)(player_info->lerp_camera_y / grid_size) - view_dim / 2;
+        origin_x = rr_fclamp(origin_x, 0, (int32_t)maze_dim - view_dim);
+        origin_y = rr_fclamp(origin_y, 0, (int32_t)maze_dim - view_dim);
+    }
+    if (arena->biome != previous_biome || view_dim != minimap_view_dim ||
+        origin_x != minimap_origin_x || origin_y != minimap_origin_y)
+    {
+        previous_biome = arena->biome;
+        minimap_view_dim = view_dim;
+        minimap_origin_x = origin_x;
+        minimap_origin_y = origin_y;
+        minimap_cell_size = floorf(this->abs_width / view_dim);
+        if (minimap_cell_size < 1)
+            minimap_cell_size = 1;
+        rr_renderer_set_dimensions(&minimap, minimap_cell_size * view_dim,
+                                   minimap_cell_size * view_dim);
+        minimap.state.filter.color = 0xffffffff;
+        minimap_draw_row = 0;
+    }
+    minimap_draw_step(&minimap, grid, maze_dim);
+
+    double view_world_size = grid_size * minimap_view_dim;
+    double midX = ((player_info->lerp_camera_x / grid_size -
+                   minimap_origin_x) /
+                      minimap_view_dim -
+                  0.5) *
                   this->abs_width;
-    double midY = (player_info->lerp_camera_y / (grid_size * maze_dim) - 0.5) *
+    double midY = ((player_info->lerp_camera_y / grid_size -
+                   minimap_origin_y) /
+                      minimap_view_dim -
+                  0.5) *
                   this->abs_height;
-    double W =
-        renderer->width / scale / (grid_size * maze_dim) * this->abs_width;
-    double H =
-        renderer->height / scale / (grid_size * maze_dim) * this->abs_height;
+    double W = renderer->width / scale / view_world_size * this->abs_width;
+    double H = renderer->height / scale / view_world_size * this->abs_height;
     rr_renderer_scale(renderer, renderer->scale);
     rr_renderer_begin_path(renderer);
     rr_renderer_rect(renderer, midX - W / 2, midY - H / 2, W, H);
@@ -115,13 +211,18 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
         if (player_info->arena != game->player_info->arena)
             continue;
         rr_renderer_begin_path(renderer);
-        rr_renderer_arc(
-            renderer,
-            this->abs_width *
-                (player_info->camera_x / (grid_size * maze_dim) - 0.5),
-            this->abs_height *
-                (player_info->camera_y / (grid_size * maze_dim) - 0.5),
-            2);
+        rr_renderer_arc(renderer,
+                        this->abs_width *
+                            ((player_info->camera_x / grid_size -
+                              minimap_origin_x) /
+                                 minimap_view_dim -
+                             0.5),
+                        this->abs_height *
+                            ((player_info->camera_y / grid_size -
+                              minimap_origin_y) /
+                                 minimap_view_dim -
+                             0.5),
+                        2);
         rr_renderer_fill(renderer);
     }
 }

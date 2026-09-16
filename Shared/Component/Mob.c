@@ -60,7 +60,6 @@ void rr_component_mob_free(struct rr_component_mob *this,
         rr_simulation_get_relations(simulation, this->parent_id);
     if (this->player_spawned)
         return;
-    this->zone->grid_points -= RR_MOB_DIFFICULTY_COEFFICIENTS[this->id];
     // put it here please
     struct rr_component_physical *physical =
         rr_simulation_get_physical(simulation, this->parent_id);
@@ -87,6 +86,25 @@ void rr_component_mob_free(struct rr_component_mob *this,
                     RR_MOB_DATA[this->id].health *
                         RR_MOB_RARITY_SCALING[this->rarity].health * 0.2);
 
+    // RR_DROP_RARITY_COEFFICIENTS saturates to 1.0 in double precision past
+    // ultimate, so rolling with the mob's real rarity as the pow() exponent
+    // always breaks at exotic/ultimate regardless of how high the mob's
+    // rarity actually is. Roll as if the mob were ultimate-rarity (where the
+    // coefficients are still meaningful) and shift the result up afterward
+    // by how far past ultimate the mob's real rarity is.
+    uint8_t roll_rarity = this->rarity > rr_rarity_id_ultimate
+                              ? rr_rarity_id_ultimate
+                              : this->rarity;
+    uint8_t real_cap = this->rarity >= rr_rarity_id_max - 2 ? this->rarity - 1
+                                                            : this->rarity;
+    uint8_t rarity_shift = 0;
+    if (this->rarity > rr_rarity_id_ultimate)
+    {
+        rarity_shift = this->rarity - rr_rarity_id_ultimate + 1;
+        if (this->rarity > rr_rarity_id_eternal)
+            --rarity_shift;
+    }
+
     for (uint64_t i = 0; i < 4; ++i)
     {
         if (RR_MOB_DATA[this->id].loot[i].id == 0)
@@ -95,8 +113,7 @@ void rr_component_mob_free(struct rr_component_mob *this,
         float seed = rr_frand();
         float s2 = RR_MOB_DATA[this->id].loot[i].seed;
         uint8_t drop;
-        uint8_t cap = this->rarity >= rr_rarity_id_exotic ? this->rarity - 1
-                                                          : this->rarity;
+        uint8_t cap = roll_rarity;
 
         for (drop = 0; drop <= cap + 1; ++drop)
         {
@@ -107,13 +124,14 @@ void rr_component_mob_free(struct rr_component_mob *this,
             else if (drop < RR_PETAL_DATA[id].min_rarity)
                 end = RR_DROP_RARITY_COEFFICIENTS[RR_PETAL_DATA[id].min_rarity];
             if (seed <= pow(1 - (1 - end) * s2,
-                            RR_MOB_LOOT_RARITY_COEFFICIENTS[this->rarity]))
+                            RR_MOB_LOOT_RARITY_COEFFICIENTS[roll_rarity]))
                 break;
         }
         if (drop == 0)
             continue;
         spawn_ids[count] = RR_MOB_DATA[this->id].loot[i].id;
-        spawn_rarities[count] = drop - 1;
+        uint8_t shifted = drop - 1 + rarity_shift;
+        spawn_rarities[count] = shifted > real_cap ? real_cap : shifted;
         ++count;
     }
     for (uint8_t i = 0; i < count; ++i)

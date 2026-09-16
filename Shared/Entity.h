@@ -46,4 +46,5 @@ struct rr_id_rarity_pair
     XX(physical, 3)                                                            \
     XX(drop, 9)                                                                \
     XX(player_info, 1)                                                         \
-    XX(petal, 8)
+    XX(petal, 8)                                                               \
+    XX(portal, 13)

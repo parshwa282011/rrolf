@@ -193,11 +193,23 @@ int rr_base_64_encode(char *encoded, const char *string, int len)
 
 char *rr_sprintf(char *buf, double i)
 {
-    if (fabs(i) < 1000)
+    // higher rarity tiers can push stats well past the millions, so this
+    // keeps going with the usual short-scale suffixes instead of printing
+    // an unreadable wall of digits.
+    static char const *const suffixes[] = {"",  "k", "m", "b",  "t",
+                                           "Qa", "Qi", "Sx", "Sp", "Oc"};
+    uint32_t const suffix_count = sizeof(suffixes) / sizeof(suffixes[0]);
+    double mag = fabs(i);
+    uint32_t tier = 0;
+    while (mag >= 1000 && tier + 1 < suffix_count)
+    {
+        mag /= 1000;
+        i /= 1000;
+        ++tier;
+    }
+    if (tier == 0)
         sprintf(buf, "%.0f", i);
-    else if (fabs(i) < 1000000)
-        sprintf(buf, "%.1fk", i / 1000);
     else
-        sprintf(buf, "%.1fm", i / 1000000);
+        sprintf(buf, "%.1f%s", i, suffixes[tier]);
     return buf;
 }

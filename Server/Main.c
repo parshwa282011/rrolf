@@ -37,6 +37,18 @@ int main()
 {
     fprintf(stderr, "gameserver on version %llu\n", RR_SECRET8 ^ 255);
     srand(time(0));
+    char const *biome_env = getenv("RR_BIOME");
+    if (biome_env)
+    {
+        if (!strcmp(biome_env, "hell_creek_med") || !strcmp(biome_env, "med"))
+            RR_GLOBAL_BIOME = rr_biome_id_hell_creek_med;
+        else if (!strcmp(biome_env, "garden"))
+            RR_GLOBAL_BIOME = rr_biome_id_garden;
+        else if (!strcmp(biome_env, "beehive"))
+            RR_GLOBAL_BIOME = rr_biome_id_beehive;
+        else
+            RR_GLOBAL_BIOME = rr_biome_id_hell_creek_easy;
+    }
     // signal(SIGINT, sigint_handle);
 #ifdef RIVET_BUILD
     curl_global_init(CURL_GLOBAL_ALL);

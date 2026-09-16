@@ -339,29 +339,13 @@ static void crafting_xp_text_animate(struct rr_ui_element *this,
         return;
     }
     this->fill = RR_RARITY_COLORS[game->crafting_data.crafting_rarity];
-    switch (game->crafting_data.crafting_rarity)
+    if (game->crafting_data.crafting_rarity < rr_rarity_id_max - 1)
     {
-    case rr_rarity_id_common:
-        data->text = "1 xp per craft";
-        break;
-    case rr_rarity_id_unusual:
-        data->text = "8 xp per craft";
-        break;
-    case rr_rarity_id_rare:
-        data->text = "60 xp per craft";
-        break;
-    case rr_rarity_id_epic:
-        data->text = "750 xp per craft";
-        break;
-    case rr_rarity_id_legendary:
-        data->text = "25k xp per craft";
-        break;
-    case rr_rarity_id_mythic:
-        data->text = "1m xp per craft";
-        break;
-    case rr_rarity_id_exotic:
-        data->text = "25m xp per craft";
-        break;
+        static char buf[32];
+        char fmt[16];
+        rr_sprintf(fmt, CRAFT_XP_GAINS[game->crafting_data.crafting_rarity]);
+        sprintf(buf, "%s xp per craft", fmt);
+        data->text = buf;
     }
 }
 

@@ -28,11 +28,13 @@ set(SRCS
     System/Ai.c
     System/Camera.c
     System/Centipede.c
+    System/Checkpoints.c
     System/CollisionDetection.c
     System/CollisionResolution.c
     System/Drops.c
     System/Health.c
     System/PetalBehavior.c
+    System/Portal.c
     System/Velocity.c
     System/Web.c
     Main.c
@@ -56,6 +58,7 @@ set(SRCS
     ../Shared/Component/Petal.c
     ../Shared/Component/Physical.c
     ../Shared/Component/PlayerInfo.c
+    ../Shared/Component/Portal.c
     ../Shared/Component/Relations.c
     ../Shared/Component/Web.c
     ../Shared/Api.c

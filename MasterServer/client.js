@@ -28,6 +28,7 @@ class GameClient
         const user = this.user;
         encoder.WriteStringNT(user.username);
         encoder.WriteFloat64(user.xp);
+        encoder.WriteUint8(user.checkpoint || 0);
         for (const petal of Object.keys(user.petals))
         {
             if (!(user.petals[petal] > 0))

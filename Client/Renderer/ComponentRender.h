@@ -33,6 +33,8 @@ void rr_component_mob_render(EntityIdx, struct rr_game *,
                              struct rr_simulation *);
 void rr_component_petal_render(EntityIdx, struct rr_game *,
                                struct rr_simulation *);
+void rr_component_portal_render(EntityIdx, struct rr_game *,
+                                struct rr_simulation *);
 void rr_component_web_render(EntityIdx, struct rr_game *,
                              struct rr_simulation *);
 

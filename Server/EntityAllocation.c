@@ -24,8 +24,6 @@
 #include <Shared/Squad.h>
 #include <Shared/Utilities.h>
 
-static struct rr_maze_grid DEFAULT_GRID = {0};
-
 static void set_respawn_zone(struct rr_component_arena *arena, uint32_t x,
                              uint32_t y)
 {
@@ -143,7 +141,6 @@ static EntityIdx rr_simulation_alloc_mob_non_recursive(
     struct rr_component_arena *arena = rr_simulation_get_arena(this, 1);
 
     struct rr_component_mob *mob = rr_simulation_add_mob(this, entity);
-    mob->zone = &DEFAULT_GRID;
     struct rr_component_physical *physical =
         rr_simulation_add_physical(this, entity);
     struct rr_component_health *health = rr_simulation_add_health(this, entity);
@@ -190,7 +187,6 @@ EntityIdx rr_simulation_alloc_mob(struct rr_simulation *this,
         rr_simulation_add_relations(this, entity);
     struct rr_component_ai *ai = rr_simulation_add_ai(this, entity);
     // init team elsewhere
-    mob->zone = &DEFAULT_GRID;
     rr_component_mob_set_id(mob, mob_id);
     rr_component_mob_set_rarity(mob, rarity_id);
     struct rr_mob_rarity_scale const *rarity_scale =
@@ -296,4 +292,29 @@ EntityIdx rr_simulation_alloc_entity(struct rr_simulation *this)
     }
 
     RR_UNREACHABLE("ran out of entity ids");
+}
+
+EntityIdx rr_simulation_alloc_portal(struct rr_simulation *this,
+                                     EntityIdx arena, float x, float y,
+                                     uint8_t rarity,
+                                     char const *target_dimension,
+                                     char const *target_server_url)
+{
+    EntityIdx entity = rr_simulation_alloc_entity(this);
+    struct rr_component_physical *physical =
+        rr_simulation_add_physical(this, entity);
+    struct rr_component_portal *portal =
+        rr_simulation_add_portal(this, entity);
+    rr_component_physical_set_x(physical, x);
+    rr_component_physical_set_y(physical, y);
+    rr_component_physical_set_radius(
+        physical, RR_PORTAL_BASE_RADIUS * RR_MOB_RARITY_SCALING[rarity].radius);
+    physical->arena = arena;
+
+    rr_component_portal_set_rarity(portal, rarity);
+    strncpy(portal->target_dimension, target_dimension,
+           sizeof portal->target_dimension - 1);
+    strncpy(portal->target_server_url, target_server_url,
+           sizeof portal->target_server_url - 1);
+    return entity;
 }

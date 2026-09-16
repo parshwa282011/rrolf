@@ -13,5 +13,6 @@
         "__locale": "c",
         "locale": "c",
         "vector.h": "c"
-    }
+    },
+    "cmake.ignoreCMakeListsMissing": true
 }

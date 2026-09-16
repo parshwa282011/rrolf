@@ -87,6 +87,10 @@ struct rr_component_player_info
                                             // player poicks up more than that
                                             // then it waits until the next tick
     RR_SERVER_ONLY(uint8_t drops_this_tick_size;)
+    RR_SERVER_ONLY(uint8_t redirecting;) // set once a portal has sent this
+                                         // player a rr_clientbound_redirect,
+                                         // so we don't resend it every tick
+                                         // they're still standing in it
 };
 
 void rr_component_player_info_init(struct rr_component_player_info *,

@@ -23,11 +23,9 @@ struct rr_simulation;
 struct proto_bug;
 RR_CLIENT_ONLY(struct rr_renderer;)
 RR_SERVER_ONLY(struct rr_component_player_info;)
-RR_SERVER_ONLY(struct rr_maze_grid;)
 
 struct rr_component_mob
 {
-    RR_SERVER_ONLY(struct rr_maze_grid *zone;)
     RR_SERVER_ONLY(float squad_damage_counter[RR_SQUAD_COUNT];)
     RR_SERVER_ONLY(uint16_t ticks_to_despawn;)
     EntityIdx parent_id;

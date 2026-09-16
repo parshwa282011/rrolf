@@ -137,6 +137,110 @@ static struct rr_ui_element *region_join_button_init()
     return this;
 }
 
+#ifndef RIVET_BUILD
+char const *rr_local_servers[2] = {"Easy", "Medium"};
+char const *rr_local_server_urls[2] = {"ws://127.0.0.1:6767",
+                                       "ws://127.0.0.1:6768"};
+
+uint8_t selected_server = 0;
+
+static void server_button_on_event(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+    {
+        selected_server = (selected_server + 1) % 2;
+    }
+}
+
+static void server_button_on_render(struct rr_ui_element *this,
+                                    struct rr_game *game)
+{
+    struct rr_renderer *renderer = game->renderer;
+    if (rr_ui_mouse_over(this, game))
+        rr_renderer_add_color_filter(renderer, 0xff000000, 0.2);
+
+    rr_renderer_scale(renderer, renderer->scale);
+    rr_renderer_set_fill(renderer, 0x80555555);
+    rr_renderer_begin_path(renderer);
+    rr_renderer_round_rect(renderer, -this->abs_width / 2,
+                           -this->abs_height / 2, this->abs_width,
+                           this->abs_height, 6);
+    rr_renderer_fill(renderer);
+    rr_renderer_set_text_baseline(renderer, 1);
+    rr_renderer_set_text_align(renderer, 1);
+    renderer->state.filter.amount = 0;
+    rr_renderer_set_fill(renderer, 0xffffffff);
+    rr_renderer_set_stroke(renderer, 0xff222222);
+    rr_renderer_set_text_size(renderer, this->abs_height / 2);
+    rr_renderer_set_line_width(renderer, this->abs_height / 2 * 0.12);
+    rr_renderer_begin_path(renderer);
+    rr_renderer_stroke_text(renderer, rr_local_servers[selected_server], 0, 0);
+    rr_renderer_fill_text(renderer, rr_local_servers[selected_server], 0, 0);
+}
+
+static struct rr_ui_element *server_toggle_button_init()
+{
+    struct rr_ui_element *this = rr_ui_element_init();
+    this->abs_width = this->width = 70;
+    this->abs_height = this->height = 25;
+    this->on_render = server_button_on_render;
+    this->on_event = server_button_on_event;
+    return this;
+}
+
+static void server_join_button_on_event(struct rr_ui_element *this,
+                                        struct rr_game *game)
+{
+    if (game->socket_pending)
+        return;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+    {
+        game->socket_pending = 1;
+        if (game->socket_ready)
+            rr_websocket_disconnect(&game->socket, game);
+        strcpy(game->server_url, rr_local_server_urls[selected_server]);
+        rr_game_connect_socket(game);
+    }
+}
+
+static void server_join_button_on_render(struct rr_ui_element *this,
+                                         struct rr_game *game)
+{
+    struct rr_renderer *renderer = game->renderer;
+    if (rr_ui_mouse_over(this, game))
+        rr_renderer_add_color_filter(renderer, 0xff000000, 0.2);
+
+    rr_renderer_scale(renderer, renderer->scale);
+    rr_renderer_set_fill(renderer, 0x80555555);
+    rr_renderer_begin_path(renderer);
+    rr_renderer_round_rect(renderer, -this->abs_width / 2,
+                           -this->abs_height / 2, this->abs_width,
+                           this->abs_height, 6);
+    rr_renderer_fill(renderer);
+    rr_renderer_set_text_baseline(renderer, 1);
+    rr_renderer_set_text_align(renderer, 1);
+    renderer->state.filter.amount = 0;
+    rr_renderer_set_fill(renderer, 0xffffffff);
+    rr_renderer_set_stroke(renderer, 0xff222222);
+    rr_renderer_set_text_size(renderer, this->abs_height / 2);
+    rr_renderer_set_line_width(renderer, this->abs_height / 2 * 0.12);
+    rr_renderer_begin_path(renderer);
+    rr_renderer_stroke_text(renderer, "Join", 0, 0);
+    rr_renderer_fill_text(renderer, "Join", 0, 0);
+}
+
+static struct rr_ui_element *server_join_button_init()
+{
+    struct rr_ui_element *this = rr_ui_element_init();
+    this->abs_width = this->width = 50;
+    this->abs_height = this->height = 25;
+    this->on_render = server_join_button_on_render;
+    this->on_event = server_join_button_on_event;
+    return this;
+}
+#endif
+
 static uint8_t settings_container_should_show(struct rr_ui_element *this,
                                               struct rr_game *game)
 {
@@ -253,6 +357,15 @@ struct rr_ui_element *rr_ui_settings_container_init(struct rr_game *game)
                                 region_toggle_button_init(),
                                 region_join_button_init(), NULL),
                             -1, -1),
+#ifndef RIVET_BUILD
+                        rr_ui_set_justify(
+                            rr_ui_h_container_init(
+                                rr_ui_container_init(), 5, 5,
+                                rr_ui_text_init("Server:", 15, 0xffffffff),
+                                server_toggle_button_init(),
+                                server_join_button_init(), NULL),
+                            -1, -1),
+#endif
                         rr_ui_set_justify(
                             rr_ui_h_container_init(
                                 rr_ui_container_init(), 5, 10,

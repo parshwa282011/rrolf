@@ -92,7 +92,7 @@ static void asset_web_draw(struct rr_renderer *renderer)
     rr_renderer_scale(renderer, 0.1);
 }
 
-void rr_renderer_draw_tile_hell_creek(struct rr_renderer *renderer, uint8_t pos)
+void rr_renderer_draw_tile_hell_creek_easy(struct rr_renderer *renderer, uint8_t pos)
 {
     render_sprite_from_cache(renderer, &background_tiles, pos);
 }

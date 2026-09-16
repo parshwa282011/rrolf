@@ -18,11 +18,13 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <Server/Client.h>
 #include <Server/EntityAllocation.h>
 #include <Server/EntityDetection.h>
 #include <Server/Simulation.h>
 
 #include <Shared/Entity.h>
+#include <Shared/Squad.h>
 #include <Shared/StaticData.h>
 #include <Shared/Utilities.h>
 #include <Shared/Vector.h>
@@ -463,7 +465,15 @@ static void petal_modifiers(struct rr_simulation *simulation,
         else if (data->id == rr_petal_id_crest)
         {
             rr_component_flower_set_face_flags(flower, flower->face_flags | 8);
-            RR_SET_IF_LESS(player_info->camera_fov, 1 - 0.1 * slot->rarity)
+            // Linear 1 - 0.1 * rarity hits 0 at primal and goes negative past
+            // it, which sends view_width/height (1280 / camera_fov) to
+            // +-infinity. Past ultimate, taper the remaining rarities down to
+            // 0.1 (1000% view) at cosmic instead of continuing linearly.
+            float fov =
+                slot->rarity <= rr_rarity_id_ultimate
+                    ? 1 - 0.1f * slot->rarity
+                    : 0.3f - 0.02f * (slot->rarity - rr_rarity_id_ultimate);
+            RR_SET_IF_LESS(player_info->camera_fov, fov)
         }
         else if (data->id == rr_petal_id_droplet)
             ++rot_count;
@@ -492,6 +502,9 @@ static void petal_modifiers(struct rr_simulation *simulation,
             }
         }
     }
+    if (player_info->squad_member != NULL &&
+        player_info->squad_member->client != NULL)
+        to_rotate *= player_info->squad_member->client->rotation_percent;
     player_info->global_rotation +=
         to_rotate * ((rot_count % 3) ? (rot_count % 3 == 2) ? 0 : -1 : 1);
 }

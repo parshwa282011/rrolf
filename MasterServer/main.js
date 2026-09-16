@@ -111,6 +111,7 @@ function apply_missing_defaults(account)
         password: "",
         username: "",
         xp: 0,
+        checkpoint: 0,
         petals: {"1:0": 5},
         failed_crafts: {},
         mob_gallery: {},
@@ -423,6 +424,7 @@ wss.on("connection", (ws, req) => {
                     break;
                 const user = connected_clients[uuid].user;
                 user.xp = decoder.ReadFloat64();
+                user.checkpoint = decoder.ReadUint8();
                 user.petals = {};
                 user.failed_crafts = {};
                 let id = decoder.ReadUint8();

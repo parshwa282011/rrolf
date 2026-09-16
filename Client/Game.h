@@ -97,6 +97,16 @@ struct rr_game_squad
 struct rr_developer_cheats
 {
     float speed_percent;
+    float rotation_percent;
+    uint8_t summon_mob_id;
+    uint8_t summon_rarity;
+    uint8_t give_petal_id;
+    uint8_t give_petal_rarity;
+    uint32_t give_petal_count;
+    uint8_t slot_count;
+    uint8_t summon_portal_rarity;
+    char summon_portal_dimension[24];
+    char summon_portal_url[64];
 };
 
 struct rr_game
@@ -161,6 +171,7 @@ struct rr_game
 
     char rivet_player_token[400];
     char connect_code[16];
+    char server_url[64];
 };
 
 void rr_game_init(struct rr_game *);

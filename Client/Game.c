@@ -222,6 +222,7 @@ void rr_game_init(struct rr_game *this)
     strcpy(this->rivet_account.token, "");
     strcpy(this->rivet_account.account_number, "#0000");
     strcpy(this->rivet_account.uuid, "no-uuid");
+    strcpy(this->server_url, "ws://127.0.0.1:6767");
     rr_rivet_identities_create_guest(this);
 
     // clang-format off
@@ -290,7 +291,7 @@ void rr_game_init(struct rr_game *this)
                         ),
                         /*
                         rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
-                            rr_ui_biome_button_init("Hell Creek", 0xffff0000, 0),
+                            rr_ui_biome_button_init("Hell Creek Easy", 0xffff0000, 0),
                             rr_ui_biome_button_init("Ocean", 0xffcdb423, 1),
                             NULL
                         ),
@@ -803,6 +804,14 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             this->crafting_data.animation = 0;
             break;
         }
+        case rr_clientbound_redirect:
+        {
+            proto_bug_read_string(&encoder, this->server_url,
+                                  sizeof this->server_url, "server url");
+            rr_websocket_disconnect(&this->socket, this);
+            rr_game_connect_socket(this);
+            break;
+        }
         default:
             RR_UNREACHABLE("how'd this happen");
         }
@@ -886,6 +895,18 @@ void render_web_component(EntityIdx entity, struct rr_game *this,
     rr_renderer_context_state_free(this->renderer, &state);
 }
 
+void render_portal_component(EntityIdx entity, struct rr_game *this,
+                             struct rr_simulation *simulation)
+{
+    struct rr_renderer_context_state state;
+    rr_renderer_context_state_init(this->renderer, &state);
+    struct rr_component_physical *physical =
+        rr_simulation_get_physical(simulation, entity);
+    rr_renderer_translate(this->renderer, physical->lerp_x, physical->lerp_y);
+    rr_component_portal_render(entity, this, simulation);
+    rr_renderer_context_state_free(this->renderer, &state);
+}
+
 void player_info_finder(struct rr_game *this)
 {
     struct rr_simulation *simulation = this->simulation;
@@ -921,8 +942,13 @@ static void write_serverbound_packet_desktop(struct rr_game *this)
     movement_flags |= this->cache.use_mouse << 6;
 
     if (this->is_dev)
+    {
         proto_bug_write_float32(&encoder2, this->developer_cheats.speed_percent,
                                 "speed_percent");
+        proto_bug_write_float32(&encoder2,
+                                this->developer_cheats.rotation_percent,
+                                "rotation_percent");
+    }
     proto_bug_write_uint8(&encoder2, movement_flags, "movement kb flags");
     if (this->cache.use_mouse)
     {
@@ -1031,6 +1057,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             render_component(web);
             render_component(health);
             render_component(drop);
+            render_component(portal);
             render_component(mob);
             rr_system_particle_render_tick(this, delta);
             render_component(petal);
@@ -1069,8 +1096,9 @@ void rr_game_tick(struct rr_game *this, float delta)
                 rr_renderer_translate(this->renderer, newLeftX + GRID_SIZE / 2,
                                       currY + GRID_SIZE / 2);
                 rr_renderer_scale(this->renderer, (GRID_SIZE + 2) / 256);
-                if (this->selected_biome == 0)
-                    rr_renderer_draw_tile_hell_creek(this->renderer,
+                if (this->selected_biome != rr_biome_id_garden)
+                    // hell_creek_med reuses the hell_creek_easy tileset for now
+                    rr_renderer_draw_tile_hell_creek_easy(this->renderer,
                                                      tile_index);
                 else
                     rr_renderer_draw_tile_garden(this->renderer, tile_index);
@@ -1269,7 +1297,7 @@ void rr_game_connect_socket(struct rr_game *this)
 #else
     rr_websocket_init(&this->socket);
     this->socket.user_data = this;
-    rr_websocket_connect_to(&this->socket, "ws://127.0.0.1:1234");
+    rr_websocket_connect_to(&this->socket, this->server_url);
     // rr_websocket_connect_to(&this->socket, "45.79.197.197", 1234, 0);
 #endif
 }

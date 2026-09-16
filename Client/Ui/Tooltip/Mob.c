@@ -112,6 +112,19 @@ struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
                       -1, 0));
     }
     rr_ui_container_add_element(this, rr_ui_static_space_init(10));
+    // mirrors the roll_rarity/rarity_shift workaround in
+    // Shared/Component/Mob.c's rr_component_mob_free — see there for why.
+    uint8_t roll_rarity =
+        rarity > rr_rarity_id_ultimate ? rr_rarity_id_ultimate : rarity;
+    uint8_t real_cap =
+        rarity >= rr_rarity_id_max - 2 ? rarity - 1 : rarity;
+    uint8_t rarity_shift = 0;
+    if (rarity > rr_rarity_id_ultimate)
+    {
+        rarity_shift = rarity - rr_rarity_id_ultimate + 1;
+        if (rarity > rr_rarity_id_eternal)
+            --rarity_shift;
+    }
     for (uint8_t i = 0; i < 4; ++i)
     {
         if (RR_MOB_DATA[id].loot[i].id == 0)
@@ -120,7 +133,7 @@ struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
         float seed = RR_MOB_DATA[id].loot[i].seed;
         struct rr_ui_element *temp =
             rr_ui_h_container_init(rr_ui_container_init(), 0, 10, NULL);
-        uint64_t cap = rarity >= rr_rarity_id_exotic ? rarity - 1 : rarity;
+        uint64_t cap = roll_rarity;
         uint8_t min_rar = RR_PETAL_DATA[p_id].min_rarity;
         for (uint8_t r = min_rar + 1; r <= cap + 1; ++r)
         {
@@ -130,9 +143,9 @@ struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
             if (cap < min_rar)
                 end = 1;
             float chance = pow(1 - (1 - end) * seed,
-                               RR_MOB_LOOT_RARITY_COEFFICIENTS[rarity]) -
+                               RR_MOB_LOOT_RARITY_COEFFICIENTS[roll_rarity]) -
                            pow(1 - (1 - start) * seed,
-                               RR_MOB_LOOT_RARITY_COEFFICIENTS[rarity]);
+                               RR_MOB_LOOT_RARITY_COEFFICIENTS[roll_rarity]);
             if (chance * 100 < 0.01)
                 continue;
             char *d = malloc((sizeof *d) * 16);
@@ -143,10 +156,13 @@ struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
                 sprintf(d, "%.2f%%", pct);
             else if (pct > 0.01)
                 sprintf(d, "%.3f%%", pct);
+            uint8_t shifted = r - 1 + rarity_shift;
+            if (shifted > real_cap)
+                shifted = real_cap;
             rr_ui_container_add_element(
                 temp, rr_ui_v_container_init(
                           rr_ui_container_init(), 0, 5,
-                          tooltip_petal_icon_init(p_id, r - 1),
+                          tooltip_petal_icon_init(p_id, shifted),
                           rr_ui_text_init(d, 11, 0xffffffff), NULL));
         }
         rr_ui_h_container_set(temp);

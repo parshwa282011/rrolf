@@ -43,11 +43,14 @@ struct rr_server_client
     struct rr_server_client_message *message_at;
     struct rr_component_player_info *player_info;
     double experience;
+    uint8_t checkpoint; // index into RR_MAZES[RR_GLOBAL_BIOME].checkpoints,
+                        // persisted to the account; see Server/System/Checkpoints.c
     float player_accel_x;
     float player_accel_y;
     char ip_address[100];
 
     float speed_percent;
+    float rotation_percent;
 
     uint32_t inventory[rr_petal_id_max][rr_rarity_id_max];
     uint32_t craft_fails[rr_petal_id_max][rr_rarity_id_max];
