@@ -242,7 +242,7 @@ uint64_t RR_PVP_POINTS_PER_RARITY[rr_rarity_id_max] = {
 double RR_MOB_WAVE_RARITY_COEFFICIENTS[rr_rarity_id_max + 1] = {
     0, 1, 6, 10, 15, 25, 160, 1200, 250};
 
-double RR_DROP_RARITY_COEFFICIENTS[rr_rarity_id_exotic + 2] = {
+double RR_DROP_RARITY_COEFFICIENTS[rr_rarity_id_max + 1] = {
     0, 1, 8, 15, 40, 150, 500, 2500};
 double RR_MOB_LOOT_RARITY_COEFFICIENTS[rr_rarity_id_max] = {2.5, 4,  6,   15,
                                                             35,  50, 125, 150};
@@ -657,7 +657,7 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
     {MAZE_ENTRY(BURROW, 512), 0},
 };
 
-#ifdef RIVET_BUILD
+#ifdef RYSTERIA
 struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
     {"wss://rysteria.pro/default",   1234,   "Hell Creek"}, // hell creek
     {"wss://rysteria.pro/pvp",       1235,          "pvp"}, // pvp

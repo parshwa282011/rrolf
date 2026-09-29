@@ -1,4 +1,6 @@
 build/
+build-d/
+build-p/
 frontend_release_build/
 node_modules/
 .vs/

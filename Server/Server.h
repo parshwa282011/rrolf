@@ -35,7 +35,7 @@ struct rr_server;
 struct rr_squad_member;
 
 #ifdef PVP
-#define RR_PVP_BANKED_POINTS_MAX 256
+#define RR_PVP_BANKED_POINTS_MAX 64
 struct rr_pvp_banked_points
 {
     char uuid[500];

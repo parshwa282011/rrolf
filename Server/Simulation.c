@@ -251,11 +251,17 @@ static void spawn_mob(struct rr_simulation *this, uint32_t grid_x,
                     break;
             }
     }
+#ifdef rr_biome_id_pvp
     else if (RR_GLOBAL_BIOME == rr_biome_id_pvp)
     {
-        grid->spawn_timer = 0;
+        if(grid->skip)
+            grid->spawn_timer = 0;
+        else
+            id = get_spawn_id(RR_GLOBAL_BIOME, grid);
+        grid->skip = !grid->skip;
         return;
     }
+#endif
     else
         id = get_spawn_id(RR_GLOBAL_BIOME, grid);
     if (id == NO_MOBS)
