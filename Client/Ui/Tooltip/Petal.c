@@ -80,7 +80,7 @@ static void get_cooldown(struct rr_ui_element *this, struct rr_game *game)
                 (RR_PETAL_DATA[id].cooldown * 2 / 5) * 0.1 / reload_speed,
                 (RR_PETAL_DATA[id].secondary_cooldown * 2 / 5) * 0.1,
                 RR_PETAL_RARITY_SCALE[rarity].seed_cooldown);
-    else if (id == rr_petal_id_nest)
+    else if (id == rr_petal_id_nest || id == rr_petal_id_beehive_post)
         sprintf(cd, "↻ %.1f + %.1f + %.1fs",
                 (RR_PETAL_DATA[id].cooldown * 2 / 5) * 0.1 / reload_speed,
                 (RR_PETAL_DATA[id].secondary_cooldown * 2 / 5) * 0.1, 5.0);
@@ -267,6 +267,19 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
                               RR_RARITY_NAMES[rarity >= 1 ? rarity - 1 : 0], 12,
                               RR_RARITY_COLORS[rarity >= 1 ? rarity - 1 : 0]),
                           rr_ui_text_init(" T-Rex", 12, 0xffffffff), NULL),
+                      -1, 0));
+    }
+    else if (id == rr_petal_id_bee_egg)
+    {
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Spawns: ", 12, 0xffe07422),
+                          rr_ui_text_init(
+                              RR_RARITY_NAMES[rarity >= 1 ? rarity - 1 : 0], 12,
+                              RR_RARITY_COLORS[rarity >= 1 ? rarity - 1 : 0]),
+                          rr_ui_text_init(" Fighter Bee", 12, 0xffffffff), NULL),
                       -1, 0));
     }
     else if (id == rr_petal_id_berry)
@@ -475,6 +488,35 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
                           rr_ui_container_init(), 0, 0,
                           rr_ui_text_init("Egg reload speed: ", 12, 0xff12bef1),
                           rr_ui_text_init("x2", 12, 0xffffffff), NULL),
+                      -1, 0));
+    }
+    else if (id == rr_petal_id_beehive_post)
+    {
+        uint8_t stats_rarity = rarity > 0 ? rarity - 1 : 0;
+        char *extra = malloc((sizeof *extra) * 8);
+        rr_sprintf(extra, 200 * RR_MOB_RARITY_SCALING[stats_rarity].health);
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Post health: ", 12, 0xff44ff44),
+                          rr_ui_text_init(extra, 12, 0xffffffff), NULL),
+                      -1, 0));
+        extra = malloc((sizeof *extra) * 8);
+        rr_sprintf(extra, 5 * RR_MOB_RARITY_SCALING[stats_rarity].damage);
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Post damage reduction: ", 12, 0xff666666),
+                          rr_ui_text_init(extra, 12, 0xffffffff), NULL),
+                      -1, 0));
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Bee egg reload speed: ", 12, 0xff12bef1),
+                          rr_ui_text_init("x4", 12, 0xffffffff), NULL),
                       -1, 0));
     }
     else if (id == rr_petal_id_fireball)

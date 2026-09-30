@@ -30,6 +30,8 @@ void render_background(struct rr_component_player_info *player_info,
 {
     if (player_info->arena == 0)
         return;
+    struct rr_component_arena *arena =
+        rr_simulation_get_arena(this->simulation, player_info->arena);
     struct rr_renderer *renderer = this->renderer;
     double extra = 100;
     double scale = player_info->lerp_camera_fov * renderer->scale;
@@ -59,8 +61,10 @@ void render_background(struct rr_component_player_info *player_info,
             rr_renderer_translate(renderer, newLeftX + GRID_SIZE / 2,
                                   currY + GRID_SIZE / 2);
             rr_renderer_scale(renderer, (GRID_SIZE + 2) / 256);
-            if (this->selected_biome == rr_biome_id_hell_creek ||
-                this->selected_biome == rr_biome_id_pvp)
+            if (arena->biome == rr_biome_id_beehive)
+                rr_renderer_draw_tile_beehive(renderer, tile_index);
+            else if (this->selected_biome == rr_biome_id_hell_creek ||
+                    this->selected_biome == rr_biome_id_pvp)
                 rr_renderer_draw_tile_hell_creek(renderer, tile_index);
             else
                 rr_renderer_draw_tile_garden(renderer, tile_index);
@@ -69,11 +73,25 @@ void render_background(struct rr_component_player_info *player_info,
     }
 
 #undef GRID_SIZE
-    struct rr_component_arena *arena =
-        rr_simulation_get_arena(this->simulation, player_info->arena);
-    float grid_size = RR_MAZES[arena->biome].grid_size;
-    uint32_t maze_dim = RR_MAZES[arena->biome].maze_dim;
-    struct rr_maze_grid *grid = RR_MAZES[arena->biome].maze;
+    float grid_size;
+    uint32_t maze_dim;
+    struct rr_maze_grid *grid;
+    if (arena->biome == rr_biome_id_beehive)
+    {
+        // Beehives pick one of a few pregenerated sizes by rarity tier
+        // (synced via size_tier), not the shared per-biome RR_MAZES[] table.
+        struct rr_maze_declaration *tier =
+            &RR_BEEHIVE_MAZE_TIERS[arena->size_tier];
+        grid_size = tier->grid_size;
+        maze_dim = tier->maze_dim;
+        grid = tier->maze;
+    }
+    else
+    {
+        grid_size = RR_MAZES[arena->biome].grid_size;
+        maze_dim = RR_MAZES[arena->biome].maze_dim;
+        grid = RR_MAZES[arena->biome].maze;
+    }
     rr_renderer_set_fill(renderer, 0xff000000);
     rr_renderer_set_global_alpha(renderer, 0.5f);
     int32_t nx = floorf(leftX / grid_size);

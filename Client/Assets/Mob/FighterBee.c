@@ -18,7 +18,7 @@
 
 #include <Client/Renderer/Renderer.h>
 
-void rr_hornet_head_draw(struct rr_renderer *renderer)
+void rr_fighter_bee_head_draw(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0xff6c5c0d);
     rr_renderer_begin_path(renderer);
@@ -202,7 +202,7 @@ void rr_hornet_head_draw(struct rr_renderer *renderer)
     rr_renderer_fill(renderer);
 }
 
-void rr_hornet_thorax_draw(struct rr_renderer *renderer)
+void rr_fighter_bee_thorax_draw(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0xff363636);
     rr_renderer_begin_path(renderer);
@@ -243,7 +243,7 @@ void rr_hornet_thorax_draw(struct rr_renderer *renderer)
     rr_renderer_fill(renderer);
 }
 
-void rr_hornet_abdomen_draw(struct rr_renderer *renderer)
+void rr_fighter_bee_abdomen_draw(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0xff262626);
     rr_renderer_begin_path(renderer);
@@ -402,7 +402,7 @@ void rr_hornet_abdomen_draw(struct rr_renderer *renderer)
     rr_renderer_fill(renderer);
 }
 
-void rr_hornet_leg_draw(struct rr_renderer *renderer)
+void rr_fighter_bee_leg_draw(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0xff262626);
     rr_renderer_begin_path(renderer);
@@ -421,7 +421,7 @@ void rr_hornet_leg_draw(struct rr_renderer *renderer)
     rr_renderer_fill(renderer);
 }
 
-void rr_hornet_wing_draw(struct rr_renderer *renderer)
+void rr_fighter_bee_wing_draw(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0x99c6831c);
     rr_renderer_begin_path(renderer);

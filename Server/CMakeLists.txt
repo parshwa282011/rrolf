@@ -35,6 +35,7 @@ set(SRCS
     System/PetalBehavior.c
     System/Velocity.c
     System/Web.c
+    System/BeehiveGen.c
     Main.c
     EntityAllocation.c
     EntityDetection.c

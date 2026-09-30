@@ -17,6 +17,7 @@
 #include <Server/EntityAllocation.h>
 #include <Server/Client.h>
 #include <Server/Simulation.h>
+#include <Server/System/BeehiveGen.h>
 #include <Server/Waves.h>
 
 #include <math.h>
@@ -27,14 +28,6 @@
 #include <Shared/Utilities.h>
 
 static struct rr_maze_grid DEFAULT_GRID = {0};
-
-static void set_respawn_zone(struct rr_component_arena *arena, uint32_t x,
-                             uint32_t y)
-{
-    float dim = arena->maze->grid_size;
-    arena->respawn_zone.x = 2 * x * dim;
-    arena->respawn_zone.y = 2 * y * dim;
-}
 
 EntityIdx rr_simulation_alloc_player(struct rr_simulation *this,
                                      EntityIdx arena_id, EntityIdx entity)
@@ -241,22 +234,7 @@ EntityIdx rr_simulation_alloc_mob(struct rr_simulation *this,
         struct rr_component_arena *arena =
             rr_simulation_add_arena(this, entity);
         rr_component_arena_set_biome(arena, rr_biome_id_beehive);
-        rr_component_arena_spatial_hash_init(arena, this);
-        set_respawn_zone(arena, 0, 0);
-        for (uint32_t X = 0; X < arena->maze->maze_dim; ++X)
-        {
-            for (uint32_t Y = 0; Y < arena->maze->maze_dim; ++Y)
-            {
-                uint8_t v = rr_component_arena_get_grid(arena, X, Y)->value;
-                if (v == 0 || (v & 8))
-                    continue;
-                ++arena->mob_count;
-                rr_simulation_alloc_mob(
-                    this, entity, (X + rr_frand()) * arena->maze->grid_size,
-                    (Y + rr_frand()) * arena->maze->grid_size,
-                    rr_mob_id_honeybee, rarity_id, team_id);
-            }
-        }
+        rr_beehive_generate_layout(this, entity, arena, rarity_id, team_id);
     }
     else
     {
