@@ -77,7 +77,7 @@ static uint8_t can_craft(struct rr_game *game)
 
 static uint8_t can_autocraft(struct rr_game *game)
 {
-    for (uint8_t id = 1; id <= rr_petal_id_meteor; ++id)
+    for (uint8_t id = 1; id < rr_petal_id_max; ++id)
     {
         uint32_t sum = 0;
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)

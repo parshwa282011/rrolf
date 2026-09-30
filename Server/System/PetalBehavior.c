@@ -421,6 +421,7 @@ static void system_flower_petal_movement_logic(
             break;
         }
         case rr_petal_id_nest:
+        case rr_petal_id_beehive_post:
         {
             if ((player_info->input & 2) == 0)
                 break;
@@ -728,6 +729,11 @@ system_egg_hatching_logic(struct rr_simulation *simulation,
         m_id = rr_mob_id_trex;
         m_rar = petal->rarity >= 1 ? petal->rarity - 1 : 0;
     }
+    else if (petal->id == rr_petal_id_bee_egg)
+    {
+        m_id = rr_mob_id_fighter_bee;
+        m_rar = petal->rarity >= 1 ? petal->rarity - 1 : 0;
+    }
     else if (petal->id == rr_petal_id_meteor)
     {
         m_id = rr_mob_id_meteor;
@@ -750,6 +756,16 @@ system_egg_hatching_logic(struct rr_simulation *simulation,
     {
         mob_relations->nest = relations->nest;
         rr_simulation_get_ai(simulation, mob_id)->ai_type = rr_ai_type_aggro;
+    }
+    else if (m_id == rr_mob_id_fighter_bee)
+    {
+        mob_relations->beehive_post = relations->beehive_post;
+        rr_simulation_get_ai(simulation, mob_id)->ai_type = rr_ai_type_aggro;
+        if (relations->beehive_post != RR_NULL_ENTITY &&
+            rr_simulation_entity_alive(simulation, relations->beehive_post) &&
+            rr_simulation_has_nest(simulation, relations->beehive_post))
+            ++rr_simulation_get_nest(simulation, relations->beehive_post)
+                  ->bees_spawned;
     }
     rr_component_mob_set_player_spawned(
         rr_simulation_get_mob(simulation, mob_id), 1);
@@ -841,6 +857,105 @@ static void system_nest_egg_movement_logic(struct rr_simulation *simulation,
     float radius = 100;
     rr_vector_from_polar(&chase_vector, radius, angle);
     rr_vector_add(&chase_vector, &nest_vector);
+    rr_vector_sub(&chase_vector, &position_vector);
+    rr_vector_scale(&chase_vector, 0.25);
+    rr_vector_add(&physical->acceleration, &chase_vector);
+}
+
+// Same as system_nest_egg_choosing_logic, but for bee eggs pairing up with
+// a beehive post instead of regular eggs pairing with a nest - kept
+// separate so a player can have one of each active at once.
+static void
+system_beehive_post_egg_choosing_logic(struct rr_simulation *simulation,
+                                       struct rr_component_player_info *player_info,
+                                       EntityHash id)
+{
+    struct rr_component_relations *relations =
+        rr_simulation_get_relations(simulation, id);
+    struct rr_component_physical *flower_physical =
+        rr_simulation_get_physical(simulation, player_info->flower_id);
+    if (relations->beehive_post != RR_NULL_ENTITY &&
+        !rr_simulation_entity_alive(simulation, relations->beehive_post))
+        relations->beehive_post = RR_NULL_ENTITY;
+    if (relations->beehive_post != RR_NULL_ENTITY)
+    {
+        struct rr_component_physical *post_physical =
+            rr_simulation_get_physical(simulation, relations->beehive_post);
+        struct rr_vector delta = {post_physical->x - flower_physical->x,
+                                  post_physical->y - flower_physical->y};
+        if (rr_vector_magnitude_cmp(&delta, 5000) == 1)
+            relations->beehive_post = RR_NULL_ENTITY;
+    }
+    if (relations->beehive_post != RR_NULL_ENTITY)
+        return;
+    struct rr_component_relations *flower_relations =
+        rr_simulation_get_relations(simulation, player_info->flower_id);
+    if (flower_relations->beehive_post != RR_NULL_ENTITY &&
+        rr_simulation_entity_alive(simulation, flower_relations->beehive_post))
+    {
+        relations->beehive_post = flower_relations->beehive_post;
+        if (rr_frand() < 0.5)
+            return;
+    }
+    EntityIdx post_vector[RR_SQUAD_MEMBER_COUNT - 1];
+    uint8_t post_count = 0;
+    for (uint32_t i = 0; i < simulation->nest_count; ++i)
+    {
+        EntityIdx nest_id = simulation->nest_vector[i];
+        if (!rr_simulation_get_nest(simulation, nest_id)->is_beehive_post)
+            continue;
+        struct rr_component_relations *post_relations =
+            rr_simulation_get_relations(simulation, nest_id);
+        if (post_relations->owner == player_info->flower_id)
+            continue;
+        struct rr_component_player_info *p_info = rr_simulation_get_player_info(
+            simulation, post_relations->root_owner);
+        if (p_info->squad != player_info->squad)
+            continue;
+        struct rr_component_physical *post_physical =
+            rr_simulation_get_physical(simulation, nest_id);
+        struct rr_vector delta = {post_physical->x - flower_physical->x,
+                                  post_physical->y - flower_physical->y};
+        if (rr_vector_magnitude_cmp(&delta, 5000) == 1)
+            continue;
+        post_vector[post_count++] = nest_id;
+    }
+    if (post_count > 0)
+        relations->beehive_post =
+            rr_simulation_get_entity_hash(simulation,
+                                          post_vector[rand() % post_count]);
+}
+
+// Same as system_nest_egg_movement_logic, but a beehive post accelerates
+// bee egg hatching twice as fast as a nest does for regular eggs.
+static void
+system_beehive_post_egg_movement_logic(struct rr_simulation *simulation,
+                                       EntityHash id)
+{
+    struct rr_component_relations *relations =
+        rr_simulation_get_relations(simulation, id);
+    struct rr_component_nest *post =
+        rr_simulation_get_nest(simulation, relations->beehive_post);
+    post->rotation_pos++;
+    if (post->rotation_count == 0)
+        return;
+    struct rr_component_petal *petal =
+        rr_simulation_get_petal(simulation, id);
+    struct rr_component_physical *physical =
+        rr_simulation_get_physical(simulation, id);
+    struct rr_component_physical *post_physical =
+        rr_simulation_get_physical(simulation, relations->beehive_post);
+    petal->effect_delay -= 4;
+    if (petal->effect_delay < 0)
+        petal->effect_delay = 0;
+    struct rr_vector position_vector = {physical->x, physical->y};
+    struct rr_vector post_vector = {post_physical->x, post_physical->y};
+    struct rr_vector chase_vector;
+    float angle = 2 * M_PI * (post->rotation_pos - 1) / post->rotation_count +
+                      post->global_rotation;
+    float radius = 100;
+    rr_vector_from_polar(&chase_vector, radius, angle);
+    rr_vector_add(&chase_vector, &post_vector);
     rr_vector_sub(&chase_vector, &position_vector);
     rr_vector_scale(&chase_vector, 0.25);
     rr_vector_add(&physical->acceleration, &chase_vector);
@@ -949,9 +1064,25 @@ static void rr_system_petal_reload_foreach_function(EntityIdx id,
                         system_egg_hatching_logic(simulation, player_info, p_petal);
                     }
                 }
+                else if (data->id == rr_petal_id_bee_egg)
+                {
+                    system_beehive_post_egg_choosing_logic(
+                        simulation, player_info, p_petal->entity_hash);
+                    if (rr_simulation_has_petal(simulation, p_petal->entity_hash))
+                    {
+                        if (rr_simulation_get_relations(simulation,
+                                p_petal->entity_hash)->beehive_post !=
+                            RR_NULL_ENTITY)
+                            system_beehive_post_egg_movement_logic(
+                                simulation, p_petal->entity_hash);
+                        system_egg_hatching_logic(simulation, player_info, p_petal);
+                    }
+                }
                 if (!rr_simulation_has_petal(simulation, p_petal->entity_hash) ||
                     rr_simulation_get_relations(simulation,
-                        p_petal->entity_hash)->nest != RR_NULL_ENTITY)
+                        p_petal->entity_hash)->nest != RR_NULL_ENTITY ||
+                    rr_simulation_get_relations(simulation,
+                        p_petal->entity_hash)->beehive_post != RR_NULL_ENTITY)
                 {
                     if (--clump_count == 0)
                         --rotation_pos;
@@ -1085,6 +1216,52 @@ static void system_petal_misc_logic(EntityIdx id, void *_simulation)
                 rr_component_health_set_health(nest_health, nest_health->max_health);
                 nest_health->damage = 0;
                 nest_health->damage_reduction =
+                    5 * RR_MOB_RARITY_SCALING[stats_rarity].damage;
+            }
+            else if (petal->id == rr_petal_id_beehive_post)
+            {
+                struct rr_component_relations *flower_relations =
+                    rr_simulation_get_relations(simulation, relations->owner);
+                if (flower_relations->beehive_post != RR_NULL_ENTITY &&
+                    rr_simulation_entity_alive(simulation,
+                                               flower_relations->beehive_post))
+                {
+                    struct rr_component_nest *old_post = rr_simulation_get_nest(
+                        simulation, flower_relations->beehive_post);
+                    if (old_post->rarity < petal->rarity)
+                        rr_simulation_request_entity_deletion(
+                            simulation, flower_relations->beehive_post);
+                    else
+                        return;
+                }
+                EntityIdx post_id = rr_simulation_alloc_entity(simulation);
+                petal->p_petal->entity_hash = flower_relations->beehive_post =
+                    rr_simulation_get_entity_hash(simulation, post_id);
+                struct rr_component_nest *post =
+                    rr_simulation_add_nest(simulation, post_id);
+                post->rarity = petal->rarity;
+                rr_component_nest_set_is_beehive_post(post, 1);
+                struct rr_component_physical *post_physical =
+                    rr_simulation_add_physical(simulation, post_id);
+                rr_component_physical_set_x(post_physical, physical->x);
+                rr_component_physical_set_y(post_physical, physical->y);
+                rr_component_physical_set_radius(post_physical, 250);
+                rr_component_physical_set_angle(post_physical, rr_frand() * 2 * M_PI);
+                post_physical->friction = 0.75;
+                post_physical->arena = physical->arena;
+                struct rr_component_relations *post_relations =
+                    rr_simulation_add_relations(simulation, post_id);
+                rr_component_relations_set_team(post_relations, relations->team);
+                rr_component_relations_set_owner(post_relations, relations->owner);
+                rr_component_relations_update_root_owner(simulation, post_relations);
+                struct rr_component_health *post_health =
+                    rr_simulation_add_health(simulation, post_id);
+                uint8_t stats_rarity = post->rarity > 0 ? post->rarity - 1 : 0;
+                rr_component_health_set_max_health(
+                    post_health, 200 * RR_MOB_RARITY_SCALING[stats_rarity].health);
+                rr_component_health_set_health(post_health, post_health->max_health);
+                post_health->damage = 0;
+                post_health->damage_reduction =
                     5 * RR_MOB_RARITY_SCALING[stats_rarity].damage;
             }
         }

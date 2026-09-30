@@ -433,6 +433,7 @@ void rr_renderer_draw_petal(struct rr_renderer *renderer, uint8_t id,
             rr_renderer_scale(renderer, 1 / 0.2);
             break;
         case rr_petal_id_egg:
+        case rr_petal_id_bee_egg:
             rr_renderer_set_stroke(renderer, 0xffb08a48);
             rr_renderer_set_fill(renderer, 0xffddad5a);
             rr_renderer_set_line_width(renderer, 3);
@@ -2171,6 +2172,53 @@ void rr_renderer_draw_petal(struct rr_renderer *renderer, uint8_t id,
                                         0.21, 6.45);
             rr_renderer_fill(renderer);
             rr_renderer_scale(renderer, 1 / 0.2f);
+            break;
+        case rr_petal_id_beehive_post:
+        {
+            rr_renderer_set_stroke(renderer, 0xff6b4a1a);
+            rr_renderer_set_line_width(renderer, 2);
+            float outer_r = 13.0f;
+            float inner_r = 8.0f;
+            rr_renderer_set_fill(renderer, 0xffb8873a);
+            rr_renderer_begin_path(renderer);
+            for (uint8_t i = 0; i < 6; ++i)
+            {
+                float angle = (float)i * (M_PI / 3.0);
+                float x = outer_r * cosf(angle), y = outer_r * sinf(angle);
+                if (i == 0)
+                    rr_renderer_move_to(renderer, x, y);
+                else
+                    rr_renderer_line_to(renderer, x, y);
+            }
+            rr_renderer_fill(renderer);
+            rr_renderer_stroke(renderer);
+            rr_renderer_set_fill(renderer, 0xffd9a95c);
+            rr_renderer_begin_path(renderer);
+            for (uint8_t i = 0; i < 6; ++i)
+            {
+                float angle = (float)i * (M_PI / 3.0);
+                float x = inner_r * cosf(angle), y = inner_r * sinf(angle);
+                if (i == 0)
+                    rr_renderer_move_to(renderer, x, y);
+                else
+                    rr_renderer_line_to(renderer, x, y);
+            }
+            rr_renderer_fill(renderer);
+            break;
+        }
+        case rr_petal_id_dev_stinger:
+            rr_renderer_set_fill(renderer, 0xffff00c8);
+            rr_renderer_set_stroke(renderer, 0xff5c0047);
+            rr_renderer_set_line_width(renderer, 3.0f);
+            rr_renderer_set_line_join(renderer, 1.0f);
+            rr_renderer_set_line_cap(renderer, 1.0f);
+            rr_renderer_begin_path(renderer);
+            rr_renderer_move_to(renderer, 10.00, 0.00);
+            rr_renderer_line_to(renderer, -5.00, 8.66);
+            rr_renderer_line_to(renderer, -5.00, -8.66);
+            rr_renderer_line_to(renderer, 10.00, 0.00);
+            rr_renderer_fill(renderer);
+            rr_renderer_stroke(renderer);
             break;
         default:
             break;

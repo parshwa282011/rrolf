@@ -37,6 +37,7 @@ void rr_renderer_draw_rarity_name(struct rr_renderer *, uint8_t, float, int8_t,
 
 void rr_renderer_draw_tile_hell_creek(struct rr_renderer *, uint8_t);
 void rr_renderer_draw_tile_garden(struct rr_renderer *, uint8_t);
+void rr_renderer_draw_tile_beehive(struct rr_renderer *, uint8_t);
 void rr_renderer_draw_prop(struct rr_renderer *, uint8_t);
 void rr_renderer_draw_web(struct rr_renderer *);
 void rr_renderer_draw_nest_stick(struct rr_renderer *);

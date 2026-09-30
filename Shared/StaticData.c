@@ -18,6 +18,8 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <Shared/Utilities.h>
 
@@ -79,7 +81,10 @@ struct rr_petal_data RR_PETAL_DATA[rr_petal_id_max] = {
     {rr_petal_id_wax,       rr_rarity_id_unusual,   offensive, 10.0f,  10.0f,  10.0f,  38,  0, {2,2,2,2,2,2,2,2}},
     {rr_petal_id_sand,      rr_rarity_id_common,    offensive, 15.0f,  10.0f,  10.0f,  37,  0, {4,4,4,4,4,4,4,4}},
     {rr_petal_id_mint,      rr_rarity_id_unusual,   offensive,  5.0f,  10.0f,  10.0f,  50, 25, {1,1,1,1,1,1,1,1}},
-};    
+    {rr_petal_id_bee_egg,      rr_rarity_id_unusual,   defensive,  1.0f,  75.0f,  10.0f,  25,100, {3,3,3,2,2,2,1,1}},
+    {rr_petal_id_beehive_post, rr_rarity_id_legendary, defensive,  5.0f,  25.0f,   0.0f, 250, 13, {1,1,1,1,1,1,1,1}},
+    {rr_petal_id_dev_stinger,  rr_rarity_id_common,    offensive,  1000000000.0f, 3.0f, 10.0f,  10,  0, {1,1,1,1,1,1,1,1}},
+};
 
 char const *RR_PETAL_NAMES[rr_petal_id_max] = {
     "Secret",   "Petal",     "Pellet",    "Fossil", "Stinger",  "Berry",   "Shell",
@@ -87,6 +92,7 @@ char const *RR_PETAL_NAMES[rr_petal_id_max] = {
     "Bone",     "Web",       "Seed",      "Gravel", "Club",     "Crest",   "Droplet",
     "Beak",     "Lightning", "Third Eye", "Nest",   "Fireball", "Meat",    "Bubble",
     "Meteor",   "Mandible",  "Wax",       "Sand",   "Mint",
+    "Bee Egg",  "Beehive Post", "Dev Stinger",
 };
     
 char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max] = {
@@ -122,7 +128,10 @@ char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max] = {
     "Does more damage if target hp is below 50%",
     "Made by the bees",
     "Very fine",
-    "Remember to feed your pets"
+    "Remember to feed your pets",
+    "Spawns a friendly fighter bee to protect you",
+    "Place it down. Attracts nearby mobs and speeds up bee egg hatching",
+    "For testing. 1,000,000,000 damage in one hit"
 };
 
 struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
@@ -140,20 +149,23 @@ struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
     {rr_mob_id_quetzalcoatlus,     rr_rarity_id_common, rr_rarity_id_ultimate,  65, 20, 28.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_beak,    0.05},{rr_petal_id_fossil,     0.1},{rr_petal_id_lightning, 0.01}}},
     {rr_mob_id_edmontosaurus,      rr_rarity_id_common, rr_rarity_id_ultimate,  50, 15, 30.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_max,     {{rr_petal_id_bone,    0.01},{rr_petal_id_fossil,     0.1},{rr_petal_id_third_eye, 0.05}}},
     {rr_mob_id_ant,                rr_rarity_id_common, rr_rarity_id_ultimate,  10, 10, 20.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,   0.1},{rr_petal_id_leaf,       0.1},{rr_petal_id_mandible,  0.05}}},
-    {rr_mob_id_hornet,             rr_rarity_id_common, rr_rarity_id_ultimate,  28, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_stinger,  0.1},{rr_petal_id_crest,     0.05}}},
+    {rr_mob_id_fighter_bee,        rr_rarity_id_common, rr_rarity_id_ultimate,  28, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_stinger,  0.1},{rr_petal_id_crest,     0.05}}},
     {rr_mob_id_dragonfly,          rr_rarity_id_common, rr_rarity_id_ultimate,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,   0.1},{rr_petal_id_magnet,    0.05}}},
-    {rr_mob_id_honeybee,           rr_rarity_id_common, rr_rarity_id_ultimate,  12, 25, 22.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_wax,     0.05},{rr_petal_id_stinger,   0.05}}},
+    {rr_mob_id_honeybee,           rr_rarity_id_common, rr_rarity_id_ultimate,  12, 25, 22.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_wax,     0.05},{rr_petal_id_stinger,   0.05}}},
     {rr_mob_id_beehive,            rr_rarity_id_common, rr_rarity_id_ultimate,   0,  0, 45.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_wax,     0.05},{rr_petal_id_azalea,    0.05}}},
     {rr_mob_id_spider,             rr_rarity_id_common, rr_rarity_id_ultimate,  20, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_web,      0.1},{rr_petal_id_third_eye, 0.01}}},
     {rr_mob_id_house_centipede,    rr_rarity_id_common, rr_rarity_id_ultimate,  25, 10, 23.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_peas,     0.1},{rr_petal_id_sand,      0.05}}},
     {rr_mob_id_lanternfly,         rr_rarity_id_common, rr_rarity_id_ultimate,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_mint,     0.1},{rr_petal_id_sand,      0.05}}},
+    {rr_mob_id_queen_bee,          rr_rarity_id_common, rr_rarity_id_ultimate, 100, 50, 32.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_wax, 0.1},{rr_petal_id_mandible, 0.02},{rr_petal_id_bee_egg, 0.02}}},
+    {rr_mob_id_beehive_core,       rr_rarity_id_common, rr_rarity_id_ultimate, 500,  0, 45.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_wax, 0.05},{rr_petal_id_azalea, 0.05},{rr_petal_id_beehive_post, 0.0005}}},
 };
 
 char const *RR_MOB_NAMES[rr_mob_id_max] = {
 "Triceratops","T-Rex","Fern","Tree","Pteranodon","Dakotaraptor",
 "Pachycephalosaurus","Ornithomimus","Ankylosaurus","Meteor",
-"Quetzalcoatlus","Edmontosaurus","Ant","Hornet","Dragonfly",
-"Honeybee","Beehive","Spider","House Centipede","Lanternfly"
+"Quetzalcoatlus","Edmontosaurus","Ant","Fighter Bee","Dragonfly",
+"Honeybee","Beehive","Spider","House Centipede","Lanternfly","Queen Bee",
+"Beehive Core"
 };
 
 uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
@@ -223,6 +235,18 @@ struct rr_mob_rarity_scale RR_MOB_RARITY_SCALING[rr_rarity_id_max] = {
     {192,    14.5, 4  },
     {2560,   24.6, 5.5},
     {38400,  42,   7  },
+};
+
+struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max] = {
+//   size_tier  fighter_bee_count  honeybee_count
+    {0,          4,                 8 }, // common
+    {0,          6,                 10}, // unusual
+    {1,          8,                 14}, // rare
+    {1,          12,                18}, // epic
+    {2,          16,                24}, // legendary
+    {2,          20,                30}, // mythic
+    {3,          26,                36}, // exotic
+    {3,          32,                44}, // ultimate
 };
 // clang-format on
 
@@ -305,7 +329,7 @@ static void init_game_coefficients()
          : template[(y + b) * size / 2 + x + a])
 #define maze_grid(x, y) maze[(y)*size + (x)]
 
-static void init_maze(uint32_t size, uint8_t *template,
+void rr_init_maze_grid(uint32_t size, uint8_t *template,
                       struct rr_maze_grid *maze)
 {
     for (int32_t y = 0; y < size / 2; ++y)
@@ -466,7 +490,7 @@ static double get_prd_base(double p)
 }
 
 #define init(MAZE)                                                             \
-    init_maze(sizeof(RR_MAZE_##MAZE[0]) / sizeof(struct rr_maze_grid),         \
+    rr_init_maze_grid(sizeof(RR_MAZE_##MAZE[0]) / sizeof(struct rr_maze_grid), \
               &RR_MAZE_TEMPLATE_##MAZE[0][0], &RR_MAZE_##MAZE[0][0]);
 
 void rr_static_data_init()
@@ -477,6 +501,10 @@ void rr_static_data_init()
     init(HELL_CREEK);
     init(BURROW);
     init(PVP);
+    init(BURROW_SMALL);
+    init(BURROW_MEDIUM);
+    init(BURROW_LARGE);
+    init(BURROW_HUGE);
 #ifdef RR_SERVER
     print_chances(1);  // c
     print_chances(4);  // C
@@ -629,6 +657,93 @@ RR_DEFINE_MAZE(PVP, 80) = {
 };
 RR_DEFINE_MAZE(BURROW, 4) = {{1, 1}, {0, 1}};
 
+// A handful of pregenerated beehive interior sizes, progressively larger -
+// picked per spawn by rarity (RR_BEEHIVE_RARITY_SCALING[rarity].size_tier),
+// not procedurally generated.
+// hand-authored in the map editor and pasted in here as walls-inverted
+// (editor exports 1=wall; these templates use 1=open floor), same workflow
+// as the pvp map
+RR_DEFINE_MAZE(BURROW_SMALL, 24) = {
+    {0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,0,0},
+    {0,1,1,1,0,1,1,0,0,1,1,0},
+    {0,0,1,0,0,1,1,1,0,0,0,0},
+    {0,0,0,0,1,1,1,1,1,1,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,0,1,0,1,1,0},
+    {0,0,0,1,0,0,0,1,0,0,0,0},
+    {0,1,0,0,0,1,1,1,1,1,0,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0}
+};
+RR_DEFINE_MAZE(BURROW_MEDIUM, 32) = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,0,0,1,0,0,1,0,0},
+    {0,0,1,1,1,1,1,0,0,1,1,1,0,0,0,0},
+    {0,0,0,0,1,1,0,0,1,1,1,1,1,1,0,0},
+    {0,1,1,0,0,0,0,1,1,1,0,1,1,1,1,0},
+    {0,1,1,1,0,0,1,1,0,0,0,0,0,0,0,0},
+    {0,1,1,1,1,1,1,0,0,1,1,1,1,0,0,0},
+    {0,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,0},
+    {0,1,0,0,0,0,1,1,1,0,0,1,1,1,1,0},
+    {0,1,1,1,0,1,1,1,0,0,0,0,0,0,0,0},
+    {0,1,1,1,0,1,1,0,0,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+};
+RR_DEFINE_MAZE(BURROW_LARGE, 40) = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,0,0},
+    {0,1,1,1,1,1,1,1,0,1,1,1,0,0,1,1,1,1,1,0},
+    {0,0,1,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0},
+    {0,0,0,1,1,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0},
+    {0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,1,0,0},
+    {0,0,1,1,1,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0},
+    {0,1,1,1,1,1,1,0,1,1,1,0,0,0,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,0,1,1,1,1,1,0,0,1,1,1,1,0},
+    {0,1,1,1,1,1,1,0,1,1,1,1,1,1,0,1,1,1,1,0},
+    {0,1,1,1,1,1,1,0,0,1,1,1,1,1,0,0,0,1,1,0},
+    {0,0,0,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,0},
+    {0,1,0,0,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,0},
+    {0,1,0,0,0,0,1,1,1,0,0,0,0,0,1,1,1,1,1,0},
+    {0,1,1,1,1,0,0,1,1,1,1,1,1,0,0,1,1,1,1,0},
+    {0,1,1,1,1,1,0,0,1,1,1,1,1,1,0,0,0,0,1,0},
+    {0,1,1,1,1,1,1,0,0,1,1,1,1,0,0,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+};
+RR_DEFINE_MAZE(BURROW_HUGE, 48) = {
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0},
+    {0,1,1,1,1,1,1,1,1,0,0,1,1,0,0,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,0,1,1,1,1,0,0,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,0,0,1,1,1,1,1,0,0,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,0,0,1,1,1,1,0,0},
+    {0,0,0,1,1,1,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0},
+    {0,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,0,1,1,1,0,0,0,1,1,1,1,1,0,1,1,1,1,0},
+    {0,1,1,1,1,1,0,1,0,0,0,1,0,0,1,1,1,1,0,1,1,1,1,0},
+    {0,1,1,1,1,1,0,1,0,1,1,1,1,0,1,1,1,0,0,1,1,1,0,0},
+    {0,1,1,1,1,1,0,0,0,1,1,1,1,0,1,1,0,0,1,1,1,0,0,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,0,1,0,0,1,1,1,0,0,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,0,0,1,1,0},
+    {0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,0},
+    {0,0,0,1,1,1,1,1,1,0,0,0,0,1,1,1,1,0,0,1,1,1,1,0},
+    {0,1,0,0,0,0,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0,1,0},
+    {0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,1,0},
+    {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
+};
+
 #define MAZE_ENTRY(MAZE, GRID_SIZE)                                            \
     (sizeof(RR_MAZE_##MAZE[0]) / sizeof(struct rr_maze_grid)), GRID_SIZE,      \
         &RR_MAZE_##MAZE[0][0]
@@ -657,6 +772,13 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
     {MAZE_ENTRY(BURROW, 512), 0},
 };
 
+struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {
+    {MAZE_ENTRY(BURROW_SMALL, 512), 0},
+    {MAZE_ENTRY(BURROW_MEDIUM, 512), 0},
+    {MAZE_ENTRY(BURROW_LARGE, 512), 0},
+    {MAZE_ENTRY(BURROW_HUGE, 512), 0},
+};
+
 #ifdef RYSTERIA
 struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
     {"wss://rysteria.pro/default",   1234,   "Hell Creek"}, // hell creek
@@ -666,8 +788,8 @@ struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
 };
 #else
 struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
-    {"ws://localhost:1234", 1234, "Hell Creek"}, // hell creek
-    {"ws://localhost:1235", 1235, "pvp"},        // pvp
+    {"ws://127.0.0.1:1234", 1234, "Hell Creek"}, // hell creek
+    {"ws://127.0.0.1:1235", 1235, "pvp"},        // pvp
     {NULL,                  0,    NULL},         // garden, doesn't have a server
     {NULL,                  0,    NULL},         // beehive, lives inside other arenas
 };

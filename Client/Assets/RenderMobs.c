@@ -116,6 +116,10 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         rr_renderer_scale(renderer, 0.4f);
         render_sprite(renderer, id, 0, flags);
         break;
+    case rr_mob_id_beehive_core:
+        rr_renderer_scale(renderer, 0.3f);
+        render_sprite(renderer, id, 0, flags);
+        break;
     case rr_mob_id_pteranodon:
         rr_renderer_scale(renderer, 0.15f);
 
@@ -206,7 +210,26 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         rr_renderer_translate(renderer, 70, 0);
         render_sprite(renderer, id, 0, flags);
         break;
-    case rr_mob_id_hornet:
+    case rr_mob_id_queen_bee:
+        rr_renderer_scale(renderer, 0.28f);
+        rr_renderer_translate(renderer, -90, 0);
+        render_sprite(renderer, id, 2, flags);
+        rr_renderer_translate(renderer, 90, 0);
+        render_sprite(renderer, id, 1, flags);
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_rotate(renderer, animation_tick * 0.2f + 2 * M_PI / 3);
+        rr_renderer_translate(renderer, 100, 0);
+        render_sprite(renderer, id, 4, flags);
+        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_rotate(renderer, animation_tick * -0.2f - 2 * M_PI / 3);
+        rr_renderer_translate(renderer, 100, 0);
+        render_sprite(renderer, id, 4, flags);
+        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_translate(renderer, 80, 0);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_fighter_bee:
     case rr_mob_id_honeybee:
         rr_renderer_scale(renderer, 0.2f);
         /*
@@ -362,6 +385,28 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
             render_sprite(renderer, id, 1, flags);
         }
         break;
+    case rr_mob_id_lanternfly:
+        rr_renderer_scale(renderer, 0.2);
+        render_sprite(renderer, id, 1, flags); // abdomen
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_rotate(renderer, animation_tick * 0.2f);
+        render_sprite(renderer, id, 0, flags); // wing1
+        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_scale2(renderer, 1, -1);
+        rr_renderer_rotate(renderer, animation_tick * -0.2f);
+        render_sprite(renderer, id, 0, flags); // mirrored wing1
+        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_translate(renderer, -40, 60);
+        render_sprite(renderer, id, 2, flags); // leg
+        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_scale2(renderer, -1, 1);
+        rr_renderer_translate(renderer, -40, 60);
+        render_sprite(renderer, id, 2, flags); // mirrored leg
+        rr_renderer_context_state_free(renderer, &state);
+        break;
     }
 
     rr_renderer_context_state_free(renderer, &original_state);
@@ -445,9 +490,9 @@ void rr_renderer_mob_cache_init()
                                  rr_ant_leg_draw, 0);
 
     rr_renderer_spritesheet_init(
-        &mob_sprites[13], NULL, 192, 192, rr_hornet_head_draw, 192, 192,
-        rr_hornet_thorax_draw, 192, 192, rr_hornet_abdomen_draw, 192, 192,
-        rr_hornet_leg_draw, 192, 192, rr_hornet_wing_draw, 0);
+        &mob_sprites[13], NULL, 192, 192, rr_fighter_bee_head_draw, 192, 192,
+        rr_fighter_bee_thorax_draw, 192, 192, rr_fighter_bee_abdomen_draw, 192,
+        192, rr_fighter_bee_leg_draw, 192, 192, rr_fighter_bee_wing_draw, 0);
 
     rr_renderer_spritesheet_init(
         &mob_sprites[14], NULL, 192, 192, rr_dragonfly_head_draw, 192, 192,
@@ -470,4 +515,17 @@ void rr_renderer_mob_cache_init()
                                  rr_house_centipede_head_draw, 240, 240,
                                  rr_house_centipede_body_draw, 240, 240,
                                  rr_house_centipede_leg_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[19], NULL, 240, 240,
+                                 rr_lanternfly_wing1_draw, 240, 240,
+                                 rr_lanternfly_abdomen_draw, 240, 240,
+                                 rr_lanternfly_leg_draw, 0);
+
+    rr_renderer_spritesheet_init(
+        &mob_sprites[20], NULL, 192, 192, rr_queen_bee_head_draw, 192, 192,
+        rr_queen_bee_thorax_draw, 192, 192, rr_queen_bee_abdomen_draw, 192,
+        192, rr_queen_bee_leg_draw, 192, 192, rr_queen_bee_wing_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[21], NULL, 400, 400,
+                                 rr_beehive_core_draw, 0);
 }

@@ -36,6 +36,7 @@ struct rr_component_arena
     RR_SERVER_ONLY(struct rr_spawn_zone respawn_zone;)
     EntityIdx parent_id;
     uint8_t biome;
+    uint8_t size_tier;
     RR_SERVER_ONLY(uint8_t protocol_state;)
     RR_SERVER_ONLY(uint8_t first_squad_to_enter;)
     RR_SERVER_ONLY(uint8_t player_entered;)
@@ -52,6 +53,9 @@ void rr_component_arena_free(struct rr_component_arena *,
 
 RR_SERVER_ONLY(void rr_component_arena_spatial_hash_init(
                    struct rr_component_arena *, struct rr_simulation *);)
+RR_SERVER_ONLY(void rr_component_arena_spatial_hash_init_custom(
+                   struct rr_component_arena *, struct rr_simulation *,
+                   struct rr_maze_declaration *maze);)
 RR_SERVER_ONLY(struct rr_maze_grid *rr_component_arena_get_grid(
                    struct rr_component_arena *, uint32_t, uint32_t);)
 RR_SERVER_ONLY(void rr_component_arena_write(
@@ -61,3 +65,4 @@ RR_CLIENT_ONLY(void rr_component_arena_read(struct rr_component_arena *,
                                             struct proto_bug *);)
 
 RR_DECLARE_PUBLIC_FIELD(arena, uint8_t, biome)
+RR_DECLARE_PUBLIC_FIELD(arena, uint8_t, size_tier)

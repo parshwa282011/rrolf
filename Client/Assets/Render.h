@@ -77,11 +77,11 @@ void rr_ant_head_draw(struct rr_renderer *);
 void rr_ant_thorax_draw(struct rr_renderer *);
 void rr_ant_leg_draw(struct rr_renderer *);
 
-void rr_hornet_abdomen_draw(struct rr_renderer *);
-void rr_hornet_head_draw(struct rr_renderer *);
-void rr_hornet_thorax_draw(struct rr_renderer *);
-void rr_hornet_leg_draw(struct rr_renderer *);
-void rr_hornet_wing_draw(struct rr_renderer *);
+void rr_fighter_bee_abdomen_draw(struct rr_renderer *);
+void rr_fighter_bee_head_draw(struct rr_renderer *);
+void rr_fighter_bee_thorax_draw(struct rr_renderer *);
+void rr_fighter_bee_leg_draw(struct rr_renderer *);
+void rr_fighter_bee_wing_draw(struct rr_renderer *);
 
 void rr_dragonfly_abdomen_draw(struct rr_renderer *);
 void rr_dragonfly_head_draw(struct rr_renderer *);
@@ -94,6 +94,15 @@ void rr_honeybee_head_draw(struct rr_renderer *);
 void rr_honeybee_leg_draw(struct rr_renderer *);
 void rr_honeybee_wing_draw(struct rr_renderer *);
 
+void rr_queen_bee_abdomen_draw(struct rr_renderer *);
+void rr_queen_bee_thorax_draw(struct rr_renderer *);
+void rr_queen_bee_head_draw(struct rr_renderer *);
+void rr_queen_bee_leg_draw(struct rr_renderer *);
+void rr_queen_bee_wing_draw(struct rr_renderer *);
+
+void rr_beehive_core_draw(struct rr_renderer *);
+void rr_beehive_post_draw(struct rr_renderer *);
+
 void rr_spider_abdomen_draw(struct rr_renderer *);
 void rr_spider_head_draw(struct rr_renderer *);
 void rr_spider_leg_draw(struct rr_renderer *);
@@ -101,6 +110,10 @@ void rr_spider_leg_draw(struct rr_renderer *);
 void rr_house_centipede_body_draw(struct rr_renderer *);
 void rr_house_centipede_head_draw(struct rr_renderer *);
 void rr_house_centipede_leg_draw(struct rr_renderer *);
+
+void rr_lanternfly_wing1_draw(struct rr_renderer *);
+void rr_lanternfly_abdomen_draw(struct rr_renderer *);
+void rr_lanternfly_leg_draw(struct rr_renderer *);
 
 void rr_hc_tile_1_draw(struct rr_renderer *);
 void rr_hc_tile_2_draw(struct rr_renderer *);
@@ -113,6 +126,10 @@ void rr_ga_tile_3_draw(struct rr_renderer *);
 void rr_oc_tile_1_draw(struct rr_renderer *);
 void rr_oc_tile_2_draw(struct rr_renderer *);
 void rr_oc_tile_3_draw(struct rr_renderer *);
+
+void rr_bh_tile_1_draw(struct rr_renderer *);
+void rr_bh_tile_2_draw(struct rr_renderer *);
+void rr_bh_tile_3_draw(struct rr_renderer *);
 
 void rr_prop_fern_draw(struct rr_renderer *);
 void rr_prop_moss_draw(struct rr_renderer *);

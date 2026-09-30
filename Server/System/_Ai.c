@@ -749,7 +749,7 @@ static void tick_ai_aggro_edmontosaurus(EntityIdx entity,
     }
 }
 
-static void tick_ai_aggro_hornet(EntityIdx entity,
+static void tick_ai_aggro_fighter_bee(EntityIdx entity,
                                  struct rr_simulation *simulation)
 {
     struct rr_component_ai *ai = rr_simulation_get_ai(simulation, entity);
@@ -945,8 +945,8 @@ static void system_for_each(EntityIdx entity, void *simulation)
     case rr_mob_id_edmontosaurus:
         tick_ai_aggro_edmontosaurus(entity, this);
         break;
-    case rr_mob_id_hornet:
-        tick_ai_aggro_hornet(entity, this);
+    case rr_mob_id_fighter_bee:
+        tick_ai_aggro_fighter_bee(entity, this);
         break;
     default:
         RR_UNREACHABLE("invalid ai aggro type state");

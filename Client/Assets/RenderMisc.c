@@ -128,21 +128,27 @@ void rr_renderer_draw_tile_garden(struct rr_renderer *renderer, uint8_t pos)
     render_sprite_from_cache(renderer, &background_tiles, TILES_SIZE + pos);
 }
 
+void rr_renderer_draw_tile_beehive(struct rr_renderer *renderer, uint8_t pos)
+{
+    render_sprite_from_cache(renderer, &background_tiles,
+                             2 * TILES_SIZE + pos);
+}
+
 void rr_renderer_draw_prop(struct rr_renderer *renderer, uint8_t pos)
 {
-    render_sprite_from_cache(renderer, &background_tiles, 2 * TILES_SIZE + pos);
+    render_sprite_from_cache(renderer, &background_tiles, 3 * TILES_SIZE + pos);
 }
 
 void rr_renderer_draw_web(struct rr_renderer *renderer)
 {
     render_sprite_from_cache(renderer, &background_tiles,
-                             2 * TILES_SIZE + PROP_SIZE);
+                             3 * TILES_SIZE + PROP_SIZE);
 }
 
 void rr_renderer_draw_nest(struct rr_renderer *renderer)
 {
     render_sprite_from_cache(renderer, &background_tiles,
-                             2 * TILES_SIZE + PROP_SIZE + 1);
+                             3 * TILES_SIZE + PROP_SIZE + 1);
 }
 
 void rr_renderer_draw_nest_stick(struct rr_renderer *renderer)
@@ -208,7 +214,8 @@ void rr_renderer_tiles_init()
         &background_tiles, NULL, 256, 256, rr_hc_tile_1_draw, 256, 256,
         rr_hc_tile_2_draw, 256, 256, rr_hc_tile_3_draw, 256, 256,
         rr_ga_tile_1_draw, 256, 256, rr_ga_tile_2_draw, 256, 256,
-        rr_ga_tile_3_draw, 800, 800, rr_prop_fern_draw, 800, 800,
-        rr_prop_moss_draw, 250, 250, asset_web_draw, 700, 700, asset_nest_draw,
-        0);
+        rr_ga_tile_3_draw, 256, 256, rr_bh_tile_1_draw, 256, 256,
+        rr_bh_tile_2_draw, 256, 256, rr_bh_tile_3_draw, 800, 800,
+        rr_prop_fern_draw, 800, 800, rr_prop_moss_draw, 250, 250,
+        asset_web_draw, 700, 700, asset_nest_draw, 0);
 }

@@ -29,6 +29,7 @@
 #include <Server/EntityAllocation.h>
 #include <Server/Server.h>
 #include <Server/Simulation.h>
+#include <Server/System/BeehiveGen.h>
 
 #include <Shared/StaticData.h>
 #include <Shared/Utilities.h>
@@ -82,8 +83,14 @@ void rr_component_mob_free(struct rr_component_mob *this,
     struct rr_component_arena *arena =
         rr_simulation_get_arena(simulation, physical->arena);
     --arena->mob_count;
+    if (this->id == rr_mob_id_beehive_core)
+        rr_beehive_core_teardown(simulation, this->parent_id, physical->arena);
     if (this->no_drop)
         return;
+    if (this->id == rr_mob_id_tree && rr_frand() < 0.05)
+        rr_simulation_alloc_mob(simulation, physical->arena, physical->x,
+                                physical->y, rr_mob_id_beehive, this->rarity,
+                                relations->team);
 #ifdef PVP
     if (arena->pvp && rr_simulation_entity_alive(simulation, health->last_attacker) &&
         rr_simulation_has_player_info(simulation, health->last_attacker))

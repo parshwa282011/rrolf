@@ -101,9 +101,23 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     struct rr_renderer *renderer = game->renderer;
     struct rr_component_arena *arena =
         rr_simulation_get_arena(game->simulation, game->player_info->arena);
-    float grid_size = RR_MAZES[arena->biome].grid_size;
-    uint32_t maze_dim = RR_MAZES[arena->biome].maze_dim;
-    struct rr_maze_grid *grid = RR_MAZES[arena->biome].maze;
+    float grid_size;
+    uint32_t maze_dim;
+    struct rr_maze_grid *grid;
+    if (arena->biome == rr_biome_id_beehive)
+    {
+        struct rr_maze_declaration *tier =
+            &RR_BEEHIVE_MAZE_TIERS[arena->size_tier];
+        grid_size = tier->grid_size;
+        maze_dim = tier->maze_dim;
+        grid = tier->maze;
+    }
+    else
+    {
+        grid_size = RR_MAZES[arena->biome].grid_size;
+        maze_dim = RR_MAZES[arena->biome].maze_dim;
+        grid = RR_MAZES[arena->biome].maze;
+    }
     DRAW_MINIMAP(&minimap, grid);
     rr_renderer_scale(renderer, renderer->scale);
     rr_renderer_scale(renderer, this->abs_width / minimap.width);

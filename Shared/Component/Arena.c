@@ -30,12 +30,15 @@
 #include <Shared/Utilities.h>
 #endif
 
-#define FOR_EACH_PUBLIC_FIELD X(biome, uint8)
+#define FOR_EACH_PUBLIC_FIELD                                                  \
+    X(biome, uint8)                                                           \
+    X(size_tier, uint8)
 
 enum
 {
     state_flags_biome = 0b000001,
-    state_flags_all = 0b000001
+    state_flags_size_tier = 0b000010,
+    state_flags_all = 0b000011
 };
 
 void rr_component_arena_init(struct rr_component_arena *this,
@@ -85,6 +88,15 @@ void rr_component_arena_spatial_hash_init(struct rr_component_arena *this,
                          this->maze->maze_dim * this->maze->grid_size);
 }
 
+void rr_component_arena_spatial_hash_init_custom(
+    struct rr_component_arena *this, struct rr_simulation *simulation,
+    struct rr_maze_declaration *maze)
+{
+    this->maze = maze;
+    rr_spatial_hash_init(&this->spatial_hash, simulation,
+                         this->maze->maze_dim * this->maze->grid_size);
+}
+
 struct rr_maze_grid *
 rr_component_arena_get_grid(struct rr_component_arena *this, uint32_t x,
                             uint32_t y)
@@ -104,6 +116,7 @@ void rr_component_arena_write(struct rr_component_arena *this,
 }
 
 RR_DEFINE_PUBLIC_FIELD(arena, uint8_t, biome)
+RR_DEFINE_PUBLIC_FIELD(arena, uint8_t, size_tier)
 #endif
 
 #ifdef RR_CLIENT

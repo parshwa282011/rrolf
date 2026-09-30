@@ -143,8 +143,11 @@ enum rr_petal_id
     rr_petal_id_wax,       // 30
     rr_petal_id_sand,      // 31
     rr_petal_id_mint,      // 32
+    rr_petal_id_bee_egg,      // 33
+    rr_petal_id_beehive_post, // 34
+    rr_petal_id_dev_stinger,  // 35
 
-    rr_petal_id_max,       // 33
+    rr_petal_id_max,       // 36
 };
 
 enum rr_mob_id
@@ -163,15 +166,17 @@ enum rr_mob_id
     rr_mob_id_edmontosaurus,      // 11
 
     rr_mob_id_ant,                // 12
-    rr_mob_id_hornet,             // 13
+    rr_mob_id_fighter_bee,        // 13
     rr_mob_id_dragonfly,          // 14
     rr_mob_id_honeybee,           // 15
     rr_mob_id_beehive,            // 16
     rr_mob_id_spider,             // 17
     rr_mob_id_house_centipede,    // 18
     rr_mob_id_lanternfly,         // 19
+    rr_mob_id_queen_bee,          // 20
+    rr_mob_id_beehive_core,       // 21
 
-    rr_mob_id_max,                // 20
+    rr_mob_id_max,                // 22
 };
 
 struct rr_petal_base_stat_scale
@@ -226,6 +231,21 @@ struct rr_mob_rarity_scale
     float damage;
     float radius;
 };
+
+// How many pregenerated burrow sizes a beehive can pick from - each rarity
+// maps to one tier via RR_BEEHIVE_RARITY_SCALING below, tiers get
+// progressively larger (see RR_BEEHIVE_MAZE_TIERS).
+#define RR_BEEHIVE_MAZE_TIER_COUNT 4
+
+// How a beehive's population scales with the rarity of its core.
+struct rr_beehive_rarity_scale
+{
+    uint8_t size_tier; // index into RR_BEEHIVE_MAZE_TIERS
+    uint32_t fighter_bee_count;
+    uint32_t honeybee_count;
+};
+
+extern struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max];
 
 extern struct rr_petal_data RR_PETAL_DATA[rr_petal_id_max];
 extern char const *RR_PETAL_NAMES[rr_petal_id_max];
@@ -301,8 +321,23 @@ struct rr_maze_declaration
 RR_DECLARE_MAZE(HELL_CREEK, 80)
 RR_DECLARE_MAZE(BURROW, 4)
 RR_DECLARE_MAZE(PVP, 80)
+RR_DECLARE_MAZE(BURROW_SMALL, 24)
+RR_DECLARE_MAZE(BURROW_MEDIUM, 32)
+RR_DECLARE_MAZE(BURROW_LARGE, 40)
+RR_DECLARE_MAZE(BURROW_HUGE, 48)
 
 extern struct rr_maze_declaration RR_MAZES[rr_biome_id_max];
+
+// Pregenerated beehive interior sizes, progressively larger, picked per
+// spawn via RR_BEEHIVE_RARITY_SCALING[rarity].size_tier - not procedurally
+// generated, just a handful of fixed hand-authored layouts like RR_MAZES.
+extern struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT];
+
+// Runs the marching-squares wall-shape generator against caller-provided
+// buffers: `template` is a (size/2)*(size/2) array of 0/1 open-cell flags,
+// `maze` is a size*size output array.
+void rr_init_maze_grid(uint32_t size, uint8_t *template,
+                       struct rr_maze_grid *maze);
 
 // where each biome's game server lives. one server process runs one biome, the
 // main menu's biome buttons connect the client to the matching entry. this is
