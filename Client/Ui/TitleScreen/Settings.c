@@ -91,19 +91,13 @@ static void region_join_button_on_event(struct rr_ui_element *this,
         switch (selected)
         {
         case 0:
-            rr_rivet_lobbies_find(
-                game, NULL,
-                RR_BIOME_SERVERS[game->selected_biome].rivet_game_mode);
+            rr_rivet_lobbies_find(game, NULL);
             break;
         case 1:
-            rr_rivet_lobbies_find(
-                game, "lnd-atl",
-                RR_BIOME_SERVERS[game->selected_biome].rivet_game_mode);
+            rr_rivet_lobbies_find(game, "lnd-atl");
             break;
         case 2:
-            rr_rivet_lobbies_find(
-                game, "lnd-fra",
-                RR_BIOME_SERVERS[game->selected_biome].rivet_game_mode);
+            rr_rivet_lobbies_find(game, "lnd-fra");
             break;
         }
 #endif
@@ -362,13 +356,12 @@ struct rr_ui_element *rr_ui_settings_container_init(struct rr_game *game)
                             rr_ui_h_container_init(
                                 rr_ui_container_init(), 0, 10,
                                 rr_ui_toggle_box_init(
-                                    &game->cache.show_leaderboard),
-                                rr_ui_text_init("Show PvP leaderboard", 15,
+                                    &game->cache.hide_ui),
+                                rr_ui_text_init("Hide UI", 15,
                                                 0xffffffff),
                                 NULL),
-                                rr_ui_text_init("[B]", 15, 0xffffffff),
+                                rr_ui_text_init("[I]", 15, 0xffffffff),
                             10),
-                        hide_ui_row_init(game),
                         rr_ui_set_justify(
                             rr_ui_h_container_init(
                                 rr_ui_container_init(), 0, 10,
