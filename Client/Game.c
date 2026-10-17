@@ -46,8 +46,6 @@
 #include <Shared/Component/Petal.h>
 #include <Shared/Component/Physical.h>
 #include <Shared/Component/PlayerInfo.h>
-#include <Client/Filter.h>
-#include <Client/Platform.h>
 #include <Shared/Crypto.h>
 #include <Shared/Rivet.h>
 #include <Shared/Utilities.h>
@@ -291,14 +289,6 @@ static uint8_t ui_not_hidden_and_simulation_ready(struct rr_ui_element *this,
     return !game->cache.hide_ui && game->simulation_ready;
 }
 
-static uint8_t leaderboard_should_show(struct rr_ui_element *this,
-                                       struct rr_game *game)
-{
-    return ui_not_hidden_and_simulation_ready(this, game) &&
-           game->selected_biome == rr_biome_id_pvp &&
-           game->leaderboard_count > 0;
-}
-
 static uint8_t ui_not_hidden_and_player_dead(struct rr_ui_element *this,
                                              struct rr_game *game)
 {
@@ -454,8 +444,7 @@ void rr_game_init(struct rr_game *this)
             rr_ui_pad(
                 rr_ui_set_justify(
                     rr_ui_h_container_init(rr_ui_container_init(), 10, 10,
-                    rr_ui_link_toggle(rr_ui_leaderboard_init(this),
-                                      leaderboard_should_show),
+                    rr_ui_leaderboard_init(this),
                     rr_ui_minimap_init(this),
                     NULL
                 )
@@ -504,7 +493,7 @@ void rr_game_init(struct rr_game *this)
                             ),
                             rr_ui_flex_container_init(
                                 rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
-                                    rr_ui_biome_button_init("Hell Creek", 0xffff0000, rr_biome_id_hell_creek),
+                                    rr_ui_biome_button_init("Hell Creek", 0xff990000, rr_biome_id_hell_creek),
                                     rr_ui_biome_button_init("PvP", 0xff3a6ee0, rr_biome_id_pvp),
                                     NULL
                                 ),
@@ -537,11 +526,7 @@ void rr_game_init(struct rr_game *this)
                                             NULL
                                         ),
                                         rr_ui_flex_container_init(
-                                            rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
-                                                rr_ui_copy_squad_code_button_init(),
-                                                rr_ui_copy_squad_link_button_init(),
-                                                NULL
-                                            ),
+                                            rr_ui_copy_squad_code_button_init(),
                                             rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                                                 rr_ui_set_fill_stroke(
                                                     rr_ui_h_container_init(rr_ui_container_init(), 0, 0,
@@ -679,7 +664,6 @@ void rr_game_init(struct rr_game *this)
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_crafting_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_settings_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_account_container_init(this), close_menu_button_init(25))->container);
-    rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_legal_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_dev_panel_container_init(this), close_menu_button_init(25))->container);
 
     this->link_account_tooltip = rr_ui_container_add_element(
@@ -872,7 +856,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             rr_particle_manager_clear(&this->default_particle_manager);
             rr_particle_manager_clear(&this->foreground_particle_manager);
         }
-        memset(&this->crafting_data, 0, sizeof this->crafting_data);
         this->simulation_ready = 0;
         this->socket.recieved_first_packet = 0;
         break;
@@ -912,10 +895,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             // stays the same.
             proto_bug_write_string(&verify_encoder, this->rivet_account.code,
                                    100, "oauth2 code");
-            proto_bug_write_string(&verify_encoder,
-                                   this->rivet_account.cg_token,
-                                   sizeof this->rivet_account.cg_token,
-                                   "crazygames token");
             proto_bug_write_varuint(&verify_encoder, this->dev_flag,
                                     "dev_flag");
             rr_websocket_send(&this->socket,
@@ -986,7 +965,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                 proto_bug_read_string(&encoder,
                                       this->squad.squad_members[i].nickname, 16,
                                       "nickname");
-                rr_filter_censor(this->squad.squad_members[i].nickname);
                 proto_bug_read_string(&encoder,
                                       this->squad.squad_members[i].role, 16,
                                       "role");
@@ -1067,10 +1045,8 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                 proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
                 proto_bug_write_uint8(&encoder, rr_serverbound_squad_update,
                                       "header");
-                char nickname[17];
-                snprintf(nickname, sizeof nickname, "%s", this->cache.nickname);
-                rr_filter_censor(nickname);
-                proto_bug_write_string(&encoder, nickname, 16, "nickname");
+                proto_bug_write_string(&encoder, this->cache.nickname, 16,
+                                       "nickname");
                 proto_bug_write_uint8(&encoder, this->slots_unlocked,
                                       "loadout count");
                 for (uint32_t i = 0; i < this->slots_unlocked; ++i)
@@ -1147,7 +1123,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                     proto_bug_read_string(&encoder,
                                           squad->squad_members[i].nickname, 16,
                                           "nickname");
-                    rr_filter_censor(squad->squad_members[i].nickname);
                     proto_bug_read_string(&encoder,
                                           squad->squad_members[i].role, 16,
                                           "role");
@@ -1235,17 +1210,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                     break;
                 }
                 case rr_animation_type_chat:
-                {
-                    char sender_name[65] = {0};
-                    char chat_message[65] = {0};
-                    proto_bug_read_string(&encoder, sender_name, 64, "name");
-                    proto_bug_read_string(&encoder, chat_message, 64, "chat");
-                    sender_name[64] = chat_message[64] = 0;
-                    // the strings are read either way to stay in sync
-                    if (rr_platform_chat_disabled())
-                        break;
-                    rr_filter_censor(sender_name);
-                    rr_filter_censor(chat_message);
                     if (this->chat.at < 9)
                         this->chat.at++;
                     else
@@ -1254,11 +1218,10 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                             this->chat.messages[i] = this->chat.messages[i + 1];
                     }
                     struct rr_game_chat_message *message = &this->chat.messages[this->chat.at];
-                    snprintf(message->sender_name, sizeof message->sender_name, "%s", sender_name);
-                    snprintf(message->message, sizeof message->message, "%s", chat_message);
+                    proto_bug_read_string(&encoder, message->sender_name, 64, "name");
+                    proto_bug_read_string(&encoder, message->message, 64, "chat");
                     sprintf(message->text, "%s: %s", message->sender_name, message->message);
                     break;
-                }
                 case rr_animation_type_area_damage:
                     particle->x = proto_bug_read_float32(&encoder, "ani x");
                     particle->y = proto_bug_read_float32(&encoder, "ani y");
@@ -1334,7 +1297,6 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             {
                 proto_bug_read_string(&encoder, this->leaderboard[i].nickname,
                                       16, "nickname");
-                rr_filter_censor(this->leaderboard[i].nickname);
                 this->leaderboard[i].points =
                     proto_bug_read_varuint(&encoder, "points");
             }
@@ -1484,11 +1446,9 @@ void player_info_finder(struct rr_game *this)
             continue;
         struct rr_component_player_info *p_info =
             rr_simulation_get_player_info(simulation, p_id);
-        if (p_info->squad == this->player_info->squad)
-        {
-            if (counter < RR_SQUAD_MEMBER_COUNT)
-                this->player_infos[counter++] = p_id;
-        }
+        if (p_info->squad == this->player_info->squad &&
+            counter < RR_SQUAD_MEMBER_COUNT)
+            this->player_infos[counter++] = p_id;
         else if (other_counter < RR_MAX_CLIENT_COUNT)
             this->arena_player_infos[other_counter++] = p_id;
     }
@@ -1924,9 +1884,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             this->cache.use_mouse ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'H'))
             this->cache.show_hitboxes ^= 1;
-        // crazygames' reviewers need to see the interface
-        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'I') &&
-            !rr_platform_on_crazygames())
+        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'I'))
             this->cache.hide_ui ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'K'))
             this->cache.hold_attack ^= 1;
@@ -2021,6 +1979,9 @@ void rr_game_connect_socket(struct rr_game *this)
     this->socket_ready = 0;
     this->simulation_ready = 0;
     this->socket_pending = 1;
+    this->is_dev = 0;
+    memset(&this->crafting_data, 0, sizeof this->crafting_data);
+    memset(&this->other_squads, 0, sizeof this->other_squads);
 
     struct rr_biome_server const *server = &RR_BIOME_SERVERS[this->selected_biome];
 #ifdef RIVET_BUILD

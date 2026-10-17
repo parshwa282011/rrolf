@@ -54,7 +54,6 @@ set(SRCS
     Assets/RenderRarityBackground.c
     Assets/RenderText.c
     DOM.c
-    Filter.c
     Particle.c
     Renderer/Common.c
     Renderer/RenderArena.c
@@ -88,14 +87,12 @@ set(SRCS
     Ui/TitleScreen/Account.c
     Ui/TitleScreen/BiomeButton.c
     Ui/TitleScreen/Crafting.c
-    Ui/TitleScreen/CrazyGames.c
     Ui/TitleScreen/DevSquadPanel.c
     Ui/TitleScreen/Discord.c
     Ui/TitleScreen/Fullscreen.c
     Ui/TitleScreen/Gardn.c
     Ui/TitleScreen/Github.c
     Ui/TitleScreen/Inventory.c
-    Ui/TitleScreen/Legal.c
     Ui/TitleScreen/LevelBar.c
     Ui/TitleScreen/MobGallery.c
     Ui/TitleScreen/Settings.c
@@ -112,7 +109,6 @@ set(SRCS
     Main.c
     Mobile.c
     Oauth2.c
-    Platform.c
     Simulation.c
     Socket.c
     Storage.c
