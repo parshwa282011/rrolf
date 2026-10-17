@@ -102,7 +102,7 @@ enum rr_rarity_id
     rr_rarity_id_legendary,
     rr_rarity_id_mythic,
     rr_rarity_id_exotic,
-    rr_rarity_id_ultimate,
+    rr_rarity_id_ancient,
     rr_rarity_id_max
 };
 

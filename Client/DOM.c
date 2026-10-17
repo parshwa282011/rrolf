@@ -141,6 +141,7 @@ uint8_t rr_is_text_input_focused()
 {
     return rr_dom_has_focus("_0x4346") ||
            rr_dom_has_focus("_0x4347") ||
+           rr_dom_has_focus("_0x4348") ||
            rr_dom_has_focus("_0x4523");
 }
 

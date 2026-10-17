@@ -411,7 +411,7 @@ void rr_game_init(struct rr_game *this)
             rr_ui_set_justify(
                 rr_ui_h_container_init(rr_ui_container_init(), 10, 10,
                     rr_ui_settings_toggle_button_init(),
-                    rr_ui_account_toggle_button_init(),
+                    rr_tutorial_target(this, rr_tutorial_target_account, rr_ui_account_toggle_button_init()),
                     rr_ui_dev_panel_toggle_button_init(),
                     rr_ui_fullscreen_toggle_button_init(),
                     rr_ui_link_toggle(rr_ui_close_button_init(30, abandon_game_on_event), simulation_ready),
@@ -426,6 +426,8 @@ void rr_game_init(struct rr_game *this)
         rr_ui_link_toggle(
             rr_ui_set_justify(
                 rr_ui_h_container_init(rr_ui_container_init(), 10, 10,
+                    rr_tutorial_target(this, rr_tutorial_target_cg_login, rr_ui_crazygames_login_button_init()),
+                    rr_ui_crazygames_user_init(this),
                     rr_ui_gardn_toggle_button_init(),
                     rr_ui_github_toggle_button_init(),
                     rr_ui_discord_toggle_button_init(),
@@ -486,7 +488,7 @@ void rr_game_init(struct rr_game *this)
                                         ), 
                                     0x00000000, 0x00000000),
                                 simulation_not_ready),
-                                rr_ui_join_button_init(),
+                                rr_tutorial_target(this, rr_tutorial_target_join, rr_ui_join_button_init()),
                                 NULL
                             ),
                             rr_ui_flex_container_init(
@@ -496,8 +498,8 @@ void rr_game_init(struct rr_game *this)
                                     NULL
                                 ),
                                 rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
-                                    rr_ui_create_squad_button_init(),
-                                    rr_ui_squad_button_init(),
+                                    rr_tutorial_target(this, rr_tutorial_target_create_squad, rr_ui_create_squad_button_init()),
+                                    rr_tutorial_target(this, rr_tutorial_target_find_squad, rr_ui_squad_button_init()),
                                     NULL
                                 ),
                                 20
@@ -638,9 +640,9 @@ void rr_game_init(struct rr_game *this)
                 rr_ui_link_toggle(
                     rr_ui_set_justify(
                         rr_ui_v_container_init(rr_ui_container_init(), 10, 10,
-                            rr_ui_inventory_toggle_button_init(),
-                            rr_ui_mob_gallery_toggle_button_init(),
-                            rr_ui_crafting_toggle_button_init(),
+                            rr_tutorial_target(this, rr_tutorial_target_inventory, rr_ui_inventory_toggle_button_init()),
+                            rr_tutorial_target(this, rr_tutorial_target_gallery, rr_ui_mob_gallery_toggle_button_init()),
+                            rr_tutorial_target(this, rr_tutorial_target_crafting, rr_ui_crafting_toggle_button_init()),
                             NULL
                         ),
                     -1, 1),
@@ -774,6 +776,10 @@ void rr_game_init(struct rr_game *this)
         rr_ui_anti_afk_container_init(this)
     );
 
+    // last, so they draw above everything else
+    rr_ui_container_add_element(this->window, rr_ui_tutorial_init(this));
+    rr_ui_container_add_element(this->window, rr_ui_tutorial_highlight_init(this));
+
     // clang-format on
 
     for (uint32_t i = 0; i < RR_SQUAD_MEMBER_COUNT; ++i)
@@ -823,6 +829,7 @@ void rr_game_init(struct rr_game *this)
     this->is_mobile = rr_dom_test_mobile();
     this->slots_unlocked =
         RR_SLOT_COUNT_FROM_LEVEL(level_from_xp(this->cache.experience));
+    rr_tutorial_init(this);
     rr_discord_oauth2_init(this);
 }
 
@@ -883,6 +890,9 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                    300, "rivet token");
             proto_bug_write_string(&verify_encoder, this->rivet_account.uuid,
                                    100, "rivet uuid");
+            // code and cg_token are always empty now: logins are exchanged at
+            // the master server (rr_auth_post). Kept so the packet layout
+            // stays the same.
             proto_bug_write_string(&verify_encoder, this->rivet_account.code,
                                    100, "oauth2 code");
             proto_bug_write_varuint(&verify_encoder, this->dev_flag,
@@ -984,10 +994,29 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                   "squad code");
             // this->is_dev =
             //     this->squad.squad_members[this->squad.squad_pos].is_dev;
+            uint16_t prev_afk_ticks = this->afk_ticks;
             this->afk_ticks = proto_bug_read_varuint(&encoder, "afk_ticks");
             if (this->afk_ticks > RR_AFK_WARNING)
+            {
                 proto_bug_read_string(&encoder, this->afk_challenge, 7,
                                       "afk_challenge");
+                // answer the check the moment it first arrives
+                if (prev_afk_ticks <= RR_AFK_WARNING &&
+                    this->afk_challenge[0] != 0)
+                {
+                    struct proto_bug reply;
+                    proto_bug_init(&reply, RR_OUTGOING_PACKET);
+                    proto_bug_write_uint8(&reply,
+                                          this->socket.quick_verification,
+                                          "qv");
+                    proto_bug_write_uint8(&reply, rr_serverbound_chat,
+                                          "header");
+                    proto_bug_write_string(&reply, this->afk_challenge, 64,
+                                           "chat");
+                    rr_websocket_send(&this->socket,
+                                      reply.current - reply.start);
+                }
+            }
             if (proto_bug_read_uint8(&encoder, "in game") == 1)
             {
                 if (!this->simulation_ready)
@@ -1802,6 +1831,8 @@ void rr_game_tick(struct rr_game *this, float delta)
     rr_ui_container_refactor(this->window, this);
     rr_ui_render_element(this->window, this);
     rr_dom_set_cursor(this->cursor);
+    rr_platform_tick(this, delta);
+    rr_tutorial_tick(this, delta);
     rr_game_crafting_tick(this, delta);
     rr_game_autocraft_tick(this, delta);
 #ifndef __EMSCRIPTEN__
@@ -1966,6 +1997,38 @@ void rr_game_connect_socket(struct rr_game *this)
     rr_websocket_connect_to(&this->socket, url);
     // rr_websocket_connect_to(&this->socket, "45.79.197.197", 1234, 0);
 #endif
+}
+
+void rr_game_join_squad_by_code(struct rr_game *this, char const *input)
+{
+    char buffer[16];
+    snprintf(buffer, sizeof buffer, "%s", input);
+    char *code = buffer;
+    while (*code != 0 && *code != '-')
+        ++code;
+    uint8_t biome = rr_biome_id_max;
+    if (*code == '-')
+    {
+        size_t prefix_length = code - buffer;
+        for (uint8_t b = 0; b < rr_biome_id_garden; ++b)
+            if (RR_BIOME_SERVERS[b].port != 0 &&
+                strlen(RR_BIOME_SERVERS[b].squad_prefix) == prefix_length &&
+                strncmp(buffer, RR_BIOME_SERVERS[b].squad_prefix,
+                        prefix_length) == 0)
+                biome = b;
+        ++code;
+    }
+    if (biome == rr_biome_id_max)
+        code[0] = 0;
+    else
+        rr_game_select_biome(this, biome);
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
+    proto_bug_write_uint8(&encoder, rr_serverbound_squad_join, "header");
+    proto_bug_write_uint8(&encoder, 1, "join type");
+    proto_bug_write_string(&encoder, code, 7, "connect link");
+    rr_websocket_queue_send(&this->socket, encoder.current - encoder.start);
 }
 
 void rr_game_select_biome(struct rr_game *this, uint8_t biome)

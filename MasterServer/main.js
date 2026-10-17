@@ -408,6 +408,146 @@ app.get(`${namespace}/user_get_server_alias/:alias`, async (req, res) => {
     });
 });
 
+// ---- public account endpoints ----------------------------------------------
+// The browser talks to these directly (https://api-game.parshwa.blog/auth/...,
+// or <site>/api/auth/... behind a proxy), so linking a Discord / CrazyGames
+// account never goes through a game server. Bodies are JSON, answers are
+// {ok, message, uuid?, token?, code?}. uuid + token are the account to connect
+// with, which is another account when the Discord / CrazyGames id was already
+// linked somewhere else.
+const auth = express.Router();
+auth.use(express.json({limit: "4kb"}));
+
+const rate_hits = new Map();
+setInterval(() => rate_hits.clear(), 60 * 1000).unref();
+
+auth.use((req, res, next) => {
+    const ip = req.headers["cf-connecting-ip"] || req.socket.remoteAddress || "";
+    const hits = (rate_hits.get(ip) || 0) + 1;
+    rate_hits.set(ip, hits);
+    if (hits > 30)
+        return res.status(429).json({ok: false, message: "Too many requests, try again in a minute."});
+    next();
+});
+
+function authenticated_user(body)
+{
+    if (!body || typeof body.uuid !== "string" || typeof body.token !== "string")
+        return null;
+    if (!is_valid_uuid(body.uuid))
+        return null;
+    const user = database[body.uuid];
+    if (!user || typeof user !== "object" || user.password !== body.token)
+        return null;
+    return user;
+}
+
+async function account_reply(res, user, message)
+{
+    user.password = hash(user.username + PASSWORD_SALT);
+    await write_db_entry(user.username, user);
+    res.json({ok: true, message, uuid: user.username, token: user.password});
+}
+
+function route(handler)
+{
+    return async (req, res) => {
+        try {
+            await handler(req, res);
+        } catch (e) {
+            console.error("auth endpoint failed:", e.message);
+            res.status(500).json({ok: false, message: "Something went wrong, try again."});
+        }
+    };
+}
+
+auth.post("/link/discord", route(async (req, res) => {
+    let user = authenticated_user(req.body);
+    if (!user)
+        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
+    const code = req.body.code;
+    if (typeof code !== "string" || !code || code.length > 100)
+        return res.status(400).json({ok: false, message: "Bad request."});
+    let discord;
+    try {
+        discord = await discord_oauth2(code);
+    } catch (e) {
+        console.error(e);
+        return res.status(400).json({ok: false, message: "Discord login failed, try again."});
+    }
+    if (!user.discord_id && !database.links[discord]) {
+        user.discord_id = discord;
+        database.links[discord] = user.username;
+        log("discord link", [user.username, discord]);
+    } else if (database.links[discord])
+        user = await db_read_or_create_user(database.links[discord], SERVER_SECRET);
+    await account_reply(res, user, "Discord account linked.");
+}));
+
+auth.post("/link/crazygames", route(async (req, res) => {
+    let user = authenticated_user(req.body);
+    if (!user)
+        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
+    const cg_token = req.body.cg_token;
+    if (typeof cg_token !== "string" || !cg_token || cg_token.length > 4000)
+        return res.status(400).json({ok: false, message: "Bad request."});
+    let cg_id;
+    try {
+        cg_id = await crazygames.user_id_from_token(cg_token);
+    } catch (e) {
+        console.error("crazygames token rejected:", e.message);
+        return res.status(400).json({ok: false, message: "CrazyGames login could not be verified."});
+    }
+    const link = "cg:" + cg_id;
+    if (!user.cg_id && !database.links[link]) {
+        user.cg_id = cg_id;
+        database.links[link] = user.username;
+        log("crazygames link", [user.username, cg_id]);
+    } else if (database.links[link])
+        user = await db_read_or_create_user(database.links[link], SERVER_SECRET);
+    await account_reply(res, user, "CrazyGames account linked.");
+}));
+
+const TRANSFER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const TRANSFER_TTL = 10 * 60 * 1000;
+const transfer_codes = new Map();
+
+auth.post("/code/create", route(async (req, res) => {
+    const user = authenticated_user(req.body);
+    if (!user)
+        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
+    const now = Date.now();
+    for (const [code, entry] of transfer_codes)
+        if (entry.expires < now || entry.username === user.username)
+            transfer_codes.delete(code);
+    if (transfer_codes.size >= 5000)
+        return res.status(503).json({ok: false, message: "Try again later."});
+    let code = "";
+    for (let i = 0; i < 8; ++i)
+        code += TRANSFER_ALPHABET[crypto.randomInt(TRANSFER_ALPHABET.length)];
+    transfer_codes.set(code, {username: user.username, expires: now + TRANSFER_TTL});
+    log("transfer code created", [user.username]);
+    res.json({ok: true, message: "Code valid for 10 minutes.", code: code.slice(0, 4) + "-" + code.slice(4)});
+}));
+
+auth.post("/code/redeem", route(async (req, res) => {
+    const input = req.body && req.body.code;
+    if (typeof input !== "string" || input.length > 32)
+        return res.status(400).json({ok: false, message: "Bad request."});
+    const code = input.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const entry = transfer_codes.get(code);
+    transfer_codes.delete(code);
+    if (!entry || entry.expires < Date.now() || !database[entry.username])
+        return res.status(400).json({ok: false, message: "That code is wrong or has expired."});
+    log("transfer code redeemed", [entry.username]);
+    await account_reply(res, database[entry.username], "Account loaded.");
+}));
+
+auth.use((err, req, res, next) => {
+    res.status(400).json({ok: false, message: "Bad request."});
+});
+
+app.use(["/auth", `${namespace}/auth`], auth);
 
 app.use((req, res) => {
     res.status(404).send("404 Not Found\n");
@@ -484,22 +624,6 @@ wss.on("connection", (ws, req) => {
                         // encoder.WriteVarUint(nonce);
                         // ws.send(encoder.data.subarray(0, encoder.at));
                         // break;
-                    }
-                    let discord;
-                    if (code) {
-                        try {
-                            discord = await discord_oauth2(code);
-                        } catch (e) {
-                            console.error(e);
-                        }
-                    }
-                    if (discord) {
-                        if (!user.discord_id && !database.links[discord]) {
-                            user.discord_id = discord;
-                            database.links[discord] = user.username;
-                            log("discord link", [user.username, discord]);
-                        } else if (database.links[discord])
-                            user = await db_read_or_create_user(database.links[discord], SERVER_SECRET);
                     }
                     user.password = hash(user.username + PASSWORD_SALT);
                     write_db_entry(user.username, user);
