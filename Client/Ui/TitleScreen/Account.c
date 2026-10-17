@@ -220,9 +220,14 @@ static struct rr_ui_element *link_account_button_init(struct rr_game *game)
     return this;
 }
 
-static uint8_t linked_account(struct rr_ui_element *this, struct rr_game *game)
+// 0 on CrazyGames (their rules ban other logins, so nothing is shown),
+// 1 linked, 2 not linked
+static uint8_t discord_section_choose(struct rr_ui_element *this,
+                                      struct rr_game *game)
 {
-    return !game->account_linked;
+    if (rr_platform_on_crazygames())
+        return 0;
+    return game->account_linked ? 1 : 2;
 }
 
 // 0 off crazygames (nothing shown), 1 linked, 2 not linked
@@ -262,11 +267,55 @@ static void copy_uuid(struct rr_ui_element *this, struct rr_game *game)
     game->cursor = rr_game_cursor_pointer;
 }
 
+// Moving an account between sites (e.g. CrazyGames, where the CrazyGames login
+// works, and game.parshwa.blog, where it cannot): one side makes a code, the
+// other types it in.
+static void copy_transfer_code(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (game->transfer_code[0] == 0)
+        return;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+        rr_copy_string(game->transfer_code);
+    rr_ui_render_tooltip_right(this, game->click_to_copy_tooltip, game);
+    game->cursor = rr_game_cursor_pointer;
+}
+
+static void get_transfer_code(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+        rr_auth_get_transfer_code(game);
+    game->cursor = rr_game_cursor_pointer;
+}
+
+static void use_transfer_code(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+        rr_auth_use_transfer_code(game);
+    game->cursor = rr_game_cursor_pointer;
+}
+
+static struct rr_ui_element *transfer_button_init(char *label,
+    void (*on_event)(struct rr_ui_element *, struct rr_game *))
+{
+    struct rr_ui_element *this = rr_ui_labeled_button_init(label, 26, NULL);
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    this->on_event = on_event;
+    return this;
+}
+
 // clang-format off
 struct rr_ui_element *rr_ui_account_container_init(struct rr_game *game)
 {
     struct rr_ui_element *uuid = rr_ui_text_init(game->rivet_account.uuid, 15, 0xffffffff);
     uuid->on_event = copy_uuid;
+    struct rr_ui_element *transfer_code =
+        rr_ui_text_init(game->transfer_code, 20, 0xffffffff);
+    transfer_code->on_event = copy_transfer_code;
     struct rr_ui_element *this = rr_ui_pad(
         rr_ui_set_background(
             rr_ui_v_pad(
@@ -282,21 +331,23 @@ struct rr_ui_element *rr_ui_account_container_init(struct rr_game *game)
                         ),
                         uuid,
                         rr_ui_static_space_init(10),
-                        rr_ui_choose_element_init(
+                        rr_ui_multi_choose_element_init(
+                            discord_section_choose,
+                            rr_ui_static_space_init(0),
+                            rr_ui_text_init("Discord linked", 20, 0xffffffff),
                             rr_ui_v_container_init(rr_ui_container_init(), 0, 0,
                                 rr_ui_flex_container_init(
-                                    rr_ui_v_container_init(rr_ui_container_init(), 0, 5, 
+                                    rr_ui_v_container_init(rr_ui_container_init(), 0, 5,
                                         rr_ui_text_init("Login to save progress across devices", 15, 0xffffffff),
                                         rr_ui_text_init("and avoid losing access to your account", 15, 0xffffffff),
                                         NULL
                                     ),
-                                    link_account_button_init(game),
+                                    rr_tutorial_target(game, rr_tutorial_target_discord_link, link_account_button_init(game)),
                                     10
                                 ),
                                 NULL
                             ),
-                            rr_ui_text_init("Discord linked", 20, 0xffffffff),
-                            linked_account
+                            NULL
                         ),
                         rr_ui_multi_choose_element_init(
                             crazygames_section_choose,
@@ -309,13 +360,31 @@ struct rr_ui_element *rr_ui_account_container_init(struct rr_game *game)
                                         rr_ui_text_init("to keep your progress on any device", 15, 0xffffffff),
                                         NULL
                                     ),
-                                    link_crazygames_button_init(),
+                                    rr_tutorial_target(game, rr_tutorial_target_cg_link, link_crazygames_button_init()),
                                     10
                                 ),
                                 NULL
                             ),
                             NULL
                         ),
+                        rr_ui_static_space_init(10),
+                        rr_ui_text_init("Play this account on another site", 15, 0xffffffff),
+                        rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
+                            transfer_button_init("Get code", get_transfer_code),
+                            transfer_code,
+                            NULL
+                        ),
+                        rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
+                            rr_ui_set_fill_stroke(
+                                rr_ui_h_container_init(rr_ui_container_init(), 0, 0,
+                                    rr_ui_text_input_init(130, 18, &game->enter_code[0], 16, "_0x4348"),
+                                    NULL
+                                ),
+                            0x00000000, 0x00000000),
+                            transfer_button_init("Use code", use_transfer_code),
+                            NULL
+                        ),
+                        rr_ui_text_init(game->auth_message, 14, 0xffbbbbbb),
                         NULL
                     ), -1, -1
                 ), 50

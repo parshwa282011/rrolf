@@ -28,6 +28,22 @@
 
 #define RR_DEBUG_POLL_SIZE 10
 
+// the buttons the first-time tutorial points at
+enum rr_tutorial_target
+{
+    rr_tutorial_target_join,
+    rr_tutorial_target_create_squad,
+    rr_tutorial_target_find_squad,
+    rr_tutorial_target_inventory,
+    rr_tutorial_target_gallery,
+    rr_tutorial_target_crafting,
+    rr_tutorial_target_account,
+    rr_tutorial_target_cg_login,
+    rr_tutorial_target_cg_link,
+    rr_tutorial_target_discord_link,
+    rr_tutorial_target_max
+};
+
 enum rr_game_menu
 {
     rr_game_menu_none,
@@ -243,6 +259,25 @@ struct rr_game
     char cg_username[64];
     char cg_label[96];
     char afk_challenge[7];
+    char auth_message[96];
+    char transfer_code[24];
+    char enter_code[16];
+    // first-time tutorial, see Ui/InGame/Tutorial.c
+    struct
+    {
+        // where the player is in the tutorial, remembered in localStorage
+        uint8_t stage;
+        uint8_t has_start;
+        uint8_t saw_craft;
+        uint8_t craft_id;
+        uint8_t craft_rarity;
+        float progress;
+        float start_x;
+        float start_y;
+        float pulse;
+        // the buttons the tutorial can point at, see rr_tutorial_target
+        struct rr_ui_element *targets[rr_tutorial_target_max];
+    } tutorial;
 };
 
 void rr_game_init(struct rr_game *);

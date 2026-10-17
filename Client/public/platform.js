@@ -222,6 +222,38 @@
         return code;
     };
 
+    // Where the master server's public account endpoints are. The game page
+    // is always served from game.parshwa.blog (also inside the CrazyGames
+    // iframe), the master server has its own hostname. A deployment with the
+    // master behind a path of the game's own domain (rysteria.pro/api) works
+    // too, the master answers on both /auth and /api/auth. One place to edit.
+    platform.authUrl = function () {
+        const host = window.location.hostname;
+        if (host === "localhost" || host === "127.0.0.1")
+            return "http://" + host + ":55554/auth";
+        if (host === "rysteria.pro" || host.endsWith(".rysteria.pro"))
+            return "https://rysteria.pro/api/auth";
+        return "https://api-game.parshwa.blog/auth";
+    };
+
+    // POSTs JSON to the master server. Always resolves to an object with
+    // ok and message, never rejects.
+    platform.auth = async function (path, body) {
+        try {
+            const response = await fetch(platform.authUrl() + path, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(body),
+            });
+            const result = await response.json();
+            if (result && typeof result === "object")
+                return result;
+        } catch (e) {
+            console.warn("account request failed", e);
+        }
+        return {ok: false, message: "Could not reach the account server."};
+    };
+
     platform.takeLoginEvent = function () {
         const event = platform.loginEvent;
         platform.loginEvent = false;

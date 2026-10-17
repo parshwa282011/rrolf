@@ -124,13 +124,12 @@ void rr_crazygames_on_link(char *uuid, char *token, char *cg_token, void *game)
              uuid);
     snprintf(this->rivet_account.token, sizeof this->rivet_account.token, "%s",
              token);
-    // a token that does not fit is dropped, a cut off one can never verify
-    if (strlen(cg_token) < sizeof this->rivet_account.cg_token)
-        strcpy(this->rivet_account.cg_token, cg_token);
+    // the token goes to the master server's public endpoint, not through the
+    // game server. The answer reconnects with the (possibly other) account.
+    rr_auth_post(this, "/link/crazygames", "cg_token", cg_token, 0);
     free(uuid);
     free(token);
     free(cg_token);
-    rr_game_connect_socket(this);
 }
 
 #ifdef __EMSCRIPTEN__

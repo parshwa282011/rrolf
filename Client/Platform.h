@@ -32,3 +32,13 @@ void rr_crazygames_link(void *game);
 // Called from JS with malloc'ed strings, which it frees.
 void rr_crazygames_on_link(char *uuid, char *token, char *cg_token,
                            void *game);
+
+// Requests to the master server's public /auth endpoints, see Oauth2.c.
+void rr_auth_post(void *game, char const *path, char const *field,
+                  char const *value, uint8_t connect_anyway);
+void rr_auth_on_result(char *uuid, char *token, char *code, char *message,
+                       int flags, void *game);
+// Makes a code (shown in game->transfer_code) that moves this account to
+// another site, and moves the account behind game->enter_code to this one.
+void rr_auth_get_transfer_code(void *game);
+void rr_auth_use_transfer_code(void *game);

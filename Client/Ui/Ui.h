@@ -269,3 +269,18 @@ extern struct rr_ui_element *rr_ui_chat_bar_init(struct rr_game *);
 extern struct rr_ui_element *rr_ui_message_box_init(struct rr_game *);
 
 extern struct rr_ui_element *rr_ui_anti_afk_container_init(struct rr_game *);
+
+// First-time tutorial (Ui/InGame/Tutorial.c). The banner and the highlight
+// ring around the button it talks about are two elements, both added last so
+// they draw on top. rr_tutorial_init reads how far the player got before,
+// rr_tutorial_tick follows their progress once per frame.
+extern struct rr_ui_element *rr_ui_tutorial_init(struct rr_game *);
+extern struct rr_ui_element *rr_ui_tutorial_highlight_init(struct rr_game *);
+extern void rr_tutorial_init(struct rr_game *);
+extern void rr_tutorial_tick(struct rr_game *, float);
+// Remembers a button so the tutorial can point at it, returns it unchanged.
+// target is an enum rr_tutorial_target.
+extern struct rr_ui_element *rr_tutorial_target(struct rr_game *, uint8_t,
+                                                struct rr_ui_element *);
+// The player pressed Enter Game: equips something if nothing is equipped.
+extern void rr_tutorial_on_join(struct rr_game *);
