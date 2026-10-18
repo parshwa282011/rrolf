@@ -226,6 +226,7 @@ void rr_dom_set_cursor(uint8_t cursor)
 }
 
 void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
+void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
 {
 #ifdef PDEV
     EM_ASM({
@@ -257,16 +258,15 @@ void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
         HEAPU8[$0] = 0;
         if (!window["rrolfScript"])
             return;
-        const suffix = UTF8ToString($2);
-        const host = new URL(window["rrolfScript"].src).hostname;
-        let url = window["rrolfScript"].src.replace("http", "ws")
+        const url = window["rrolfScript"].src.replace("http", "ws")
             .replace("8080", ($1).toString())
-            .replace("rrolf-client.js", suffix);
+            .replace("rrolf-client.js", UTF8ToString($2));
         const arr = new TextEncoder().encode(url);
         if (arr.length >= 128)
             return;
         HEAPU8.set(arr, $0);
         HEAPU8[$0 + arr.length] = 0;
+    }, out, port, suffix);
     }, out, port, suffix);
 #endif
 }
