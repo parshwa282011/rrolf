@@ -226,7 +226,6 @@ void rr_dom_set_cursor(uint8_t cursor)
 }
 
 void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
-void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
 {
 #ifdef PDEV
     EM_ASM({
