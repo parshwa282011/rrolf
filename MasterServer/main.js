@@ -34,8 +34,16 @@ const CLOUD_TOKEN = "cloud.eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.CKOM_-XtMRCjtLqo
 const NAMESPACE_ID = "04cfba67-e965-4899-bcb9-b7497cc6863b";
 const SERVER_SECRET = "ad904nf3adrgnariwpanyf3qap8unri4t9b384wna3g34ytgdr4bwtvd4y";
 
-const REDIRECT_URI = "https://rysteria.pro/";
-const CLIENT_ID = "1453525695228678349";
+// Where the master server listens. Only loopback by default: browsers never
+// talk to it, the game servers on this machine do. Do not put it on the
+// tunnel (scripts/tunnel-setup.sh does not).
+const LISTEN_HOSTS = (process.env["MASTER_HOSTS"] || "127.0.0.1,::1").split(",");
+
+// must match, character for character, what the client sends
+// (origin + pathname, so with the trailing slash) and what is registered in
+// the Discord developer portal
+const REDIRECT_URI = process.env["PDEV"] ? "https://game.parshwa.blog/" : "https://rysteria.pro/";
+const CLIENT_ID = process.env["PDEV"] ? "1242286155320393859" : "1453525695228678349";
 const CLIENT_SECRET = process.env["CLIENT_SECRET"] || "";
 const BOT_TOKEN = process.env["BOT_TOKEN"] || "";
 const PASSWORD_SALT = process.env["PASSWORD_SALT"] || "";
