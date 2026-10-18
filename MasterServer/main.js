@@ -445,6 +445,20 @@ function merge_accounts(survivor, absorbed)
     log("account merge", [absorbed.username, survivor.username]);
 }
 
+// Two accounts that both have a Discord, or both have a CrazyGames account
+// linked are never merged: that would link two external accounts together.
+// Only CrazyGames with Discord is allowed. Answers with the reason, or null.
+function merge_conflict(a, b)
+{
+    if (a.username === b.username)
+        return null;
+    if (a.discord_id && b.discord_id)
+        return "Both accounts already have a Discord account linked.";
+    if (a.cg_id && b.cg_id)
+        return "Both accounts already have a CrazyGames account linked.";
+    return null;
+}
+
 // The player is now the account `survivor`: the one they were on is merged
 // into it unless it is the same one. Answers with that account's uuid and
 // token, which the client reconnects with.
@@ -452,6 +466,9 @@ function switch_account(client, survivor, message)
 {
     if (survivor.username !== client.user.username)
     {
+        const conflict = merge_conflict(survivor, client.user);
+        if (conflict)
+            return fail(conflict);
         // a session of the surviving account would overwrite what was merged
         // into it with its own copy
         kick_client(survivor.username, null);
@@ -556,6 +573,9 @@ async function handle_account_request(client, kind, payload, on_crazygames)
         if (entry.on_crazygames === on_crazygames)
             return fail(on_crazygames ? "Use a code made on the web version, not on CrazyGames."
                                       : "Use a code made on CrazyGames, not on the web version.");
+        const conflict = merge_conflict(database[entry.username], user);
+        if (conflict)
+            return fail(conflict);
         transfer_codes.delete(code);
         log("transfer code redeemed", [entry.username, user.username]);
         return switch_account(client, database[entry.username], "Accounts merged.");
