@@ -42,8 +42,8 @@ const LISTEN_HOSTS = (process.env["MASTER_HOSTS"] || "127.0.0.1,::1").split(",")
 // must match, character for character, what the client sends
 // (origin + pathname, so with the trailing slash) and what is registered in
 // the Discord developer portal
-const REDIRECT_URI = "https://game.parshwa.blog/";
-const CLIENT_ID = "1242286155320393859";
+const REDIRECT_URI = process.env["PDEV"] ? "https://game.parshwa.blog/" : "https://rysteria.pro/";
+const CLIENT_ID = process.env["PDEV"] ? "1242286155320393859" : "1453525695228678349";
 const CLIENT_SECRET = process.env["CLIENT_SECRET"] || "";
 const BOT_TOKEN = process.env["BOT_TOKEN"] || "";
 const PASSWORD_SALT = process.env["PASSWORD_SALT"] || "";

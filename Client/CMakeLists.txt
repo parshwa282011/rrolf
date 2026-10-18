@@ -169,6 +169,10 @@ if(RIVET_BUILD)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DRIVET_BUILD")
 endif()
 
+if(PDEV)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPDEV")
+endif()
+
 add_executable(rrolf-client ${SRCS})
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
 

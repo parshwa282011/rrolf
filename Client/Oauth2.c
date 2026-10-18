@@ -182,20 +182,7 @@ void rr_discord_oauth2_read_data(void *_this, void *_decoder) {
     rr_local_storage_store_string("DO_NOT_SHARE_account_token", this->rivet_account.token);
 }
 
-// Logs in through a popup, from any page the game is hosted on (game.parshwa.blog
-// itself, inside an iframe on another site, or localhost).
-//
-// Discord only redirects to registered addresses, so the redirect is always
-// the same page on game.parshwa.blog, whichever page started the login. That
-// page (index.html) sees the "p." state, posts the code to the relay in
-// scripts/serve-client.js and closes itself. This window polls the relay for
-// the code. Nothing here depends on window.opener, BroadcastChannel or
-// localStorage, because Discord's page can sever the opener and an iframe's
-// storage is partitioned away from the popup's.
-//
-// If the browser blocks the popup and the page is game.parshwa.blog itself,
-// this falls back to redirecting the whole page, which rr_discord_oauth2_init
-// picks up on the way back.
+#ifdef PDEV
 void rr_discord_oauth2_link_account(void *captures) {
     EM_ASM({
         const base = "https://game.parshwa.blog";
@@ -259,6 +246,22 @@ void rr_discord_oauth2_link_account(void *captures) {
         poll();
     }, captures);
 }
+#else
+void rr_discord_oauth2_link_account(void *captures) {
+    EM_ASM({
+        const state = crypto.randomUUID();
+        const url = new URL("https://discord.com/oauth2/authorize");
+        url.searchParams.set("client_id", "1453525695228678349");
+        url.searchParams.set("response_type", "code");
+        url.searchParams.set("redirect_uri", "https://rysteria.pro/");
+        url.searchParams.set("scope", "identify guilds.join");
+        url.searchParams.set("state", state);
+        window.localStorage["oauth2_state"] = state;
+        window.onbeforeunload = null;
+        window.location.href = url;
+    }, captures);
+}
+#endif
 
 void rr_discord_oauth2_on_log_in(char *uuid, char *token, char *code, void *captures) {
     struct rr_game *this = captures;
