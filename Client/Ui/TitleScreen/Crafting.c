@@ -427,10 +427,11 @@ static void crafting_chance_text_animate(struct rr_ui_element *this,
     if (game->crafting_data.success_count ||
         game->crafting_data.count < PETALS_PER_CRAFT)
         attempts = game->crafting_data.last_attempts;
-    double chance = 100 * (1 + attempts) *
-                    RR_CRAFT_CHANCES[game->crafting_data.crafting_rarity];
+    double base = RR_CRAFT_CHANCES[game->crafting_data.crafting_rarity];
     if (game->crafting_data.crafting_id == rr_petal_id_basic)
-        chance = 100;
+        base = game->crafting_data.crafting_rarity > 0 ?
+                   RR_CRAFT_CHANCES[game->crafting_data.crafting_rarity - 1] : 1;
+    double chance = 100 * (1 + attempts) * base;
     snprintf(text, 99, "Chance: %0.3f%%", chance > 100 ? 100 : chance);
     data->text = text;
 }

@@ -940,18 +940,13 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                             0xffffffff);
                 }
                 uint32_t level = proto_bug_read_varuint(&encoder, "level");
-                if (this->squad.squad_members[i].level != level)
-                {
-                    float health = 200 * pow(1.0256, level - 1);
-                    float damage = 0.1 * health;
-                    this->squad.squad_members[i].level = level;
-                    sprintf(this->squad.squad_members[i].level_text,
-                            "%u", level);
-                    rr_sprintf(this->squad.squad_members[i].health_text,
-                               health);
-                    rr_sprintf(this->squad.squad_members[i].damage_text,
-                               damage);
-                }
+                float health = RR_MAX_HEALTH_FROM_LEVEL(this->selected_biome,
+                                                        level);
+                float damage = 0.1 * health;
+                this->squad.squad_members[i].level = level;
+                sprintf(this->squad.squad_members[i].level_text, "%u", level);
+                rr_sprintf(this->squad.squad_members[i].health_text, health);
+                rr_sprintf(this->squad.squad_members[i].damage_text, damage);
                 proto_bug_read_string(&encoder,
                                       this->squad.squad_members[i].nickname, 16,
                                       "nickname");
@@ -1081,16 +1076,13 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                 0xffffffff);
                     }
                     uint32_t level = proto_bug_read_varuint(&encoder, "level");
-                    if (squad->squad_members[i].level != level)
-                    {
-                        float health = 200 * pow(1.0256, level - 1);
-                        float damage = 0.1 * health;
-                        squad->squad_members[i].level = level;
-                        sprintf(squad->squad_members[i].level_text,
-                                "%u", level);
-                        rr_sprintf(squad->squad_members[i].health_text, health);
-                        rr_sprintf(squad->squad_members[i].damage_text, damage);
-                    }
+                    float health = RR_MAX_HEALTH_FROM_LEVEL(this->selected_biome,
+                                                            level);
+                    float damage = 0.1 * health;
+                    squad->squad_members[i].level = level;
+                    sprintf(squad->squad_members[i].level_text, "%u", level);
+                    rr_sprintf(squad->squad_members[i].health_text, health);
+                    rr_sprintf(squad->squad_members[i].damage_text, damage);
                     proto_bug_read_string(&encoder,
                                           squad->squad_members[i].nickname, 16,
                                           "nickname");
@@ -1950,7 +1942,9 @@ void rr_game_connect_socket(struct rr_game *this)
     this->socket_pending = 1;
     this->is_dev = 0;
     memset(&this->crafting_data, 0, sizeof this->crafting_data);
-    memset(&this->other_squads, 0, sizeof this->other_squads);
+    for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
+        for (uint32_t j = 0; j < RR_SQUAD_MEMBER_COUNT; ++j)
+            this->other_squads[i].squad_members[j].in_use = 0;
 
     struct rr_biome_server const *server = &RR_BIOME_SERVERS[this->selected_biome];
 #ifdef RIVET_BUILD

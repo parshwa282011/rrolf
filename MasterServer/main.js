@@ -125,6 +125,7 @@ function apply_missing_defaults(account)
         failed_crafts: {},
         mob_gallery: {},
         checkpoint: { hell_creek: 0, pvp: 0 },
+        score: 0,
         discord_id: "",
         // inflated_up_to: 1,
     };
@@ -543,6 +544,7 @@ wss.on("connection", (ws, req) => {
                     break;
                 const user = connected_clients[uuid].user;
                 user.xp = decoder.ReadFloat64();
+                user.score = decoder.ReadVarUint();
                 user.checkpoint = {
                     hell_creek: decoder.ReadUint8(),
                     pvp: decoder.ReadUint8(),

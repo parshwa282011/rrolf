@@ -72,7 +72,7 @@ EntityIdx rr_simulation_alloc_player(struct rr_simulation *this,
                                   player_info->level);
     rr_simulation_get_flower(this, flower_id)->saved_angle = physical->angle;
     rr_component_health_set_max_health(
-        health, 200 * pow(1.0256, player_info->level - 1));
+        health, RR_MAX_HEALTH_FROM_LEVEL(RR_GLOBAL_BIOME, player_info->level));
     rr_component_health_set_health(health, health->max_health);
     health->damage = health->max_health * 0.1;
     health->damage_paused = 25;

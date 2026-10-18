@@ -77,6 +77,8 @@ enum rr_dev_cheat_type
     rr_dev_cheat_fov_percent
 };
 
+#define RR_MAX_HEALTH_FROM_LEVEL(biome, level)                                 \
+    (200 * pow(biome != rr_biome_id_pvp ? 1.0256 : 1.0335, level - 1))
 #define RR_SLOT_COUNT_FROM_LEVEL(level)                                        \
     (level < (20 * (RR_MAX_SLOT_COUNT - 5))                                    \
         ? 5 + (level) / 20 : RR_MAX_SLOT_COUNT)

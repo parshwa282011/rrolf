@@ -35,6 +35,7 @@ class GameClient
         encoder.WriteStringNT(this.name);
         encoder.WriteStringNT(user.discord_id);
         encoder.WriteFloat64(user.xp);
+        encoder.WriteVarUint(user.score);
         encoder.WriteUint8(user.checkpoint.hell_creek);
         encoder.WriteUint8(user.checkpoint.pvp);
         for (const petal of Object.keys(user.petals))

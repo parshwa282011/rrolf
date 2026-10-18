@@ -196,12 +196,13 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
     uint32_t success = 0;
     uint32_t last_fails = this->craft_fails[id][rarity];
     double base = RR_CRAFT_CHANCES[rarity];
+    if (id == rr_petal_id_basic)
+        base = rarity > 0 ? RR_CRAFT_CHANCES[rarity - 1] : 1;
     double xp_gain = 0;
     while (now >= 5)
     {
         last_fails = this->craft_fails[id][rarity];
-        if (id == rr_petal_id_basic ||
-            rr_frand() < base * (++this->craft_fails[id][rarity]))
+        if (rr_frand() < base * (++this->craft_fails[id][rarity]))
         {
             ++success;
             this->craft_fails[id][rarity] = 0;
@@ -231,8 +232,8 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
             struct rr_component_health *health =
                 rr_simulation_get_health(&server->simulation,
                                          this->player_info->flower_id);
-            rr_component_health_set_max_health(health,
-                                               200 * pow(1.0256, level - 1));
+            rr_component_health_set_max_health(
+                health, RR_MAX_HEALTH_FROM_LEVEL(RR_GLOBAL_BIOME, level));
             health->damage = health->max_health * 0.1;
         }
     }
@@ -280,6 +281,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
         return 1;
     }
     this->experience = rr_binary_encoder_read_float64(encoder);
+    this->pvp_points = rr_binary_encoder_read_varuint(encoder);
     for (uint8_t biome = 0; biome < 2; ++biome)
     {
         this->checkpoint[biome] = rr_binary_encoder_read_uint8(encoder);
@@ -325,6 +327,7 @@ void rr_server_client_write_to_api(struct rr_server_client *this)
     rr_binary_encoder_write_uint8(&encoder, 2);
     rr_binary_encoder_write_nt_string(&encoder, this->rivet_account.uuid);
     rr_binary_encoder_write_float64(&encoder, this->experience);
+    rr_binary_encoder_write_varuint(&encoder, this->pvp_points);
     for (uint8_t biome = 0; biome < 2; ++biome)
         rr_binary_encoder_write_uint8(&encoder, this->checkpoint[biome]);
     for (uint8_t id = 1; id < rr_petal_id_max; ++id)

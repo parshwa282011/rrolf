@@ -208,7 +208,9 @@ void rr_simulation_write_binary(struct rr_simulation *this,
 #ifdef PVP
         uint8_t same_pvp_arena =
             viewer_arena->pvp && p_info->arena == player_info->arena;
-        if (!same_squad && !same_pvp_arena)
+        uint8_t alive = p_info->flower_id != RR_NULL_ENTITY &&
+                        !is_dead_flower(this, p_info->flower_id);
+        if (!same_squad && !(same_pvp_arena && alive))
             continue;
 #else
         if (!same_squad)

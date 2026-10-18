@@ -1395,9 +1395,6 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                     if (rr_bitset_get_bit(drop->picked_up_by, j))
                         rr_bitset_set(drop->picked_up_by, i);
                 }
-#ifdef PVP
-                client->pvp_points = this->clients[j].pvp_points;
-#endif
                 client->squad_pos = this->clients[j].squad_pos;
                 client->squad = this->clients[j].squad;
                 client->in_squad = this->clients[j].in_squad;
