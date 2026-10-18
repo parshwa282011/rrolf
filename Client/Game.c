@@ -854,6 +854,18 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
     case rr_websocket_event_type_close:
         // memset the clients
         printf("<rr_websocket::close::%llu>\n", size);
+        if (this->socket_lifetime < 5)
+        {
+            if (this->quick_closes < 8)
+                ++this->quick_closes;
+        }
+        else
+            this->quick_closes = 0;
+        this->reconnect_wait =
+            this->quick_closes > 1 ? 0.5f * (1 << (this->quick_closes - 1)) : 0;
+        if (this->reconnect_wait > 8)
+            this->reconnect_wait = 8;
+        this->socket_lifetime = 0;
         this->socket_ready = 0;
         this->socket_pending = 0;
         this->socket_error = 1;
@@ -897,15 +909,8 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                    300, "rivet token");
             proto_bug_write_string(&verify_encoder, this->rivet_account.uuid,
                                    100, "rivet uuid");
-            // code and cg_token are always empty now: logins are exchanged at
-            // the master server (rr_auth_post). Kept so the packet layout
-            // stays the same.
             proto_bug_write_string(&verify_encoder, this->rivet_account.code,
                                    100, "oauth2 code");
-            proto_bug_write_string(&verify_encoder,
-                                   this->rivet_account.cg_token,
-                                   sizeof this->rivet_account.cg_token,
-                                   "crazygames token");
             proto_bug_write_varuint(&verify_encoder, this->dev_flag,
                                     "dev_flag");
             rr_websocket_send(&this->socket,
@@ -1006,29 +1011,10 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                   "squad code");
             // this->is_dev =
             //     this->squad.squad_members[this->squad.squad_pos].is_dev;
-            uint16_t prev_afk_ticks = this->afk_ticks;
             this->afk_ticks = proto_bug_read_varuint(&encoder, "afk_ticks");
             if (this->afk_ticks > RR_AFK_WARNING)
-            {
                 proto_bug_read_string(&encoder, this->afk_challenge, 7,
                                       "afk_challenge");
-                // answer the check the moment it first arrives
-                if (prev_afk_ticks <= RR_AFK_WARNING &&
-                    this->afk_challenge[0] != 0)
-                {
-                    struct proto_bug reply;
-                    proto_bug_init(&reply, RR_OUTGOING_PACKET);
-                    proto_bug_write_uint8(&reply,
-                                          this->socket.quick_verification,
-                                          "qv");
-                    proto_bug_write_uint8(&reply, rr_serverbound_chat,
-                                          "header");
-                    proto_bug_write_string(&reply, this->afk_challenge, 64,
-                                           "chat");
-                    rr_websocket_send(&this->socket,
-                                      reply.current - reply.start);
-                }
-            }
             if (proto_bug_read_uint8(&encoder, "in game") == 1)
             {
                 if (!this->simulation_ready)
@@ -1315,6 +1301,9 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
         }
         case rr_clientbound_oauth2_data:
             rr_discord_oauth2_read_data(this, &encoder);
+            break;
+        case rr_clientbound_account_reply:
+            rr_auth_read_reply(this, &encoder);
             break;
         case rr_clientbound_leaderboard_update:
         {
@@ -1860,6 +1849,7 @@ void rr_game_tick(struct rr_game *this, float delta)
     rr_ui_render_element(this->window, this);
     rr_dom_set_cursor(this->cursor);
     rr_platform_tick(this, delta);
+    rr_auth_tick(this, delta);
     rr_tutorial_tick(this, delta);
     rr_game_crafting_tick(this, delta);
     rr_game_autocraft_tick(this, delta);
@@ -1868,6 +1858,7 @@ void rr_game_tick(struct rr_game *this, float delta)
 #endif
     if (this->socket_ready)
     {
+        this->socket_lifetime += delta;
         if (this->simulation_ready)
         {
             if (!this->is_mobile)
@@ -1903,7 +1894,14 @@ void rr_game_tick(struct rr_game *this, float delta)
         }
     }
     else if (!this->socket_pending)
-        rr_game_connect_socket(this);
+    {
+        // A connection that keeps getting dropped right away (the same
+        // account open in two tabs takes the session from each other) waits
+        // longer each time instead of reconnecting in a storm
+        this->reconnect_wait -= delta;
+        if (this->reconnect_wait <= 0)
+            rr_game_connect_socket(this);
+    }
     if (!this->text_input_focused)
     {
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 186))

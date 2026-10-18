@@ -548,9 +548,6 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                                   "rivet uuid");
             proto_bug_read_string(&encoder, client->rivet_account.code, 100,
                                   "oauth2 code");
-            proto_bug_read_string(&encoder, client->rivet_account.cg_token,
-                                  sizeof client->rivet_account.cg_token,
-                                  "crazygames token");
 
 #ifndef SANDBOX
             if (rr_get_hash(rr_get_hash(proto_bug_read_varuint(&encoder, "dev_flag"))) == 15010855733518987480u &&
@@ -578,8 +575,6 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                                               client->rivet_account.token);
             rr_binary_encoder_write_nt_string(&encoder,
                                               client->rivet_account.code);
-            rr_binary_encoder_write_nt_string(&encoder,
-                                              client->rivet_account.cg_token);
             rr_binary_encoder_write_varuint(&encoder, client->nonce);
             rr_binary_encoder_write_uint8(&encoder, i);
             lws_write(this->api_client, encoder.start,
@@ -1130,6 +1125,55 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             }
             break;
         }
+        case rr_serverbound_account_request:
+        {
+            // Linking a Discord / CrazyGames account and the transfer codes.
+            // The master server does the work, it is never reached by the
+            // browser: this forwards the request over the api websocket
+            // (message 5) and the answer comes back in api_lws_callback.
+            uint8_t kind = proto_bug_read_uint8(&encoder, "account kind");
+            uint8_t on_crazygames = proto_bug_read_uint8(&encoder, "crazygames") != 0;
+            char payload[2048] = {0};
+            proto_bug_read_string(&encoder, payload, sizeof payload - 1,
+                                  "account payload");
+            if (kind > rr_account_request_code_redeem)
+                break;
+            uint8_t changes_account = kind != rr_account_request_code_create;
+            if (changes_account && client->dev)
+            {
+                rr_server_client_write_account_reply(
+                    client, 0, kind, "Not available for this account.", "", "",
+                    "");
+                break;
+            }
+            // the account is swapped under a running game otherwise
+            if (changes_account && client->player_info != NULL &&
+                rr_simulation_entity_alive(&this->simulation,
+                                           client->player_info->flower_id))
+            {
+                rr_server_client_write_account_reply(
+                    client, 0, kind, "Leave the game first.", "", "", "");
+                break;
+            }
+            if (!this->api_ws_ready)
+            {
+                rr_server_client_write_account_reply(
+                    client, 0, kind, "Account server is not available.", "",
+                    "", "");
+                break;
+            }
+            struct rr_binary_encoder api_encoder;
+            rr_binary_encoder_init(&api_encoder, outgoing_message);
+            rr_binary_encoder_write_uint8(&api_encoder, 5);
+            rr_binary_encoder_write_uint8(&api_encoder, i);
+            rr_binary_encoder_write_varuint(&api_encoder, client->nonce);
+            rr_binary_encoder_write_uint8(&api_encoder, kind);
+            rr_binary_encoder_write_uint8(&api_encoder, on_crazygames);
+            rr_binary_encoder_write_nt_string(&api_encoder, payload);
+            lws_write(this->api_client, api_encoder.start,
+                      api_encoder.at - api_encoder.start, LWS_WRITE_BINARY);
+            break;
+        }
         case rr_serverbound_dev_cheat:
         {
             switch (proto_bug_read_uint8(&encoder, "cheat type"))
@@ -1465,6 +1509,34 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                 printf("<rr_server::client_kick::%s>\n", client->rivet_account.uuid);
                 client->pending_kick = 1;
             }
+            break;
+        }
+        case 3:
+        {
+            // the answer to a rr_serverbound_account_request
+            uint8_t pos = rr_binary_encoder_read_uint8(&decoder);
+            if (pos >= 64)
+            {
+                printf("<rr_api::malformed_req::%d>\n", pos);
+                break;
+            }
+            struct rr_server_client *client = &this->clients[pos];
+            if (!client->in_use || client->disconnected)
+                break;
+            if (rr_binary_encoder_read_varuint(&decoder) != client->nonce)
+                break;
+            uint8_t ok = rr_binary_encoder_read_uint8(&decoder);
+            uint8_t kind = rr_binary_encoder_read_uint8(&decoder);
+            char message[96] = {0};
+            char uuid[sizeof client->rivet_account.uuid] = {0};
+            char token[sizeof client->rivet_account.token] = {0};
+            char code[24] = {0};
+            rr_binary_encoder_read_nt_string(&decoder, message);
+            rr_binary_encoder_read_nt_string(&decoder, uuid);
+            rr_binary_encoder_read_nt_string(&decoder, token);
+            rr_binary_encoder_read_nt_string(&decoder, code);
+            rr_server_client_write_account_reply(client, ok, kind, message,
+                                                 uuid, token, code);
             break;
         }
         default:

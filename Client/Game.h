@@ -262,6 +262,20 @@ struct rr_game
     char auth_message[96];
     char transfer_code[24];
     char enter_code[16];
+    // an account request waiting for the connection, and the account to
+    // reconnect with after one that changed it, see Oauth2.c
+    uint8_t auth_pending;
+    uint8_t auth_kind;
+    // reconnected after an account change, waiting for the account to load
+    uint8_t auth_reconnected;
+    float auth_wait;
+    float auth_reconnect_in;
+    char auth_payload[2048];
+    // how long the connection has been verified, and how many in a row were
+    // dropped within seconds, see the reconnect in rr_game_tick
+    float socket_lifetime;
+    float reconnect_wait;
+    uint8_t quick_closes;
     // first-time tutorial, see Ui/InGame/Tutorial.c
     struct
     {

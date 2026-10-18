@@ -25,20 +25,23 @@ void rr_platform_copy_invite_link(char const *squad_code);
 void rr_crazygames_login(void);
 
 // Starts the CrazyGames login (if the player is not logged in already), then
-// reconnects with the player's user token so the master server can link the
-// account. Does nothing off CrazyGames or if the player cancels.
+// sends the player's user token so the master server can link the account.
+// Does nothing off CrazyGames or if the player cancels.
 void rr_crazygames_link(void *game);
 
-// Called from JS with malloc'ed strings, which it frees.
-void rr_crazygames_on_link(char *uuid, char *token, char *cg_token,
-                           void *game);
+// Called from JS with a malloc'ed string, which it frees.
+void rr_crazygames_on_link(char *cg_token, void *game);
 
-// Requests to the master server's public /auth endpoints, see Oauth2.c.
-void rr_auth_post(void *game, char const *path, char const *field,
-                  char const *value, uint8_t connect_anyway);
-void rr_auth_on_result(char *uuid, char *token, char *code, char *message,
-                       int flags, void *game);
-// Makes a code (shown in game->transfer_code) that moves this account to
-// another site, and moves the account behind game->enter_code to this one.
+// Account requests, see Oauth2.c. They go to the game server, which asks the
+// master server; the browser never talks to the master server itself.
+// kind is a rr_account_request_kind.
+void rr_auth_request(void *game, uint8_t kind, char const *payload);
+// Sends the waiting request once connected, reconnects after an account
+// change. Once per frame.
+void rr_auth_tick(struct rr_game *game, float delta);
+// The game server's answer, a proto_bug positioned after the header.
+void rr_auth_read_reply(void *game, void *decoder);
+// Makes a code (shown in game->transfer_code) that merges this account into
+// another one, and merges this account into the one behind game->enter_code.
 void rr_auth_get_transfer_code(void *game);
 void rr_auth_use_transfer_code(void *game);

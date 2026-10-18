@@ -16,7 +16,6 @@
 
 require("dotenv").config({ quiet: true });
 const express = require("express");
-const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const WSS = require("ws");
@@ -34,6 +33,11 @@ const DIRECTORY_SECRET = "a92pd3nf29d38tny9pr34dn3d908ntgb";
 const CLOUD_TOKEN = "cloud.eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.CKOM_-XtMRCjtLqo-DAaEgoQjUflOmYrT3Sv5ckk4-Nk0yIWOhQKEgoQ6l7BiqssS-iYCw6PaqKKnA.Pgw_qDBaugBIFd7ilYcbbm_6yPNDeqreiDi1VBkKX84ER7CXvS-8abNuRhKtU_hDtgT9Sd4a7JWN68fdLnEKCA";
 const NAMESPACE_ID = "04cfba67-e965-4899-bcb9-b7497cc6863b";
 const SERVER_SECRET = "ad904nf3adrgnariwpanyf3qap8unri4t9b384wna3g34ytgdr4bwtvd4y";
+
+// Where the master server listens. Only loopback by default: browsers never
+// talk to it, the game servers on this machine do. Do not put it on the
+// tunnel (scripts/tunnel-setup.sh does not).
+const LISTEN_HOSTS = (process.env["MASTER_HOSTS"] || "127.0.0.1,::1").split(",");
 
 // must match, character for character, what the client sends
 // (origin + pathname, so with the trailing slash) and what is registered in
@@ -57,15 +61,14 @@ if (fs.existsSync(databaseFilePath))
     try {
         database = JSON.parse(databaseData);
         if (Array.isArray(database)) database = {accounts: [], links: {}}; // remove after first run
-        if (Array.isArray(database.links)) database.links = {};
     } catch(e) {
         database = {};
     }
 }
+if (!Array.isArray(database.accounts)) database.accounts = [];
+if (!database.links || Array.isArray(database.links)) database.links = {};
 
 const hash = s => crypto.createHash("sha512").update(s, "utf8").digest("hex");
-
-app.use(cors());
 
 app.use(function (req, res, next) {
     res.setHeader("X-Powered-By", "custom rrolf http server written in c")
@@ -187,9 +190,6 @@ async function write_db_entry(username, data)
 
 async function db_read_user(username, password)
 {
-    if (!database.accounts.includes(username))
-        database.accounts.push(username);
-
     if (connected_clients[username] && (connected_clients[username].password === password || password === SERVER_SECRET))
         return connected_clients[username].user;
     const user = {value: database[username]}
@@ -354,40 +354,6 @@ async function discord_name(id) {
     }
 }
 
-app.get(`${namespace}/account_link/:old_username/:old_password/:username/:password`, async (req, res) => {
-    const {old_username, old_password, username, password} = req.params;
-    handle_error(res, async () => {
-        if (old_username === username)
-            return "same uuid linkage not valid";
-        if (!is_valid_uuid(old_username) || !is_valid_uuid(username))
-            return "invalid uuid";
-        const old_account = await db_read_user(old_username, old_password);
-        if (!old_account)
-        {
-            return "failed";
-        }
-        const new_account = await db_read_user(username, password);
-        database.links.push([old_username, username, old_account, new_account]);
-        changed = true;
-        if (!new_account || (new_account.xp * 3 <= old_account.xp))
-        {
-            log("account_link", [old_username, username]);
-            old_account.linked_from = {...old_account};
-            old_account.password = hash(username + PASSWORD_SALT);
-            old_account.username = username;
-            connected_clients[username] = old_account;
-            await write_db_entry(username, old_account);
-            await write_db_entry(old_username, null);
-            delete connected_clients[username];
-        }
-        else
-        {
-            log("account_login", [old_username, username, new_account.xp, old_account.xp]);
-        }
-        return "success";
-    });
-});
-
 app.get(`${namespace}/user_get_password/:password`, async (req, res) => {
     const {password} = req.params;
     handle_error(res, async () => {
@@ -413,150 +379,190 @@ app.get(`${namespace}/user_get_server_alias/:alias`, async (req, res) => {
     });
 });
 
-// ---- public account endpoints ----------------------------------------------
-// The browser talks to these directly (https://api-game.parshwa.blog/auth/...,
-// or <site>/api/auth/... behind a proxy), so linking a Discord / CrazyGames
-// account never goes through a game server. Bodies are JSON, answers are
-// {ok, message, uuid?, token?, code?}. uuid + token are the account to connect
-// with, which is another account when the Discord / CrazyGames id was already
-// linked somewhere else.
-const auth = express.Router();
-auth.use(express.json({limit: "4kb"}));
-
-const rate_hits = new Map();
-setInterval(() => rate_hits.clear(), 60 * 1000).unref();
-
-auth.use((req, res, next) => {
-    const ip = req.headers["cf-connecting-ip"] || req.socket.remoteAddress || "";
-    const hits = (rate_hits.get(ip) || 0) + 1;
-    rate_hits.set(ip, hits);
-    if (hits > 30)
-        return res.status(429).json({ok: false, message: "Too many requests, try again in a minute."});
-    next();
+app.use((req, res) => {
+    res.status(404).send("404 Not Found\n");
 });
 
-function authenticated_user(body)
-{
-    if (!body || typeof body.uuid !== "string" || typeof body.token !== "string")
-        return null;
-    if (!is_valid_uuid(body.uuid))
-        return null;
-    const user = database[body.uuid];
-    if (!user || typeof user !== "object" || user.password !== body.token)
-        return null;
-    return user;
-}
+// ---- account requests from the game servers --------------------------------
+// The master server is never reached by browsers. A player asks their game
+// server to link a Discord / CrazyGames account or to make / use a transfer
+// code, the game server forwards it over its websocket (message 5 below) and
+// the answer goes back the same way (message 3), see handle_account_request.
 
-async function account_reply(res, user, message)
-{
-    user.password = hash(user.username + PASSWORD_SALT);
-    await write_db_entry(user.username, user);
-    res.json({ok: true, message, uuid: user.username, token: user.password});
-}
-
-function route(handler)
-{
-    return async (req, res) => {
-        try {
-            await handler(req, res);
-        } catch (e) {
-            console.error("auth endpoint failed:", e.message);
-            res.status(500).json({ok: false, message: "Something went wrong, try again."});
-        }
-    };
-}
-
-auth.post("/link/discord", route(async (req, res) => {
-    let user = authenticated_user(req.body);
-    if (!user)
-        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
-    const code = req.body.code;
-    if (typeof code !== "string" || !code || code.length > 100)
-        return res.status(400).json({ok: false, message: "Bad request."});
-    let discord;
-    try {
-        discord = await discord_oauth2(code);
-    } catch (e) {
-        console.error(e);
-        return res.status(400).json({ok: false, message: "Discord login failed, try again."});
-    }
-    if (!user.discord_id && !database.links[discord]) {
-        user.discord_id = discord;
-        database.links[discord] = user.username;
-        log("discord link", [user.username, discord]);
-    } else if (database.links[discord])
-        user = await db_read_or_create_user(database.links[discord], SERVER_SECRET);
-    await account_reply(res, user, "Discord account linked.");
-}));
-
-auth.post("/link/crazygames", route(async (req, res) => {
-    let user = authenticated_user(req.body);
-    if (!user)
-        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
-    const cg_token = req.body.cg_token;
-    if (typeof cg_token !== "string" || !cg_token || cg_token.length > 4000)
-        return res.status(400).json({ok: false, message: "Bad request."});
-    let cg_id;
-    try {
-        cg_id = await crazygames.user_id_from_token(cg_token);
-    } catch (e) {
-        console.error("crazygames token rejected:", e.message);
-        return res.status(400).json({ok: false, message: "CrazyGames login could not be verified."});
-    }
-    const link = "cg:" + cg_id;
-    if (!user.cg_id && !database.links[link]) {
-        user.cg_id = cg_id;
-        database.links[link] = user.username;
-        log("crazygames link", [user.username, cg_id]);
-    } else if (database.links[link])
-        user = await db_read_or_create_user(database.links[link], SERVER_SECRET);
-    await account_reply(res, user, "CrazyGames account linked.");
-}));
+const ACCOUNT_DISCORD = 0;
+const ACCOUNT_CRAZYGAMES = 1;
+const ACCOUNT_CODE_CREATE = 2;
+const ACCOUNT_CODE_REDEEM = 3;
 
 const TRANSFER_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const TRANSFER_TTL = 10 * 60 * 1000;
 const transfer_codes = new Map();
 
-auth.post("/code/create", route(async (req, res) => {
-    const user = authenticated_user(req.body);
-    if (!user)
-        return res.status(401).json({ok: false, message: "Unknown account, reload the page."});
-    const now = Date.now();
+// requests per account per minute
+const account_hits = new Map();
+setInterval(() => account_hits.clear(), 60 * 1000).unref();
+
+function fail(message)
+{
+    return {ok: false, message};
+}
+
+// Moves everything from the absorbed account into the surviving one. The
+// absorbed account is deleted afterwards, so there are no duplicates.
+function merge_accounts(survivor, absorbed)
+{
+    apply_missing_defaults(survivor);
+    apply_missing_defaults(absorbed);
+    survivor.xp = (Number(survivor.xp) || 0) + (Number(absorbed.xp) || 0);
+    for (const biome of ["hell_creek", "pvp"])
+        survivor.checkpoint[biome] = Math.max(survivor.checkpoint[biome], absorbed.checkpoint[biome]);
+    merge_petals(survivor.petals, absorbed.petals);
+    merge_petals(survivor.mob_gallery, absorbed.mob_gallery);
+    // these count failed crafts towards a guaranteed success, not items
+    for (const key in absorbed.failed_crafts)
+        survivor.failed_crafts[key] = Math.max(survivor.failed_crafts[key] || 0, absorbed.failed_crafts[key]);
+    if (!survivor.discord_id)
+        survivor.discord_id = absorbed.discord_id;
+    if (!survivor.cg_id)
+        survivor.cg_id = absorbed.cg_id;
+    // logging in with either Discord / CrazyGames account lands on the survivor
+    for (const key in database.links)
+        if (database.links[key] === absorbed.username)
+            database.links[key] = survivor.username;
     for (const [code, entry] of transfer_codes)
-        if (entry.expires < now || entry.username === user.username)
+        if (entry.username === absorbed.username)
             transfer_codes.delete(code);
-    if (transfer_codes.size >= 5000)
-        return res.status(503).json({ok: false, message: "Try again later."});
-    let code = "";
-    for (let i = 0; i < 8; ++i)
-        code += TRANSFER_ALPHABET[crypto.randomInt(TRANSFER_ALPHABET.length)];
-    transfer_codes.set(code, {username: user.username, expires: now + TRANSFER_TTL});
-    log("transfer code created", [user.username]);
-    res.json({ok: true, message: "Code valid for 10 minutes.", code: code.slice(0, 4) + "-" + code.slice(4)});
-}));
+    database.accounts = database.accounts.filter(name => name !== absorbed.username);
+    delete database[absorbed.username];
+    delete connected_clients[absorbed.username];
+    for (const alias in game_servers)
+    {
+        const slot = game_servers[alias].clients.indexOf(absorbed.username);
+        if (slot !== -1)
+            game_servers[alias].clients[slot] = 0;
+    }
+    changed = true;
+    log("account merge", [absorbed.username, survivor.username]);
+}
 
-auth.post("/code/redeem", route(async (req, res) => {
-    const input = req.body && req.body.code;
-    if (typeof input !== "string" || input.length > 32)
-        return res.status(400).json({ok: false, message: "Bad request."});
-    const code = input.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const entry = transfer_codes.get(code);
-    transfer_codes.delete(code);
-    if (!entry || entry.expires < Date.now() || !database[entry.username])
-        return res.status(400).json({ok: false, message: "That code is wrong or has expired."});
-    log("transfer code redeemed", [entry.username]);
-    await account_reply(res, database[entry.username], "Account loaded.");
-}));
+// The player is now the account `survivor`: the one they were on is merged
+// into it unless it is the same one. Answers with that account's uuid and
+// token, which the client reconnects with.
+function switch_account(client, survivor, message)
+{
+    if (survivor.username !== client.user.username)
+    {
+        // a session of the surviving account would overwrite what was merged
+        // into it with its own copy
+        kick_client(survivor.username, null);
+        merge_accounts(survivor, client.user);
+    }
+    survivor.password = hash(survivor.username + PASSWORD_SALT);
+    write_db_entry(survivor.username, survivor);
+    return {ok: true, message, uuid: survivor.username, token: survivor.password, code: ""};
+}
 
-auth.use((err, req, res, next) => {
-    res.status(400).json({ok: false, message: "Bad request."});
-});
+// the account that owns a Discord / CrazyGames link, if it still exists
+function link_owner(link)
+{
+    const owner = database.links[link];
+    if (!owner)
+        return null;
+    if (!database[owner])
+    {
+        delete database.links[link];
+        return null;
+    }
+    return database[owner];
+}
 
-app.use(["/auth", `${namespace}/auth`], auth);
+// Links the player's account to an external account (user[field] = id, found
+// again through database.links[link]). If that external account is already
+// linked to another account, the player is moved onto that one.
+function link_provider(client, field, id, link, name)
+{
+    const user = client.user;
+    const owner = link_owner(link);
+    if (owner)
+        return switch_account(client, owner, `${name} account linked.`);
+    if (user[field])
+        return fail(`This account already has a ${name} account linked.`);
+    user[field] = id;
+    database.links[link] = user.username;
+    log(`${name} link`, [user.username, id]);
+    return switch_account(client, user, `${name} account linked.`);
+}
 
-app.use((req, res) => {
-    res.status(404).send("404 Not Found\n");
-});
+async function handle_account_request(client, kind, payload, on_crazygames)
+{
+    const user = client.user;
+    const hits = (account_hits.get(user.username) || 0) + 1;
+    account_hits.set(user.username, hits);
+    if (hits > 12)
+        return fail("Too many requests, try again in a minute.");
+    const now = Date.now();
+    switch (kind)
+    {
+    case ACCOUNT_DISCORD:
+    {
+        if (!payload || payload.length > 100)
+            return fail("Bad request.");
+        let discord;
+        try {
+            discord = await discord_oauth2(payload);
+        } catch (e) {
+            console.error(e);
+            return fail("Discord login failed, try again.");
+        }
+        return link_provider(client, "discord_id", discord, discord, "Discord");
+    }
+    case ACCOUNT_CRAZYGAMES:
+    {
+        if (!payload || payload.length > 4000)
+            return fail("Bad request.");
+        let cg_id;
+        try {
+            cg_id = await crazygames.user_id_from_token(payload);
+        } catch (e) {
+            console.error("crazygames token rejected:", e.message);
+            return fail("CrazyGames login could not be verified.");
+        }
+        return link_provider(client, "cg_id", cg_id, "cg:" + cg_id, "CrazyGames");
+    }
+    case ACCOUNT_CODE_CREATE:
+    {
+        for (const [code, entry] of transfer_codes)
+            if (entry.expires < now || entry.username === user.username)
+                transfer_codes.delete(code);
+        if (transfer_codes.size >= 5000)
+            return fail("Try again later.");
+        let code = "";
+        for (let i = 0; i < 8; ++i)
+            code += TRANSFER_ALPHABET[crypto.randomInt(TRANSFER_ALPHABET.length)];
+        transfer_codes.set(code, {username: user.username, expires: now + TRANSFER_TTL, on_crazygames});
+        log("transfer code created", [user.username]);
+        return {ok: true, message: "Code valid for 10 minutes.", uuid: "", token: "",
+                code: code.slice(0, 4) + "-" + code.slice(4)};
+    }
+    case ACCOUNT_CODE_REDEEM:
+    {
+        const code = payload.toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const entry = transfer_codes.get(code);
+        if (!entry || entry.expires < now || !database[entry.username])
+            return fail("That code is wrong or has expired.");
+        if (entry.username === user.username)
+            return fail("That code is from this account, enter it on the other one.");
+        // a code links CrazyGames with the web, never two of the same
+        if (entry.on_crazygames === on_crazygames)
+            return fail(on_crazygames ? "Use a code made on the web version, not on CrazyGames."
+                                      : "Use a code made on CrazyGames, not on the web version.");
+        transfer_codes.delete(code);
+        log("transfer code redeemed", [entry.username, user.username]);
+        return switch_account(client, database[entry.username], "Accounts merged.");
+    }
+    }
+    return fail("Bad request.");
+}
 
 const saveDatabaseToFile = () => {
     if (changed)
@@ -568,20 +574,39 @@ const saveDatabaseToFile = () => {
     }
 };
 
-const server = http.createServer(app);
+// The websocket the game servers connect to. Behind the tunnel every request
+// carries Cloudflare's headers, and none of them may ever get in here even if
+// the tunnel config is wrong.
+const wss = new WSS.Server({noServer: true});
+const proxied_headers = ["cf-connecting-ip", "cf-ray", "x-forwarded-for", "x-real-ip"];
 
-server.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
-
-const wss = new WSS.Server({server});
+for (const host of LISTEN_HOSTS)
+{
+    const server = http.createServer(app);
+    server.on("upgrade", (req, socket, head) => {
+        if (proxied_headers.some(header => req.headers[header]))
+            return socket.destroy();
+        wss.handleUpgrade(req, socket, head, ws => wss.emit("connection", ws, req));
+    });
+    server.on("error", e => {
+        // a machine without IPv6 has no ::1, that is fine
+        if (e.code === "EADDRNOTAVAIL" || e.code === "EAFNOSUPPORT")
+            return console.warn(`not listening on ${host}: ${e.code}`);
+        throw e;
+    });
+    server.listen(port, host, () => {
+        console.log(`Server running at http://${host.includes(":") ? `[${host}]` : host}:${port}`);
+    });
+}
 const game_servers = {};
 const connected_clients = {};
 
-function kick_from_other_servers(username, new_server)
+// Disconnects the account's session, if it has one, from the game server it
+// is on, unless that server is `except_alias`.
+function kick_client(username, except_alias)
 {
     const previous = connected_clients[username];
-    if (!previous || previous.server === new_server.alias)
+    if (!previous || previous.server === except_alias)
         return;
     const old_server = game_servers[previous.server];
     if (!old_server)
@@ -589,7 +614,7 @@ function kick_from_other_servers(username, new_server)
     const pos = old_server.clients.indexOf(username);
     if (pos === -1)
         return; // already left that server
-    log("kick from old server", [username, old_server.alias, new_server.alias]);
+    log("kick from old server", [username, old_server.alias, except_alias || "-"]);
     const encoder = new protocol.BinaryWriter();
     encoder.WriteUint8(2); // force disconnect: slot, then the nonce to make sure it's the same connection
     encoder.WriteUint8(pos);
@@ -614,10 +639,9 @@ wss.on("connection", (ws, req) => {
                 const uuid = decoder.ReadStringNT();
                 const token = decoder.ReadStringNT();
                 const code = decoder.ReadStringNT();
-                const cg_token = decoder.ReadStringNT();
                 const nonce = decoder.ReadVarUint();
                 const pos = decoder.ReadUint8();
-                log("attempt init", [uuid, token, code]);
+                log("attempt init", [uuid, code]);
                 try {
                     let user = await db_read_user(uuid, SERVER_SECRET);
                     if (!user || !is_valid_uuid(uuid) ||
@@ -633,7 +657,7 @@ wss.on("connection", (ws, req) => {
                     }
                     user.password = hash(user.username + PASSWORD_SALT);
                     write_db_entry(user.username, user);
-                    kick_from_other_servers(user.username, game_server);
+                    kick_client(user.username, game_server.alias);
                     connected_clients[user.username] = new GameClient(user, game_server.alias, nonce, await discord_name(user.discord_id));
                     game_server.clients[pos] = user.username;
                     const encoder = new protocol.BinaryWriter();
@@ -720,6 +744,39 @@ wss.on("connection", (ws, req) => {
                 }
 
                 db_append_petals_to_logs(petals);
+                break;
+            }
+            case 5:
+            {
+                // a player's account request, forwarded by their game server
+                const pos = decoder.ReadUint8();
+                const nonce = decoder.ReadVarUint();
+                const kind = decoder.ReadUint8();
+                const on_crazygames = decoder.ReadUint8() !== 0;
+                const payload = decoder.ReadStringNT();
+                const username = game_server.clients[pos];
+                const client = username && connected_clients[username];
+                if (!client || client.server !== game_server.alias || client.nonce !== nonce)
+                    break;
+                let result;
+                try {
+                    result = await handle_account_request(client, kind, payload, on_crazygames);
+                } catch (e) {
+                    console.error("account request failed:", e);
+                    result = fail("Something went wrong, try again.");
+                }
+                const encoder = new protocol.BinaryWriter();
+                encoder.WriteUint8(3);
+                encoder.WriteUint8(pos);
+                encoder.WriteVarUint(nonce);
+                encoder.WriteUint8(result.ok ? 1 : 0);
+                encoder.WriteUint8(kind);
+                encoder.WriteStringNT(result.message || "");
+                encoder.WriteStringNT(result.uuid || "");
+                encoder.WriteStringNT(result.token || "");
+                encoder.WriteStringNT(result.code || "");
+                if (ws.readyState === WSS.OPEN)
+                    ws.send(encoder.data.subarray(0, encoder.at));
                 break;
             }
             case 4:

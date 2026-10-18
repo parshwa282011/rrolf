@@ -80,9 +80,7 @@ static void start_link(struct rr_game *game, uint8_t after_prompt)
         getToken().then(function(cgToken) {
             if (!cgToken)
                 return;
-            const uuid = window.localStorage["rivet_account_uuid"] || "";
-            const token = window.localStorage["DO_NOT_SHARE_account_token"] || "";
-            _rr_crazygames_on_link(put(uuid), put(token), put(cgToken), $0);
+            _rr_crazygames_on_link(put(cgToken), $0);
         });
     }, game, after_prompt);
 }
@@ -117,18 +115,11 @@ void rr_crazygames_login(void)
 #endif
 }
 
-void rr_crazygames_on_link(char *uuid, char *token, char *cg_token, void *game)
+void rr_crazygames_on_link(char *cg_token, void *game)
 {
-    struct rr_game *this = game;
-    snprintf(this->rivet_account.uuid, sizeof this->rivet_account.uuid, "%s",
-             uuid);
-    snprintf(this->rivet_account.token, sizeof this->rivet_account.token, "%s",
-             token);
-    // the token goes to the master server's public endpoint, not through the
-    // game server. The answer reconnects with the (possibly other) account.
-    rr_auth_post(this, "/link/crazygames", "cg_token", cg_token, 0);
-    free(uuid);
-    free(token);
+    // the game server checks it with the master server, and the answer
+    // reconnects with the (possibly other) account
+    rr_auth_request(game, rr_account_request_crazygames, cg_token);
     free(cg_token);
 }
 

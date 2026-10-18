@@ -155,10 +155,7 @@ void rr_tutorial_init(struct rr_game *game)
     uint32_t length = rr_local_storage_get_string("rr_tutorial_stage");
     if (length == 0)
     {
-        // an older version only remembered that it was finished
-        game->tutorial.stage =
-            rr_local_storage_get_string("rr_tutorial_done") ? st_end
-                                                             : st_welcome;
+        game->tutorial.stage = st_welcome;
         return;
     }
     if (length > 3)

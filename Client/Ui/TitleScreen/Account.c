@@ -267,9 +267,11 @@ static void copy_uuid(struct rr_ui_element *this, struct rr_game *game)
     game->cursor = rr_game_cursor_pointer;
 }
 
-// Moving an account between sites (e.g. CrazyGames, where the CrazyGames login
+// Merging accounts between sites (e.g. CrazyGames, where the CrazyGames login
 // works, and game.parshwa.blog, where it cannot): one side makes a code, the
-// other types it in.
+// other types it in. Both accounts' items are merged into the account that made
+// the code, and the account the code was typed into is deleted. The master
+// server only accepts a code from the other platform (CrazyGames <-> web).
 static void copy_transfer_code(struct rr_ui_element *this, struct rr_game *game)
 {
     if (game->transfer_code[0] == 0)
@@ -368,7 +370,7 @@ struct rr_ui_element *rr_ui_account_container_init(struct rr_game *game)
                             NULL
                         ),
                         rr_ui_static_space_init(10),
-                        rr_ui_text_init("Play this account on another site", 15, 0xffffffff),
+                        rr_ui_text_init("Merge with an account on another site", 15, 0xffffffff),
                         rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                             transfer_button_init("Get code", get_transfer_code),
                             transfer_code,

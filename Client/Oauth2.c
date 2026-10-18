@@ -18,88 +18,55 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <Client/DOM.h>
 #include <Client/Game.h>
 #include <Client/Platform.h>
+#include <Client/Socket.h>
 #include <Client/Storage.h>
+#include <Shared/StaticData.h>
+#include <Shared/pb.h>
 
-// Account requests go straight to the master server's public /auth endpoints
-// (platform.js, platform.auth), not through a game server. path is "/link/
-// discord", "/link/crazygames", "/code/create" or "/code/redeem"; field and
-// value add one string to the request body (field may be NULL).
-// connect_anyway reconnects to the game server even if the request fails,
-// which the first connect of a page load needs.
-void rr_auth_post(void *game, char const *path, char const *field,
-                  char const *value, uint8_t connect_anyway)
+// Everything about accounts (linking Discord / CrazyGames, transfer codes)
+// goes to the game server over the game's own websocket, which hands it to the
+// master server. The browser never talks to the master server.
+//
+// A request waits in game->auth_* until the connection is verified, then is
+// sent once. The answer (rr_auth_read_reply) shows its message; if it moved the
+// player to another account, the game waits a moment so the message can be
+// read, then disconnects once and reconnects with that account, which is the
+// one clean way to load it.
+
+// seconds the "linked" message stays up before reconnecting
+#define RECONNECT_DELAY 1.5f
+// seconds a request waits for a connection before giving up
+#define REQUEST_TIMEOUT 12.0f
+
+static void set_message(struct rr_game *this, char const *message)
 {
-    struct rr_game *this = game;
-    EM_ASM({
-        const put = function(string) {
-            const bytes = new TextEncoder().encode(string);
-            const pointer = _malloc(bytes.length + 1);
-            HEAPU8.set(bytes, pointer);
-            HEAPU8[pointer + bytes.length] = 0;
-            return pointer;
-        };
-        const finish = function(flags, uuid, token, code, message) {
-            _rr_auth_on_result(put(uuid), put(token), put(code), put(message),
-                               flags, $0);
-        };
-        const platform = window["rrolfPlatform"];
-        const retry = $6 ? 2 : 0;
-        if (!platform) {
-            finish(retry, "", "", "", "Accounts are not available here.");
-            return;
-        }
-        // no comma outside of parentheses in here, EM_ASM would split on it
-        const body = {};
-        body["uuid"] = UTF8ToString($4);
-        body["token"] = UTF8ToString($5);
-        if ($2)
-            body[UTF8ToString($2)] = UTF8ToString($3);
-        platform["auth"](UTF8ToString($1), body).then(function(result) {
-            const ok = result["ok"] === true;
-            finish(retry | (ok ? 1 : 0),
-                   ok ? String(result["uuid"] || "") : "",
-                   ok ? String(result["token"] || "") : "",
-                   ok ? String(result["code"] || "") : "",
-                   String(result["message"] || ""));
-        });
-    }, this, path, field, value, this->rivet_account.uuid,
-       this->rivet_account.token, connect_anyway);
+    snprintf(this->auth_message, sizeof this->auth_message, "%s", message);
 }
 
-// Called from JS with malloc'ed strings, which it frees. flags: 1 the request
-// worked, 2 reconnect even if it did not. A reply with an account (uuid and
-// token) reconnects with it; a transfer code reply only shows the code.
-void rr_auth_on_result(char *uuid, char *token, char *code, char *message,
-                       int flags, void *game)
+// Queues a request. kind is a rr_account_request_kind, payload the Discord
+// code, CrazyGames token or transfer code ("" for a new transfer code).
+void rr_auth_request(void *game, uint8_t kind, char const *payload)
 {
     struct rr_game *this = game;
-    snprintf(this->auth_message, sizeof this->auth_message, "%s", message);
-    if (code[0])
-        snprintf(this->transfer_code, sizeof this->transfer_code, "%s", code);
-    uint8_t new_account = (flags & 1) && uuid[0] && token[0] &&
-                          strlen(uuid) < sizeof this->rivet_account.uuid &&
-                          strlen(token) < sizeof this->rivet_account.token;
-    if (new_account)
-    {
-        strcpy(this->rivet_account.uuid, uuid);
-        strcpy(this->rivet_account.token, token);
-    }
-    free(uuid);
-    free(token);
-    free(code);
-    free(message);
-    if (new_account || (flags & 2))
-        rr_game_connect_socket(this);
+    if (this->auth_reconnect_in > 0)
+        return;
+    snprintf(this->auth_payload, sizeof this->auth_payload, "%s", payload);
+    this->auth_kind = kind;
+    this->auth_pending = 1;
+    this->auth_wait = 0;
+    set_message(this, kind == rr_account_request_code_create
+                          ? "Making a code..."
+                          : "Checking...");
 }
 
 void rr_auth_get_transfer_code(void *game)
 {
     struct rr_game *this = game;
     this->transfer_code[0] = 0;
-    snprintf(this->auth_message, sizeof this->auth_message, "Making a code...");
-    rr_auth_post(game, "/code/create", NULL, NULL, 0);
+    rr_auth_request(game, rr_account_request_code_create, "");
 }
 
 void rr_auth_use_transfer_code(void *game)
@@ -107,12 +74,93 @@ void rr_auth_use_transfer_code(void *game)
     struct rr_game *this = game;
     if (this->enter_code[0] == 0)
     {
-        snprintf(this->auth_message, sizeof this->auth_message,
-                 "Type the code first.");
+        set_message(this, "Type the code first.");
         return;
     }
-    snprintf(this->auth_message, sizeof this->auth_message, "Checking...");
-    rr_auth_post(game, "/code/redeem", "code", this->enter_code, 0);
+    rr_auth_request(game, rr_account_request_code_redeem, this->enter_code);
+}
+
+// Runs once per frame: sends the waiting request when the connection is
+// ready, and does the reconnect after an account change.
+void rr_auth_tick(struct rr_game *this, float delta)
+{
+    if (this->auth_reconnect_in > 0)
+    {
+        this->auth_reconnect_in -= delta;
+        if (this->auth_reconnect_in <= 0)
+        {
+            this->auth_reconnect_in = 0;
+            this->auth_reconnected = 1;
+            this->account_ready = 0;
+            rr_game_connect_socket(this);
+        }
+        return;
+    }
+    if (this->auth_reconnected && this->account_ready)
+    {
+        this->auth_reconnected = 0;
+        set_message(this, "Done, the linked account is loaded.");
+    }
+    if (!this->auth_pending)
+        return;
+    if (!this->socket_ready || !this->account_ready)
+    {
+        this->auth_wait += delta;
+        if (this->auth_wait > REQUEST_TIMEOUT)
+        {
+            this->auth_pending = 0;
+            set_message(this, "Could not reach the game server.");
+        }
+        return;
+    }
+    this->auth_pending = 0;
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
+    proto_bug_write_uint8(&encoder, rr_serverbound_account_request, "header");
+    proto_bug_write_uint8(&encoder, this->auth_kind, "kind");
+    // transfer codes only work between CrazyGames and the web, see the master
+    proto_bug_write_uint8(&encoder, rr_platform_on_crazygames(), "crazygames");
+    proto_bug_write_string(&encoder, this->auth_payload,
+                           sizeof this->auth_payload, "payload");
+    rr_websocket_send(&this->socket, encoder.current - encoder.start);
+    memset(this->auth_payload, 0, sizeof this->auth_payload);
+}
+
+// The game server's answer to a request, see Server.c
+void rr_auth_read_reply(void *game, void *_decoder)
+{
+    struct rr_game *this = game;
+    struct proto_bug *decoder = _decoder;
+    uint8_t ok = proto_bug_read_uint8(decoder, "ok");
+    uint8_t kind = proto_bug_read_uint8(decoder, "kind");
+    char message[96] = {0};
+    char uuid[sizeof this->rivet_account.uuid] = {0};
+    char token[sizeof this->rivet_account.token] = {0};
+    char code[sizeof this->transfer_code] = {0};
+    proto_bug_read_string(decoder, message, sizeof message - 1, "message");
+    proto_bug_read_string(decoder, uuid, sizeof uuid - 1, "uuid");
+    proto_bug_read_string(decoder, token, sizeof token - 1, "token");
+    proto_bug_read_string(decoder, code, sizeof code - 1, "code");
+    if (code[0])
+        snprintf(this->transfer_code, sizeof this->transfer_code, "%s", code);
+    if (!ok || kind == rr_account_request_code_create || !uuid[0] || !token[0])
+    {
+        set_message(this, message);
+        return;
+    }
+    // linked, or moved to another account: show it, then reconnect with it
+    snprintf(this->auth_message, sizeof this->auth_message, "%s Reconnecting...",
+             message);
+    strcpy(this->rivet_account.uuid, uuid);
+    strcpy(this->rivet_account.token, token);
+    this->auth_reconnect_in = RECONNECT_DELAY;
+    this->enter_code[0] = 0;
+    rr_dom_set_text("_0x4348", this->enter_code);
+    this->transfer_code[0] = 0;
+    // if the page closes before the reconnect, the next visit still logs in
+    rr_local_storage_store_string("rivet_account_uuid", uuid);
+    rr_local_storage_store_string("DO_NOT_SHARE_account_token", token);
 }
 
 void rr_discord_oauth2_read_data(void *_this, void *_decoder) {
@@ -127,7 +175,6 @@ void rr_discord_oauth2_read_data(void *_this, void *_decoder) {
     this->cg_linked = proto_bug_read_uint8(decoder, "crazygames linked");
     this->account_ready = 1;
     this->rivet_account.code[0] = 0;
-    this->rivet_account.cg_token[0] = 0;
     this->account_linked = this->rivet_account.name[0] != 0;
     if (!this->account_linked)
         strcpy(this->rivet_account.name, "Guest");
@@ -215,18 +262,24 @@ void rr_discord_oauth2_link_account(void *captures) {
 
 void rr_discord_oauth2_on_log_in(char *uuid, char *token, char *code, void *captures) {
     struct rr_game *this = captures;
-    strcpy(this->rivet_account.uuid, uuid);
-    strcpy(this->rivet_account.token, token);
-    // the code only comes back from a Discord login. It is exchanged at the
-    // master server, then the game server is connected to with the account
-    // that gives, so the game server never sees a login code.
-    uint8_t has_code = code[0] != 0 && uuid[0] != 0;
-    if (has_code)
-        rr_auth_post(this, "/link/discord", "code", code, 1);
+    // the account is the one in this browser's storage. The first call of a
+    // page load connects with it, a Discord login that follows later (the
+    // popup) is sent over the connection that is already up
+    if (!this->socket_ready && !this->socket_pending &&
+        strlen(uuid) < sizeof this->rivet_account.uuid &&
+        strlen(token) < sizeof this->rivet_account.token)
+    {
+        strcpy(this->rivet_account.uuid, uuid);
+        strcpy(this->rivet_account.token, token);
+    }
+    // the code is exchanged for the Discord account at the master server,
+    // through the game server, so the game server never sees more than that
+    if (code[0] != 0)
+        rr_auth_request(this, rr_account_request_discord, code);
     free(uuid);
     free(token);
     free(code);
-    if (!has_code)
+    if (!this->socket_ready && !this->socket_pending)
         rr_game_connect_socket(this);
 }
 

@@ -199,6 +199,26 @@ void rr_server_client_write_oauth2_data(struct rr_server_client *client) {
                                    encoder.current - encoder.start);
 }
 
+void rr_server_client_write_account_reply(struct rr_server_client *client,
+                                          uint8_t ok, uint8_t kind,
+                                          char const *message, char const *uuid,
+                                          char const *token, char const *code)
+{
+    struct proto_bug encoder;
+    proto_bug_init(&encoder, outgoing_message);
+    proto_bug_write_uint8(&encoder, rr_clientbound_account_reply, "header");
+    proto_bug_write_uint8(&encoder, ok, "ok");
+    proto_bug_write_uint8(&encoder, kind, "kind");
+    proto_bug_write_string(&encoder, message, 96, "message");
+    proto_bug_write_string(&encoder, uuid, sizeof client->rivet_account.uuid,
+                           "uuid");
+    proto_bug_write_string(&encoder, token, sizeof client->rivet_account.token,
+                           "token");
+    proto_bug_write_string(&encoder, code, 24, "code");
+    rr_server_client_write_message(client, encoder.start,
+                                   encoder.current - encoder.start);
+}
+
 void rr_server_client_craft_petal(struct rr_server_client *this,
                                   struct rr_server *server, uint8_t id,
                                   uint8_t rarity, uint32_t count)

@@ -29,9 +29,7 @@ struct rr_rivet_account
     char uuid[500];
     char name[500];
     char id[500];
-    // crazygames login: the user token the client sends once, and the id
-    // the master server has linked to the account
-    char cg_token[2048];
+    // the CrazyGames id the master server has linked to the account
     char cg_id[500];
 };
 
