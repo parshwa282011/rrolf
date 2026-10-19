@@ -598,10 +598,12 @@ const wss = new WSS.Server({server});
 const game_servers = {};
 const connected_clients = {};
 
-function kick_from_other_servers(username, new_server)
+// Force-disconnects the player from the game server they are on. Leaves them
+// alone when that is the server `keep_alias` (null kicks them wherever they are).
+function kick_client(username, keep_alias)
 {
     const previous = connected_clients[username];
-    if (!previous || previous.server === new_server.alias)
+    if (!previous || previous.server === keep_alias)
         return;
     const old_server = game_servers[previous.server];
     if (!old_server)
@@ -609,13 +611,18 @@ function kick_from_other_servers(username, new_server)
     const pos = old_server.clients.indexOf(username);
     if (pos === -1)
         return; // already left that server
-    log("kick from old server", [username, old_server.alias, new_server.alias]);
+    log("kick from old server", [username, old_server.alias, keep_alias]);
     const encoder = new protocol.BinaryWriter();
     encoder.WriteUint8(2); // force disconnect: slot, then the nonce to make sure it's the same connection
     encoder.WriteUint8(pos);
     encoder.WriteVarUint(previous.nonce);
     old_server.ws.send(encoder.data.subarray(0, encoder.at));
     old_server.clients[pos] = 0;
+}
+
+function kick_from_other_servers(username, new_server)
+{
+    kick_client(username, new_server.alias);
 }
 
 wss.on("connection", (ws, req) => {
