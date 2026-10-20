@@ -1,0 +1,5 @@
+# Used instead of the repo-root .dockerignore, which excludes MasterServer/, Client/ and Balancer/.
+.git
+**/node_modules
+Server/build-*
+Client/build
