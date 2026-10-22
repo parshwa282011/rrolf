@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <Shared/StaticData.h>
+#include <Shared/Ctf.h>
 
 #include <math.h>
 #include <stdio.h>
@@ -482,6 +483,7 @@ void rr_static_data_init()
     init(HELL_CREEK);
     init(BURROW);
     init(PVP);
+    init(CTF);
     init(BURROW_SMALL);
     init(BURROW_MEDIUM);
     init(BURROW_LARGE);
@@ -634,6 +636,9 @@ RR_DEFINE_MAZE(PVP, 80) = {
 {_,_,_,_,_,_,_,e,e,e,e,e,e,e,e,_,_,_,_,E,E,E,E,E,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 38
 {_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 39
 };
+// the capture the flag map, made by tools/ctf/gen-map.js. It uses the tile
+// letters above, so it has to stay in this stretch of the file
+#include <Shared/CtfMap.inc>
 // clang-format on
 RR_DEFINE_MAZE(BURROW, 4) = {{1, 1}, {0, 1}};
 
@@ -750,7 +755,7 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
     }},
     {MAZE_ENTRY(HELL_CREEK, 1024), 0},
     {MAZE_ENTRY(BURROW, 512), 0},
-    {MAZE_ENTRY(PVP, 512), 0}, // ctf, replaced by its own map
+    {MAZE_ENTRY(CTF, 512), 0},
 };
 
 struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {

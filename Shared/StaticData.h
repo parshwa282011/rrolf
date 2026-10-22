@@ -58,6 +58,8 @@ enum rr_serverbound_packet_header
     rr_serverbound_ctf_create,
     rr_serverbound_ctf_start,
     rr_serverbound_ctf_place_flag,
+    rr_serverbound_ctf_cancel,
+    rr_serverbound_ctf_respawn,
 };
 
 enum rr_clientbound_packet_header
@@ -345,6 +347,7 @@ struct rr_maze_declaration
 RR_DECLARE_MAZE(HELL_CREEK, 80)
 RR_DECLARE_MAZE(BURROW, 4)
 RR_DECLARE_MAZE(PVP, 80)
+RR_DECLARE_MAZE(CTF, 158)
 RR_DECLARE_MAZE(BURROW_SMALL, 24)
 RR_DECLARE_MAZE(BURROW_MEDIUM, 32)
 RR_DECLARE_MAZE(BURROW_LARGE, 40)

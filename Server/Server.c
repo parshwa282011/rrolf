@@ -80,8 +80,8 @@ static void *rivet_disconnected_endpoint(void *_captures)
     return NULL;
 }
 
-static void rr_server_client_create_player_info(struct rr_server *server,
-                                                struct rr_server_client *client)
+void rr_server_client_create_player_info(struct rr_server *server,
+                                         struct rr_server_client *client)
 {
     puts("creating player info");
     struct rr_component_player_info *player_info = client->player_info =
@@ -325,6 +325,7 @@ void rr_server_init(struct rr_server *this)
     rr_static_data_init();
     rr_simulation_init(&this->simulation);
     this->simulation.server = this;
+    rr_ctf_match_reset(&this->ctf);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
         rr_squad_init(&this->squads[i], this, i);
 }
@@ -708,9 +709,22 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 char link[16] = {0};
                 proto_bug_read_string(&encoder, link, 7, "connect link");
                 squad = rr_client_join_squad_with_code(this, client, link);
+#ifdef CTF
+                // a squad in a running match does not take new players
+                if (squad < RR_SQUAD_COUNT &&
+                    rr_ctf_squad_locked(this, squad))
+                    squad = RR_ERROR_CODE_FULL_SQUAD;
+#endif
             }
             else if (type == 0)
+            {
+#ifdef CTF
+                // no public squads, a match is made of private ones
+                squad = RR_ERROR_CODE_INVALID_SQUAD;
+#else
                 squad = rr_client_find_squad(this, client);
+#endif
+            }
             if (squad == RR_ERROR_CODE_INVALID_SQUAD)
             {
                 struct proto_bug failure;
@@ -755,6 +769,11 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             if (client->ticks_to_next_squad_action > 0)
                 break;
             client->ticks_to_next_squad_action = 10;
+#ifdef CTF
+            // there are no public games, the match decides who is in
+            rr_ctf_on_ready(this, client);
+            break;
+#endif
             if (!client->in_squad)
             {
                 uint8_t squad = rr_client_find_squad(this, client);
@@ -1173,6 +1192,35 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                       api_encoder.at - api_encoder.start, LWS_WRITE_BINARY);
             break;
         }
+#ifdef CTF
+        case rr_serverbound_ctf_create:
+            if (client->ticks_to_next_squad_action > 0)
+                break;
+            client->ticks_to_next_squad_action = 10;
+            rr_ctf_on_create(this, client, &encoder);
+            break;
+        case rr_serverbound_ctf_start:
+            if (client->ticks_to_next_squad_action > 0)
+                break;
+            client->ticks_to_next_squad_action = 10;
+            rr_ctf_on_start(this, client);
+            break;
+        case rr_serverbound_ctf_cancel:
+            if (client->ticks_to_next_squad_action > 0)
+                break;
+            client->ticks_to_next_squad_action = 10;
+            rr_ctf_on_cancel(this, client);
+            break;
+        case rr_serverbound_ctf_place_flag:
+            rr_ctf_on_place_flag(this, client, &encoder);
+            break;
+        case rr_serverbound_ctf_respawn:
+            if (client->ticks_to_next_squad_action > 0)
+                break;
+            client->ticks_to_next_squad_action = 10;
+            rr_ctf_on_respawn(this, client);
+            break;
+#endif
         case rr_serverbound_dev_cheat:
         {
             switch (proto_bug_read_uint8(&encoder, "cheat type"))
@@ -1676,6 +1724,9 @@ static void server_tick(struct rr_server *this)
     if (!this->api_ws_ready)
         return;
     rr_simulation_tick(&this->simulation);
+#ifdef CTF
+    rr_ctf_tick(this);
+#endif
 
 #ifdef PVP
     uint8_t lb_top_n = 0;
@@ -1775,6 +1826,9 @@ static void server_tick(struct rr_server *this)
                 lws_callback_on_writable(client->socket_handle);
             if (!client->verified)
                 continue;
+#ifdef CTF
+            rr_ctf_send_state(this, client);
+#endif
             if (client->player_info != NULL)
             {
                 if (rr_simulation_entity_alive(

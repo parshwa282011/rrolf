@@ -81,6 +81,12 @@ struct rr_server_client
     uint32_t ticks_to_next_kick_vote;
     uint32_t ticks_to_next_dev_pin;
     uint8_t dev_pin_failures;
+    // capture the flag: ticks since the flower died, and what the host or
+    // player was last told, see Server/Ctf.c
+    uint16_t ctf_respawn_ticks;
+    uint8_t ctf_message;
+    uint8_t ctf_message_arg;
+    uint8_t ctf_message_ticks;
     uint32_t disconnected_ticks;
     uint32_t afk_ticks;
     uint8_t joined_squad_before[RR_BITSET_ROUND(RR_SQUAD_COUNT)];

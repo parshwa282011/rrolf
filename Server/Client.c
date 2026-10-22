@@ -63,6 +63,13 @@ void rr_server_client_create_flower(struct rr_server_client *this)
         rr_simulation_get_physical(simulation, p);
     struct rr_component_arena *arena =
         rr_simulation_get_arena(simulation, physical->arena);
+#ifdef CTF
+    // at the team's base
+    float spawn_x, spawn_y;
+    rr_ctf_spawn_position(this->server, this, &spawn_x, &spawn_y);
+    rr_component_physical_set_x(physical, spawn_x);
+    rr_component_physical_set_y(physical, spawn_y);
+#else
     struct rr_maze_declaration *decl = &RR_MAZES[RR_GLOBAL_BIOME];
     uint8_t checkpoint = this->checkpoint[RR_GLOBAL_BIOME];
     rr_component_physical_set_x(
@@ -73,6 +80,7 @@ void rr_server_client_create_flower(struct rr_server_client *this)
         physical,
         2 * decl->grid_size * (decl->checkpoints[checkpoint].spawn_y +
                                rr_frand()));
+#endif
     struct rr_binary_encoder encoder;
     rr_binary_encoder_init(&encoder, outgoing_message);
     rr_binary_encoder_write_uint8(&encoder, 3);

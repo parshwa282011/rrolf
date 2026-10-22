@@ -144,6 +144,7 @@ set(SRCS
     # ../Shared/Rivet.c
     ../Shared/SimulationCommon.c
     ../Shared/StaticData.c
+    ../Shared/Ctf.c
     ../Shared/Utilities.c
     ../Shared/Vector.c
 )

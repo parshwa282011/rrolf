@@ -68,6 +68,9 @@ set(SRCS
     ../Shared/pb.c
     ../Shared/SimulationCommon.c
     ../Shared/StaticData.c
+    ../Shared/Ctf.c
+    Ctf.c
+    CtfRules.c
     ../Shared/Utilities.c
     ../Shared/Vector.c
 )

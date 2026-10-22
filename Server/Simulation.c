@@ -343,7 +343,7 @@ static void despawn_mob(EntityIdx entity, void *_simulation)
 static float get_max_points(struct rr_simulation *this,
                             struct rr_maze_grid *grid)
 {
-#ifndef PVP
+#if !defined(PVP) || defined(CTF)
     float coeff = 2;
 #else
     float coeff = 0.2;

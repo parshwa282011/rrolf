@@ -17,6 +17,7 @@
 #pragma once
 
 #include <Server/Client.h>
+#include <Server/Ctf.h>
 #include <Server/Simulation.h>
 #include <Server/Squad.h>
 
@@ -43,11 +44,17 @@ struct rr_server
     struct lws_context *api_client_context;
     struct lws *api_client;
     struct rr_squad squads[RR_MAX_CLIENT_COUNT];
+    // capture the flag, only used by the -DCTF build
+    struct rr_ctf_match ctf;
     uint8_t api_ws_ready;
     char server_alias[16];
 };
 
 void rr_server_init(struct rr_server *);
+// puts a player's squad slot into the game, the flower comes from
+// rr_server_client_create_flower
+void rr_server_client_create_player_info(struct rr_server *,
+                                         struct rr_server_client *);
 void rr_server_free(struct rr_server *);
 
 uint8_t rr_client_create_squad(struct rr_server *, struct rr_server_client *);
