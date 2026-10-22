@@ -755,7 +755,7 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
     }},
     {MAZE_ENTRY(HELL_CREEK, 1024), 0},
     {MAZE_ENTRY(BURROW, 512), 0},
-    {MAZE_ENTRY(CTF, 512), 0},
+    {MAZE_ENTRY(CTF, 256), 0},
 };
 
 struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {
