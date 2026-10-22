@@ -54,6 +54,10 @@ enum rr_serverbound_packet_header
     rr_serverbound_chat_block,
     rr_serverbound_dev_cheat,
     rr_serverbound_account_request,
+    // capture the flag, see Server/Ctf.c
+    rr_serverbound_ctf_create,
+    rr_serverbound_ctf_start,
+    rr_serverbound_ctf_place_flag,
 };
 
 enum rr_clientbound_packet_header
@@ -67,7 +71,8 @@ enum rr_clientbound_packet_header
     rr_clientbound_craft_result,
     rr_clientbound_oauth2_data,
     rr_clientbound_leaderboard_update,
-    rr_clientbound_account_reply
+    rr_clientbound_account_reply,
+    rr_clientbound_ctf_state
 };
 
 // what a rr_serverbound_account_request asks the master server (through the
@@ -94,7 +99,12 @@ enum rr_dev_cheat_type
 };
 
 #define RR_MAX_HEALTH_FROM_LEVEL(biome, level)                                 \
-    (200 * pow(biome != rr_biome_id_pvp ? 1.0256 : 1.0335, level - 1))
+    (200 * pow((biome) != rr_biome_id_pvp && (biome) != rr_biome_id_ctf        \
+                   ? 1.0256 : 1.0335, level - 1))
+// capture the flag: everyone starts a match at this level with this many Epic
+// Basic petals, nothing about the real account is used or saved
+#define RR_CTF_START_LEVEL 10
+#define RR_CTF_START_PETALS 5
 #define RR_SLOT_COUNT_FROM_LEVEL(level)                                        \
     (level < (20 * (RR_MAX_SLOT_COUNT - 5))                                    \
         ? 5 + (level) / 20 : RR_MAX_SLOT_COUNT)
@@ -108,6 +118,7 @@ enum rr_biome_id
     rr_biome_id_pvp,
     rr_biome_id_garden,
     rr_biome_id_beehive,
+    rr_biome_id_ctf,
     rr_biome_id_max
 };
 

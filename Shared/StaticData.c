@@ -750,6 +750,7 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
     }},
     {MAZE_ENTRY(HELL_CREEK, 1024), 0},
     {MAZE_ENTRY(BURROW, 512), 0},
+    {MAZE_ENTRY(PVP, 512), 0}, // ctf, replaced by its own map
 };
 
 struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {
@@ -764,6 +765,7 @@ struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
     {"pvp",       1235,          "pvp"}, // pvp
     {NULL,           0,           NULL}, // garden, doesn't have a server
     {NULL,           0,           NULL}, // beehive, lives inside other arenas
+    {"ctf",       1236,          "ctf"}, // capture the flag
 };
 
 uint8_t RR_GLOBAL_BIOME = rr_biome_id_hell_creek;

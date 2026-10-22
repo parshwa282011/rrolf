@@ -500,6 +500,7 @@ void rr_game_init(struct rr_game *this)
                                 rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                                     rr_ui_biome_button_init("Hell Creek", 0xff990000, rr_biome_id_hell_creek),
                                     rr_ui_biome_button_init("PvP", 0xff3a6ee0, rr_biome_id_pvp),
+                                    rr_ui_biome_button_init("CTF", 0xff2f9e44, rr_biome_id_ctf),
                                     NULL
                                 ),
                                 rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
@@ -834,7 +835,7 @@ void rr_game_init(struct rr_game *this)
 
     rr_assets_init(this);
     rr_game_cache_load(this);
-    if (this->selected_biome >= rr_biome_id_garden ||
+    if (this->selected_biome >= rr_biome_id_max ||
         RR_BIOME_SERVERS[this->selected_biome].port == 0)
         this->selected_biome = 0;
     rr_dom_set_text("_0x4346", this->cache.nickname);
@@ -1735,7 +1736,8 @@ void rr_game_tick(struct rr_game *this, float delta)
                                       currY + GRID_SIZE / 2);
                 rr_renderer_scale(this->renderer, (GRID_SIZE + 2) / 256);
                 if (this->selected_biome == rr_biome_id_hell_creek ||
-                    this->selected_biome == rr_biome_id_pvp)
+                    this->selected_biome == rr_biome_id_pvp ||
+                    this->selected_biome == rr_biome_id_ctf)
                     rr_renderer_draw_tile_hell_creek(this->renderer,
                                                      tile_index);
                 else
@@ -2038,7 +2040,7 @@ void rr_game_join_squad_by_code(struct rr_game *this, char const *input)
     if (*code == '-')
     {
         size_t prefix_length = code - buffer;
-        for (uint8_t b = 0; b < rr_biome_id_garden; ++b)
+        for (uint8_t b = 0; b < rr_biome_id_max; ++b)
             if (RR_BIOME_SERVERS[b].port != 0 &&
                 strlen(RR_BIOME_SERVERS[b].squad_prefix) == prefix_length &&
                 strncmp(buffer, RR_BIOME_SERVERS[b].squad_prefix,
@@ -2061,7 +2063,7 @@ void rr_game_join_squad_by_code(struct rr_game *this, char const *input)
 
 void rr_game_select_biome(struct rr_game *this, uint8_t biome)
 {
-    if (biome >= rr_biome_id_garden || RR_BIOME_SERVERS[biome].port == 0)
+    if (biome >= rr_biome_id_max || RR_BIOME_SERVERS[biome].port == 0)
         return;
     if (this->selected_biome == biome)
         return;

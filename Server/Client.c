@@ -305,6 +305,17 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.name);
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.id);
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.cg_id);
+#ifdef CTF
+    // saveless: the account only says who the player is, a match always starts
+    // from the same level and petals, see Server/Ctf.c
+    memset(this->checkpoint, 0, sizeof this->checkpoint);
+    this->pvp_points = 0;
+    this->experience = 0;
+    for (uint32_t lvl = 2; lvl <= RR_CTF_START_LEVEL; ++lvl)
+        this->experience += xp_to_reach_level(lvl);
+    this->inventory[rr_petal_id_basic][rr_rarity_id_epic] = RR_CTF_START_PETALS;
+    return 1;
+#endif
     if (this->dev)
     {
         memset(this->checkpoint, 0, sizeof this->checkpoint);
@@ -359,6 +370,10 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
 
 void rr_server_client_write_to_api(struct rr_server_client *this)
 {
+#ifdef CTF
+    // saveless, nothing from a match is kept
+    return;
+#endif
     if (this->dev)
         return;
     struct rr_binary_encoder encoder;

@@ -693,7 +693,7 @@ static void join_code_on_event(struct rr_ui_element *this, struct rr_game *game)
             if (*code == '-')
             {
                 size_t prefix_length = code - game->connect_code;
-                for (uint8_t b = 0; b < rr_biome_id_garden; ++b)
+                for (uint8_t b = 0; b < rr_biome_id_max; ++b)
                     if (RR_BIOME_SERVERS[b].port != 0 &&
                         strlen(RR_BIOME_SERVERS[b].squad_prefix) ==
                             prefix_length &&

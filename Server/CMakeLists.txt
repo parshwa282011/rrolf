@@ -107,6 +107,12 @@ if(PVP)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPVP")
 endif()
 
+# capture the flag minigame. It reuses everything the pvp build does (teams per
+# squad, who can see whom, kill drops), so it turns that on too
+if(CTF)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCTF -DPVP")
+endif()
+
 # lets a client with the PIN give itself petals, see rr_dev_cheat_give_petals
 if(PDEV)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPDEV")

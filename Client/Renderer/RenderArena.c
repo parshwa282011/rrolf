@@ -64,7 +64,8 @@ void render_background(struct rr_component_player_info *player_info,
             if (arena->biome == rr_biome_id_beehive)
                 rr_renderer_draw_tile_beehive(renderer, tile_index);
             else if (this->selected_biome == rr_biome_id_hell_creek ||
-                    this->selected_biome == rr_biome_id_pvp)
+                    this->selected_biome == rr_biome_id_pvp ||
+                    this->selected_biome == rr_biome_id_ctf)
                 rr_renderer_draw_tile_hell_creek(renderer, tile_index);
             else
                 rr_renderer_draw_tile_garden(renderer, tile_index);
