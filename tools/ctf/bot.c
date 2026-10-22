@@ -510,6 +510,9 @@ int main(int argc, char **argv)
     CHECK(B->inv[rr_petal_id_basic][rr_rarity_id_epic] == RR_CTF_START_PETALS,
           "B starts with %d Epic Basic, has %llu", RR_CTF_START_PETALS,
           (unsigned long long)B->inv[rr_petal_id_basic][rr_rarity_id_epic]);
+    CHECK(B->inv[rr_petal_id_azalea][rr_rarity_id_epic] == RR_CTF_START_AZALEAS,
+          "B starts with %d Epic Azalea, has %llu", RR_CTF_START_AZALEAS,
+          (unsigned long long)B->inv[rr_petal_id_azalea][rr_rarity_id_epic]);
     {
         // crafting uses up some of the five, so a reset to five is visible
         struct proto_bug e = begin(B, rr_serverbound_petals_craft);
@@ -531,6 +534,31 @@ int main(int argc, char **argv)
     WAIT(B->my_team == 1 && B->phase == rr_ctf_phase_war, 4, "B is back on its team in the war");
     pump(1.0);
 
+    printf("the give petals PIN works in a match\n");
+    {
+        uint64_t before = B->inv[rr_petal_id_stinger][rr_rarity_id_epic];
+        // a wrong PIN does nothing
+        struct proto_bug e = begin(B, rr_serverbound_dev_cheat);
+        proto_bug_write_uint8(&e, rr_dev_cheat_give_petals, "cheat type");
+        proto_bug_write_string(&e, "0000", 16, "pin");
+        proto_bug_write_uint8(&e, rr_petal_id_stinger, "id");
+        proto_bug_write_uint8(&e, rr_rarity_id_epic, "rarity");
+        proto_bug_write_varuint(&e, 7, "count");
+        finish(B, &e);
+        pump(0.6);
+        CHECK(B->inv[rr_petal_id_stinger][rr_rarity_id_epic] == before, "a wrong PIN gives nothing");
+        pump(1.0); // the PIN has a cooldown
+        e = begin(B, rr_serverbound_dev_cheat);
+        proto_bug_write_uint8(&e, rr_dev_cheat_give_petals, "cheat type");
+        proto_bug_write_string(&e, "2011", 16, "pin");
+        proto_bug_write_uint8(&e, rr_petal_id_stinger, "id");
+        proto_bug_write_uint8(&e, rr_rarity_id_epic, "rarity");
+        proto_bug_write_varuint(&e, 7, "count");
+        finish(B, &e);
+        WAIT(B->inv[rr_petal_id_stinger][rr_rarity_id_epic] == before + 7, 3,
+             "7 Epic Stingers are given");
+    }
+
     printf("B takes a flag of A and banks it\n");
     pump(1.5);
     teleport(B, A->flag[0].x, A->flag[0].y);
@@ -540,21 +568,27 @@ int main(int argc, char **argv)
     teleport(B, B->teams[1].px[0], B->teams[1].py[0]);
     WAIT(B->flag[0].state == rr_ctf_flag_banked, 3, "the flag is banked");
     CHECK(B->flag[0].holder == 1, "banked for B");
-    WAIT(B->teams[0].eliminated, 2, "A is out at once");
-    CHECK(B->teams[0].held == 2 && B->teams[1].held == 4, "A holds %d and B holds %d",
-          B->teams[0].held, B->teams[1].held);
+    WAIT(B->teams[0].held == 2 && B->teams[1].held == 4, 2, "the flag counts change");
+    CHECK(!B->teams[0].eliminated, "A is not out, it still has two flags");
     CHECK(B->phase == rr_ctf_phase_war && B->winner == 255, "no winner yet");
-    CHECK(A->teams[0].eliminated, "A is told as well");
 
-    printf("B takes the last two\n");
-    for (int f = 1; f <= 2; ++f)
-    {
-        teleport(B, B->flag[f].x, B->flag[f].y);
-        WAIT(B->flag[f].state == rr_ctf_flag_carried, 3, "a flag is carried");
-        teleport(B, B->teams[1].px[0], B->teams[1].py[0]);
-        WAIT(B->flag[f].state == rr_ctf_flag_banked, 3, "a flag is banked");
-    }
+    printf("B takes the next one, A has one flag and is still in\n");
+    teleport(B, B->flag[1].x, B->flag[1].y);
+    WAIT(B->flag[1].state == rr_ctf_flag_carried, 3, "a flag is carried");
+    teleport(B, B->teams[1].px[0], B->teams[1].py[0]);
+    WAIT(B->flag[1].state == rr_ctf_flag_banked, 3, "a flag is banked");
+    WAIT(B->teams[0].held == 1, 2, "A holds one flag");
+    pump(0.3);
+    CHECK(!B->teams[0].eliminated && !A->teams[0].eliminated, "one flag keeps a team in the game");
+    CHECK(B->phase == rr_ctf_phase_war, "still the war");
+
+    printf("B takes the last one, A is out and B wins\n");
+    teleport(B, B->flag[2].x, B->flag[2].y);
+    WAIT(B->flag[2].state == rr_ctf_flag_carried, 3, "a flag is carried");
+    teleport(B, B->teams[1].px[0], B->teams[1].py[0]);
+    WAIT(B->flag[2].state == rr_ctf_flag_banked, 3, "a flag is banked");
     WAIT(B->phase == rr_ctf_phase_ended, 3, "the match ends");
+    CHECK(B->teams[0].eliminated && A->teams[0].eliminated, "A is out with no flags");
     CHECK(B->winner == 1 && A->winner == 1, "B won (%d, %d)", B->winner, A->winner);
 
     printf("back to the lobby\n");

@@ -31,6 +31,20 @@
 struct rr_renderer minimap;
 
 static uint8_t previous_biome = 255;
+// pixels of the minimap image per maze cell, set when it is drawn
+static float cell_px = 1;
+
+// A map wider than this many template cells (the size of a normal map) is shown
+// as a window of this size around the player. While the mouse is over the
+// minimap it shows the whole map.
+#define MINIMAP_WINDOW_CELLS 40
+
+// where a world position is in the box, from its center, given the center of
+// the view and how much world the box shows
+static float to_box(float world, float view_center, float span, float size)
+{
+    return size * ((world - view_center) / span);
+}
 
 #define DRAW_MINIMAP(renderer, grid)                                           \
     if (arena->biome != previous_biome)                                        \
@@ -39,6 +53,9 @@ static uint8_t previous_biome = 255;
         float s = floorf(this->abs_width / maze_dim);                          \
         if (s < 2)                                                             \
             s = 2;                                                             \
+        if (maze_dim / 2 > MINIMAP_WINDOW_CELLS)                               \
+            s = 4; /* sharp enough to zoom in on */                            \
+        cell_px = s;                                                           \
         rr_renderer_set_dimensions(renderer, s *maze_dim, s *maze_dim);        \
         (renderer)->state.filter.color = 0xffffffff;                           \
         for (int32_t x = 0; x < maze_dim; ++x)                                 \
@@ -123,13 +140,38 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
         grid = RR_MAZES[arena->biome].maze;
     }
     DRAW_MINIMAP(&minimap, grid);
+    // what part of the world the box shows
+    float world = grid_size * maze_dim;
+    float view_x = world / 2, view_y = world / 2, span = world;
+    uint8_t zoomed = 0;
+    if (maze_dim / 2 > MINIMAP_WINDOW_CELLS && !rr_ui_mouse_over(this, game))
+    {
+        zoomed = 1;
+        span = MINIMAP_WINDOW_CELLS * 2 * grid_size;
+        view_x = game->player_info->lerp_camera_x;
+        view_y = game->player_info->lerp_camera_y;
+    }
     rr_renderer_scale(renderer, renderer->scale);
-    rr_renderer_scale(renderer, this->abs_width / minimap.width);
-    rr_renderer_draw_image(renderer, &minimap);
-    rr_renderer_scale(renderer, minimap.width / this->abs_width);
+    if (zoomed)
+    {
+        // the part of the image around the player, as many pixels as the box
+        float window = span / grid_size * cell_px;
+        rr_renderer_scale(renderer, this->abs_width / window);
+        rr_renderer_draw_clipped_image(renderer, &minimap,
+                                       view_x / grid_size * cell_px,
+                                       view_y / grid_size * cell_px, window,
+                                       window, 0, 0);
+        rr_renderer_scale(renderer, window / this->abs_width);
+    }
+    else
+    {
+        rr_renderer_scale(renderer, this->abs_width / minimap.width);
+        rr_renderer_draw_image(renderer, &minimap);
+        rr_renderer_scale(renderer, minimap.width / this->abs_width);
+    }
     rr_renderer_set_line_width(renderer, 2);
     if (arena->biome == rr_biome_id_ctf)
-        rr_ctf_minimap_overlay(game, this->abs_width, grid_size * maze_dim);
+        rr_ctf_minimap_overlay(game, this->abs_width, view_x, view_y, span);
     if (arena->biome == rr_biome_id_pvp)
     {
         rr_renderer_set_fill(renderer, 0xffff0000);
@@ -153,11 +195,8 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
             rr_renderer_begin_path(renderer);
             rr_renderer_arc(
                 renderer,
-                this->abs_width *
-                    (physical->lerp_x / (grid_size * maze_dim) - 0.5),
-                this->abs_height *
-                    (physical->lerp_y / (grid_size * maze_dim) - 0.5),
-                4);
+                to_box(physical->lerp_x, view_x, span, this->abs_width),
+                to_box(physical->lerp_y, view_y, span, this->abs_height), 4);
             rr_renderer_fill(renderer);
             rr_renderer_stroke(renderer);
         }
@@ -187,16 +226,29 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
             rr_renderer_set_stroke(renderer, 0xff0080ff);
             renderer->state.filter.amount = 0;
         }
+        float bx = to_box(physical->lerp_x, view_x, span, this->abs_width);
+        float by = to_box(physical->lerp_y, view_y, span, this->abs_height);
+        // a squadmate outside the window is not drawn on its edge
+        if (fabsf(bx) > this->abs_width / 2 + 4 ||
+            fabsf(by) > this->abs_height / 2 + 4)
+            continue;
         rr_renderer_begin_path(renderer);
-        rr_renderer_arc(
-            renderer,
-            this->abs_width *
-                (physical->lerp_x / (grid_size * maze_dim) - 0.5),
-            this->abs_height *
-                (physical->lerp_y / (grid_size * maze_dim) - 0.5),
-            4);
+        rr_renderer_arc(renderer, bx, by, 4);
         rr_renderer_fill(renderer);
         rr_renderer_stroke(renderer);
+    }
+    if (zoomed)
+    {
+        rr_renderer_set_fill(renderer, 0xccffffff);
+        rr_renderer_set_stroke(renderer, 0xff222222);
+        rr_renderer_set_text_baseline(renderer, 1);
+        rr_renderer_set_text_align(renderer, 1);
+        rr_renderer_set_text_size(renderer, 11);
+        rr_renderer_set_line_width(renderer, 11 * 0.12f);
+        rr_renderer_stroke_text(renderer, "hover for the whole map", 0,
+                                this->abs_height / 2 - 9);
+        rr_renderer_fill_text(renderer, "hover for the whole map", 0,
+                              this->abs_height / 2 - 9);
     }
 }
 

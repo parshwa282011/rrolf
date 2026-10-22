@@ -38,8 +38,9 @@
 #define RR_CTF_ENDED_SECONDS 20
 // a dead player is put back at their base after this many ticks
 #define RR_CTF_RESPAWN_TICKS 25
-// a team holding fewer flags than this is out
-#define RR_CTF_MIN_FLAGS 3
+// a team holding fewer flags than this is out, so it stays in the game while it
+// holds even one
+#define RR_CTF_MIN_FLAGS 1
 // how close a player has to be, in world units, to grab a flag, to bank one at
 // a flag point, and to set one up on an empty flag point
 #define RR_CTF_PICKUP_RADIUS 90.0f

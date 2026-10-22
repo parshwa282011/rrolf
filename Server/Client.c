@@ -322,6 +322,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     for (uint32_t lvl = 2; lvl <= RR_CTF_START_LEVEL; ++lvl)
         this->experience += xp_to_reach_level(lvl);
     this->inventory[rr_petal_id_basic][rr_rarity_id_epic] = RR_CTF_START_PETALS;
+    this->inventory[rr_petal_id_azalea][rr_rarity_id_epic] = RR_CTF_START_AZALEAS;
     return 1;
 #endif
     if (this->dev)

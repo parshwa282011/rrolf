@@ -1,7 +1,8 @@
 # Capture the flag
 
 A minigame on its own server (`-DCTF`, port 1236, `ctf-game.parshwa.blog`). Nothing is saved: everyone
-starts at level 10 with 5 Epic Basic petals and the account is untouched.
+starts at level 30 (6 slots) with 5 Epic Basic and 1 Epic Azalea and the account is untouched. The
+Give Petals button (PIN) works in a match, the server is built with `-DPDEV`.
 
 ## How a match goes
 
@@ -13,13 +14,15 @@ starts at level 10 with 5 Epic Basic petals and the account is untouched.
 4. **Sealed (10 min).** The walls between the areas are up. Farm mobs, craft (**C**), change the loadout
    (**Z**, then *Respawn with this loadout*). Dying respawns you at your base after a second.
 5. **War.** The walls drop. Take another team's flag by touching it and carry it to any of **your** flag
-   points to bank it. A team holding fewer than 3 flags is out at once. A team that lost a flag can stand on
-   its empty flag point for 3 s to set a banked flag up there. The first team to hold every other team's
-   flags wins, then the server goes back to the lobby.
+   points to bank it. A team stays in the game while it holds at least one flag and is out at once when it
+   holds none. A team that lost a flag can stand on its empty flag point for 3 s to set a banked flag up
+   there. The first team to hold every other team's flags wins, then the server goes back to the lobby.
 
 "Holding" means the flags standing on your points plus the ones you banked. A carried or dropped flag
 still counts for the team it was taken from. A dropped flag goes home after 15 s, or at once when its own
 team touches it. A team that is out hands what it banked to the team that finished it.
+
+The minimap shows the 40x40 cells around you. Hover over it to see the whole map.
 
 ## Files
 
@@ -53,6 +56,7 @@ the walls only drop at the end of the sealed phase, so use the test build and it
 
 ## Changing the rules
 
-The numbers (radii, timers, minimum flags) are the `RR_CTF_*` defines in `Shared/Ctf.h`. To change what the
+The numbers (radii, timers, minimum flags) are the `RR_CTF_*` defines in `Shared/Ctf.h`. The start level
+and petals are `RR_CTF_START_*` in `Shared/StaticData.h`. To change what the
 walls do, edit `rr_ctf_drop_walls` in `Shared/Ctf.c`. To change the map, edit `base-quadrant.txt` and run
 the generator. The server and the client both compile the map in, so rebuild both.

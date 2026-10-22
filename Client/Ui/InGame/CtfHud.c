@@ -124,7 +124,7 @@ static void hud_on_render(struct rr_ui_element *this, struct rr_game *game)
                                   c->phase_ticks / RR_CTF_TPS);
         snprintf(title, sizeof title, "WAR  %s", clock);
         snprintf(sub, sizeof sub,
-                 "Take their flags to your flag points. Keep 3 or you are out");
+                 "Take their flags to your flag points. With no flag you are out");
         break;
     case rr_ctf_phase_ended:
         snprintf(title, sizeof title, "%s wins!",

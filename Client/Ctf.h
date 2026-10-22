@@ -40,8 +40,10 @@ void rr_ctf_client_render_world(struct rr_game *);
 // which team's area it is
 uint32_t rr_ctf_client_floor_tint(struct rr_game *, float x, float y);
 // on the minimap: the team areas, the players in their team's color, the flag
-// points and the flags. size is the minimap in pixels, world_size the map
-void rr_ctf_minimap_overlay(struct rr_game *, float size, float world_size);
+// points and the flags. size is the minimap box in pixels. It shows span world
+// units across, centered on view_x and view_y
+void rr_ctf_minimap_overlay(struct rr_game *, float size, float view_x,
+                            float view_y, float span);
 // the team that plays from a squad, 255 if none
 uint8_t rr_ctf_client_team_of_squad(struct rr_game *, uint8_t squad);
 // the host's feedback, and the line of text for the top of the screen

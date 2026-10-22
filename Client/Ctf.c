@@ -557,23 +557,34 @@ void rr_ctf_client_render_world(struct rr_game *this)
 
 // ---- the minimap
 
-void rr_ctf_minimap_overlay(struct rr_game *this, float size, float world_size)
+void rr_ctf_minimap_overlay(struct rr_game *this, float size, float view_x,
+                            float view_y, float span)
 {
     struct rr_game_ctf *c = &this->ctf;
     if (!c->active || !c->has_body || c->team_count == 0)
         return;
     struct rr_renderer *renderer = this->renderer;
     float cell = rr_ctf_cell_size();
-    float to_px = size / world_size;
+    float to_px = size / span;
+    float half = size / 2;
     for (uint8_t t = 0; t < c->team_count; ++t)
     {
         struct rr_ctf_rect *area = &RR_CTF_QUADRANTS[rr_ctf_team_quadrant(t)];
+        // the part of the area that is in the box
+        float x0 = (area->x * cell - view_x) * to_px;
+        float y0 = (area->y * cell - view_y) * to_px;
+        float x1 = x0 + area->w * cell * to_px;
+        float y1 = y0 + area->h * cell * to_px;
+        x0 = rr_fclamp(x0, -half, half);
+        x1 = rr_fclamp(x1, -half, half);
+        y0 = rr_fclamp(y0, -half, half);
+        y1 = rr_fclamp(y1, -half, half);
+        if (x1 <= x0 || y1 <= y0)
+            continue;
         rr_renderer_set_fill(renderer,
                              (rr_ctf_team_color(t) & 0x00ffffff) | 0x38000000);
         rr_renderer_begin_path(renderer);
-        rr_renderer_fill_rect(renderer, size * -0.5f + area->x * cell * to_px,
-                              size * -0.5f + area->y * cell * to_px,
-                              area->w * cell * to_px, area->h * cell * to_px);
+        rr_renderer_fill_rect(renderer, x0, y0, x1 - x0, y1 - y0);
     }
     // everyone in the arena, in the color of their team
     rr_renderer_set_line_width(renderer, 1.5f);
@@ -593,10 +604,13 @@ void rr_ctf_minimap_overlay(struct rr_game *this, float size, float world_size)
             continue;
         struct rr_component_physical *physical = rr_simulation_get_physical(
             this->simulation, player_info->flower_id);
+        float bx = (physical->lerp_x - view_x) * to_px;
+        float by = (physical->lerp_y - view_y) * to_px;
+        if (fabsf(bx) > half || fabsf(by) > half)
+            continue;
         rr_renderer_set_fill(renderer, rr_ctf_team_color(team));
         rr_renderer_begin_path(renderer);
-        rr_renderer_arc(renderer, size * (physical->lerp_x / world_size - 0.5f),
-                        size * (physical->lerp_y / world_size - 0.5f), 3);
+        rr_renderer_arc(renderer, bx, by, 3);
         rr_renderer_fill(renderer);
         rr_renderer_stroke(renderer);
     }
@@ -607,11 +621,13 @@ void rr_ctf_minimap_overlay(struct rr_game *this, float size, float world_size)
         {
             if (!c->teams[t].point_set[i])
                 continue;
+            float bx = (c->teams[t].point_x[i] - view_x) * to_px;
+            float by = (c->teams[t].point_y[i] - view_y) * to_px;
+            if (fabsf(bx) > half || fabsf(by) > half)
+                continue;
             rr_renderer_set_stroke(renderer, rr_ctf_team_color(t));
             rr_renderer_begin_path(renderer);
-            rr_renderer_arc(
-                renderer, size * (c->teams[t].point_x[i] / world_size - 0.5f),
-                size * (c->teams[t].point_y[i] / world_size - 0.5f), 6);
+            rr_renderer_arc(renderer, bx, by, 6);
             rr_renderer_stroke(renderer);
         }
     if (!c->flags_ready)
@@ -621,11 +637,15 @@ void rr_ctf_minimap_overlay(struct rr_game *this, float size, float world_size)
         struct rr_game_ctf_flag *flag = &c->flags[f];
         if (flag->state == rr_ctf_flag_banked)
             continue;
-        rr_renderer_set_fill(renderer, rr_ctf_team_color(f / RR_CTF_FLAGS_PER_TEAM));
+        float bx = (flag->lerp_x - view_x) * to_px;
+        float by = (flag->lerp_y - view_y) * to_px;
+        if (fabsf(bx) > half || fabsf(by) > half)
+            continue;
+        rr_renderer_set_fill(renderer,
+                             rr_ctf_team_color(f / RR_CTF_FLAGS_PER_TEAM));
         rr_renderer_set_stroke(renderer, rr_ctf_team_color(flag->holder));
         rr_renderer_begin_path(renderer);
-        rr_renderer_arc(renderer, size * (flag->lerp_x / world_size - 0.5f),
-                        size * (flag->lerp_y / world_size - 0.5f), 4.5f);
+        rr_renderer_arc(renderer, bx, by, 4.5f);
         rr_renderer_fill(renderer);
         rr_renderer_stroke(renderer);
     }

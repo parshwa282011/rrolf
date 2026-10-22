@@ -2,7 +2,7 @@
 # Plays a whole capture the flag match with two bots against a real server.
 #
 # It builds a CTF server with -DCTF_TEST (which lets a client teleport, so it is
-# never deployed) and the bot in tools/ctf/bot.c, starts a copy of the master
+# never deployed) and -DPDEV like the deployed one and the bot in tools/ctf/bot.c, starts a copy of the master
 # server so the real accounts database is left alone, shortens the phases, and
 # runs the bot.
 #
@@ -27,7 +27,7 @@ done
 
 echo "==> building in $WORK"
 mkdir -p "$WORK/server"
-(cd "$WORK/server" && cmake "$ROOT/Server" -DDEBUG_BUILD=0 -DCTF=1 -DCTF_TEST=1 > cmake.log 2>&1 &&
+(cd "$WORK/server" && cmake "$ROOT/Server" -DDEBUG_BUILD=0 -DCTF=1 -DCTF_TEST=1 -DPDEV=1 > cmake.log 2>&1 &&
     make -j"$(sysctl -n hw.ncpu)" > make.log 2>&1) || { echo "server build failed, see $WORK/server/make.log" >&2; exit 2; }
 clang -O1 -DNDEBUG -I"$ROOT" -o "$WORK/bot" "$ROOT/tools/ctf/bot.c" \
     "$ROOT/Shared/pb.c" "$ROOT/Shared/Crypto.c" -lwebsockets 2> "$WORK/bot.log" ||

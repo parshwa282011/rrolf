@@ -109,15 +109,17 @@ static void test_two_team_game()
           "banked for team 0");
     CHECK(rr_ctf_held(&m, 0) == 4, "team 0 holds 4: %d", rr_ctf_held(&m, 0));
     CHECK(rr_ctf_held(&m, 1) == 2, "team 1 holds 2: %d", rr_ctf_held(&m, 1));
-    CHECK(m.teams[1].eliminated, "team 1 is out at once");
-    CHECK(!m.teams[0].eliminated, "team 0 is not");
-    CHECK(m.winner == RR_CTF_NONE, "not won, 2 flags of team 1 are still out");
+    CHECK(!m.teams[1].eliminated, "team 1 is not out, it still has flags");
+    CHECK(m.winner == RR_CTF_NONE, "not won");
     CHECK(m.teams[1].point_flag[0] == -1, "the point is empty");
-    CHECK((uint8_t)(m.event_seq - seq0) >= 3, "events were pushed");
-    // the other two flags
+    CHECK((uint8_t)(m.event_seq - seq0) >= 2, "events were pushed (taken, banked)");
     steal_and_bank(0, 0, 1, 1);
+    CHECK(rr_ctf_held(&m, 1) == 1, "team 1 holds 1");
+    CHECK(!m.teams[1].eliminated, "one flag is enough to stay in");
     CHECK(m.winner == RR_CTF_NONE, "one to go");
     steal_and_bank(0, 0, 1, 2);
+    CHECK(rr_ctf_held(&m, 1) == 0, "team 1 holds nothing");
+    CHECK(m.teams[1].eliminated, "team 1 is out with no flags");
     CHECK(m.winner == 0, "team 0 won, winner %d", m.winner);
     CHECK(m.events[RR_CTF_EVENT_HISTORY - 1].type == rr_ctf_event_won, "won event last");
 }
@@ -200,19 +202,19 @@ static void test_one_flag_per_carrier()
 static void test_three_teams_setup_and_recover()
 {
     start_match(3);
-    // team 0 takes one of team 1's flags: team 1 is out
+    // team 0 takes one of team 1's flags
     steal_and_bank(0, 0, 1, 0);
-    CHECK(m.teams[1].eliminated, "team 1 out");
+    CHECK(!m.teams[1].eliminated, "team 1 still holds %d", rr_ctf_held(&m, 1));
     CHECK(rr_ctf_held(&m, 0) == 4, "team 0 holds 4");
-    // team 2 takes one of team 0's flags. Team 0 holds 3 and carries on
+    // team 2 takes one of team 0's flags
     steal_and_bank(7, 2, 0, 0);
     CHECK(flag(0, 0)->holder == 2 && flag(0, 0)->state == rr_ctf_flag_banked, "banked by 2");
-    CHECK(rr_ctf_held(&m, 0) == 3, "team 0 holds exactly 3: %d", rr_ctf_held(&m, 0));
-    CHECK(!m.teams[0].eliminated, "team 0 is still in, 3 is enough");
+    CHECK(rr_ctf_held(&m, 0) == 3, "team 0 holds 3: %d", rr_ctf_held(&m, 0));
     CHECK(rr_ctf_held(&m, 2) == 4, "team 2 holds 4");
     CHECK(m.teams[0].point_flag[0] == -1, "team 0's point 0 is empty");
     CHECK(rr_ctf_banked(&m, 0) == 1, "team 0 has one banked");
     // team 0 sets the banked flag up on the empty point: 3 seconds on it
+    place(0, 0, 5000, 5000);
     place(2, 0, px(0, 0), py(0, 0));
     step(RR_CTF_SETUP_TICKS - 2);
     CHECK(m.teams[0].point_flag[0] == -1, "not yet");
@@ -229,14 +231,15 @@ static void test_three_teams_setup_and_recover()
         CHECK(rr_ctf_held_foreign(&m, 0) == 1, "1 foreign held");
     }
     CHECK(rr_ctf_banked(&m, 0) == 0, "bank is empty");
-    // team 2 now takes that flag off team 0's point, team 0 drops to 2 and is out
+    // team 2 takes that flag off team 0's point, and it is theirs
     uint8_t f = m.teams[0].point_flag[0];
     place(7, 2, m.flags[f].x, m.flags[f].y);
     step(1);
     CHECK(m.flags[f].state == rr_ctf_flag_carried, "taken from the point");
     place(7, 2, px(2, 2), py(2, 2));
     step(1);
-    CHECK(m.teams[0].eliminated, "team 0 out");
+    CHECK(rr_ctf_held(&m, 0) == 2, "team 0 holds 2: %d", rr_ctf_held(&m, 0));
+    CHECK(!m.teams[0].eliminated, "team 0 is still in");
     CHECK(rr_ctf_held(&m, 2) == 5, "team 2 holds 5: %d", rr_ctf_held(&m, 2));
     CHECK(m.winner == RR_CTF_NONE, "not won");
 }
@@ -271,31 +274,55 @@ static void test_setup_needs_presence_and_decays()
 static void test_eliminated_team_gives_up_its_bank()
 {
     start_match(3);
-    steal_and_bank(0, 0, 1, 0);  // team 1 out. team 0 banked team 1's flag
-    steal_and_bank(0, 0, 1, 1);  // and another
+    // team 0 banks two of team 1's flags
+    steal_and_bank(0, 0, 1, 0);
+    steal_and_bank(0, 0, 1, 1);
     CHECK(rr_ctf_banked(&m, 0) == 2, "team 0 banked 2");
-    // team 2 takes from team 0 until it is out, the last taker gets the bank
+    // banked flags are safe, so taking team 0's own flags can't put it out
     steal_and_bank(7, 2, 0, 0);
-    CHECK(!m.teams[0].eliminated, "team 0 holds %d", rr_ctf_held(&m, 0));
     steal_and_bank(7, 2, 0, 1);
-    CHECK(!m.teams[0].eliminated, "team 0 holds %d", rr_ctf_held(&m, 0));
     steal_and_bank(7, 2, 0, 2);
+    CHECK(rr_ctf_held(&m, 0) == 2, "team 0 holds only its bank: %d", rr_ctf_held(&m, 0));
+    CHECK(!m.teams[0].eliminated, "a team with a banked flag stays in");
+    // everyone of team 0 leaves: out, and the team that took its last flag gets the bank
+    rr_ctf_eliminate(&m, 0, 2);
     CHECK(m.teams[0].eliminated, "team 0 out");
     CHECK(rr_ctf_banked(&m, 0) == 0, "its bank was handed over");
     CHECK(flag(1, 0)->holder == 2 && flag(1, 1)->holder == 2, "team 2 got team 1's flags");
     CHECK(rr_ctf_held(&m, 2) == 3 + 3 + 2, "team 2 holds 8: %d", rr_ctf_held(&m, 2));
-    CHECK(m.winner == RR_CTF_NONE, "team 1's third flag is still out");
+    step(1);
+    CHECK(m.winner == RR_CTF_NONE, "team 1's third flag and nothing of team 0's... is still out");
     steal_and_bank(7, 2, 1, 2);
-    CHECK(m.winner == 2, "team 2 has all 6 of the others, winner %d", m.winner);
+    CHECK(rr_ctf_held_foreign(&m, 2) == 6, "team 2 holds all 6 of the others: %d",
+          rr_ctf_held_foreign(&m, 2));
+    CHECK(m.winner == 2, "team 2 won, winner %d", m.winner);
 }
 
 static void test_eliminated_players_do_nothing()
 {
     start_match(2);
-    steal_and_bank(0, 0, 1, 0); // team 1 is out
+    rr_ctf_eliminate(&m, 1, 0);
     place(9, 1, flag(0, 0)->x, flag(0, 0)->y);
     step(5);
     CHECK(flag(0, 0)->state == rr_ctf_flag_standing, "an eliminated team can't take flags");
+}
+
+static void test_one_flag_is_enough()
+{
+    start_match(2);
+    steal_and_bank(0, 0, 1, 0);
+    steal_and_bank(0, 0, 1, 1);
+    CHECK(rr_ctf_held(&m, 1) == 1 && !m.teams[1].eliminated, "one flag keeps a team in");
+    // the team that is down to one flag still plays: it can take a flag of the
+    // other team
+    place(5, 1, flag(0, 0)->x, flag(0, 0)->y);
+    step(1);
+    CHECK(flag(0, 0)->state == rr_ctf_flag_carried && flag(0, 0)->carrier == 5,
+          "a team with one flag still plays");
+    players[5].alive = 0;
+    step(1);
+    steal_and_bank(0, 0, 1, 2);
+    CHECK(m.teams[1].eliminated && m.winner == 0, "taking the last one ends it");
 }
 
 static void test_carrier_of_eliminated_team_drops()
@@ -336,6 +363,7 @@ int main()
     test_setup_needs_presence_and_decays();
     test_eliminated_team_gives_up_its_bank();
     test_eliminated_players_do_nothing();
+    test_one_flag_is_enough();
     test_carrier_of_eliminated_team_drops();
     test_no_flags_before_the_end_of_the_placement();
     printf("%d checks, %d failed\n", checks, failures);

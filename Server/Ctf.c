@@ -155,10 +155,16 @@ static void fill_empty_loadout(struct rr_squad_member *member)
     for (uint32_t i = 0; i < RR_MAX_SLOT_COUNT; ++i)
         if (member->loadout[i].id != 0)
             return;
-    for (uint32_t i = 0; i < RR_CTF_START_PETALS && i < RR_MAX_SLOT_COUNT; ++i)
+    uint32_t slot = 0;
+    for (uint32_t i = 0; i < RR_CTF_START_PETALS && slot < RR_MAX_SLOT_COUNT; ++i)
     {
-        member->loadout[i].id = rr_petal_id_basic;
-        member->loadout[i].rarity = rr_rarity_id_epic;
+        member->loadout[slot].id = rr_petal_id_basic;
+        member->loadout[slot++].rarity = rr_rarity_id_epic;
+    }
+    for (uint32_t i = 0; i < RR_CTF_START_AZALEAS && slot < RR_MAX_SLOT_COUNT; ++i)
+    {
+        member->loadout[slot].id = rr_petal_id_azalea;
+        member->loadout[slot++].rarity = rr_rarity_id_epic;
     }
 }
 

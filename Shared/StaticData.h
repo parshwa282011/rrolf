@@ -106,9 +106,11 @@ enum rr_dev_cheat_type
     (200 * pow((biome) != rr_biome_id_pvp && (biome) != rr_biome_id_ctf        \
                    ? 1.0256 : 1.0335, level - 1))
 // capture the flag: everyone starts a match at this level with this many Epic
-// Basic petals, nothing about the real account is used or saved
-#define RR_CTF_START_LEVEL 10
+// Basic petals and Epic Azaleas (a slot each at level 30, which has 6), nothing
+// about the real account is used or saved
+#define RR_CTF_START_LEVEL 30
 #define RR_CTF_START_PETALS 5
+#define RR_CTF_START_AZALEAS 1
 #define RR_SLOT_COUNT_FROM_LEVEL(level)                                        \
     (level < (20 * (RR_MAX_SLOT_COUNT - 5))                                    \
         ? 5 + (level) / 20 : RR_MAX_SLOT_COUNT)
