@@ -96,6 +96,8 @@ set(SRCS
     Ui/TitleScreen/CrazyGames.c
     Ui/TitleScreen/DevSquadPanel.c
     Ui/TitleScreen/GivePetals.c
+    Ui/TitleScreen/CtfHost.c
+    Ui/InGame/CtfHud.c
     Ui/TitleScreen/Discord.c
     Ui/TitleScreen/Fullscreen.c
     Ui/TitleScreen/Gardn.c
@@ -114,6 +116,7 @@ set(SRCS
     Ui/Tooltip/Mob.c
     Ui/Tooltip/Squad.c
     Game.c
+    Ctf.c
     InputData.c
     Main.c
     Mobile.c

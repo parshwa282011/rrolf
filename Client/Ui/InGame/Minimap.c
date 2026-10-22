@@ -21,6 +21,7 @@
 #include <stdlib.h>
 
 #include <Client/Assets/RenderFunctions.h>
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/Renderer/Renderer.h>
 #include <Client/Simulation.h>
@@ -36,6 +37,8 @@ static uint8_t previous_biome = 255;
     {                                                                          \
         previous_biome = arena->biome;                                         \
         float s = floorf(this->abs_width / maze_dim);                          \
+        if (s < 2)                                                             \
+            s = 2;                                                             \
         rr_renderer_set_dimensions(renderer, s *maze_dim, s *maze_dim);        \
         (renderer)->state.filter.color = 0xffffffff;                           \
         for (int32_t x = 0; x < maze_dim; ++x)                                 \
@@ -125,6 +128,8 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     rr_renderer_draw_image(renderer, &minimap);
     rr_renderer_scale(renderer, minimap.width / this->abs_width);
     rr_renderer_set_line_width(renderer, 2);
+    if (arena->biome == rr_biome_id_ctf)
+        rr_ctf_minimap_overlay(game, this->abs_width, grid_size * maze_dim);
     if (arena->biome == rr_biome_id_pvp)
     {
         rr_renderer_set_fill(renderer, 0xffff0000);
@@ -199,6 +204,8 @@ static void minimap_redraw(void *captures)
 {
     previous_biome = 255;
 }
+
+void rr_minimap_invalidate() { previous_biome = 255; }
 
 struct rr_ui_element *rr_ui_minimap_init(struct rr_game *game)
 {

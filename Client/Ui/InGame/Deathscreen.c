@@ -18,6 +18,7 @@
 
 #include <Client/Ui/Engine.h>
 
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Simulation.h>
@@ -49,7 +50,9 @@ static uint8_t game_over(struct rr_ui_element *this, struct rr_game *game)
     if (dead && !dead_last_tick)
         chosen_text = rr_frand() >= 0.001;
     dead_last_tick = dead;
-    return !game->cache.hide_ui && game->simulation_ready && dead;
+    // in capture the flag players respawn by themselves
+    return !game->cache.hide_ui && game->simulation_ready && dead &&
+           !rr_ctf_client_selected(game);
 }
 
 static uint8_t text_choose(struct rr_ui_element *this, struct rr_game *game)

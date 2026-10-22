@@ -19,6 +19,7 @@
 #include <math.h>
 
 #include <Client/Assets/RenderFunctions.h>
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -69,6 +70,18 @@ void render_background(struct rr_component_player_info *player_info,
                 rr_renderer_draw_tile_hell_creek(renderer, tile_index);
             else
                 rr_renderer_draw_tile_garden(renderer, tile_index);
+            if (arena->biome == rr_biome_id_ctf)
+            {
+                // which team's area this is
+                uint32_t tint = rr_ctf_client_floor_tint(
+                    this, newLeftX + GRID_SIZE / 2, currY + GRID_SIZE / 2);
+                if (tint != 0)
+                {
+                    rr_renderer_set_fill(renderer, tint);
+                    rr_renderer_begin_path(renderer);
+                    rr_renderer_fill_rect(renderer, -128, -128, 256, 256);
+                }
+            }
             rr_renderer_context_state_free(renderer, &state);
         }
     }

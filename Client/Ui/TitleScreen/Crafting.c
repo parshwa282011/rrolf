@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <Client/Assets/RenderFunctions.h>
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -743,8 +744,9 @@ static uint8_t crafting_container_should_show(struct rr_ui_element *this,
                                               struct rr_game *game)
 {
     uint8_t r = game->menu_open == rr_game_menu_crafting &&
-                (!game->simulation_ready || (!game->cache.hide_ui &&
-                                             game->flower_dead));
+                (!game->simulation_ready ||
+                 (!game->cache.hide_ui &&
+                  (game->flower_dead || rr_ctf_client_in_game(game))));
     if (!r && game->menu_open == rr_game_menu_crafting)
         game->menu_open = 0;
     return r;

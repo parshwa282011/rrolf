@@ -266,6 +266,8 @@ extern struct rr_ui_element *rr_ui_level_bar_init(float);
 extern struct rr_ui_element *rr_ui_loot_container_init();
 
 extern struct rr_ui_element *rr_ui_minimap_init(struct rr_game *);
+// the maze changed, draw the minimap again
+extern void rr_minimap_invalidate();
 
 extern struct rr_ui_element *rr_ui_leaderboard_init(struct rr_game *);
 

@@ -97,7 +97,9 @@ enum rr_dev_cheat_type
     rr_dev_cheat_flags,
     rr_dev_cheat_speed_percent,
     rr_dev_cheat_fov_percent,
-    rr_dev_cheat_give_petals
+    rr_dev_cheat_give_petals,
+    // only in a -DCTF_TEST server, which is for tests and never deployed
+    rr_dev_cheat_teleport
 };
 
 #define RR_MAX_HEALTH_FROM_LEVEL(biome, level)                                 \

@@ -142,6 +142,12 @@ uint8_t rr_is_text_input_focused()
     return rr_dom_has_focus("_0x4346") ||
            rr_dom_has_focus("_0x4347") ||
            rr_dom_has_focus("_0x4348") ||
+           rr_dom_has_focus("_0x4349") || // give petals pin
+           rr_dom_has_focus("_0x434a") || // give petals amount
+           rr_dom_has_focus("_0x434b") || // crafting amount
+           rr_dom_has_focus("_0x434c") || // ctf host, squad codes
+           rr_dom_has_focus("_0x434d") ||
+           rr_dom_has_focus("_0x434e") ||
            rr_dom_has_focus("_0x4523");
 }
 

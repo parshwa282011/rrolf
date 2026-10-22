@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include <Client/Assets/RenderFunctions.h>
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -43,7 +44,7 @@ static void inventory_button_on_event(struct rr_ui_element *this,
     struct inventory_button_metadata *data = this->data;
     if (data->count == 0)
         return;
-    if (!game->simulation_ready)
+    if (!game->simulation_ready || rr_ctf_client_in_game(game))
         for (uint8_t i = 0; i < RR_MAX_SLOT_COUNT * 2; ++i)
             if (i % RR_MAX_SLOT_COUNT < game->slots_unlocked &&
                 game->cache.loadout[i].id == 0)
@@ -76,8 +77,9 @@ static uint8_t inventory_container_should_show(struct rr_ui_element *this,
                                                struct rr_game *game)
 {
     uint8_t r = game->menu_open == rr_game_menu_inventory &&
-                (!game->simulation_ready || (!game->cache.hide_ui &&
-                                             game->flower_dead));
+                (!game->simulation_ready ||
+                 (!game->cache.hide_ui &&
+                  (game->flower_dead || rr_ctf_client_in_game(game))));
     if (!r && game->menu_open == rr_game_menu_inventory)
         game->menu_open = 0;
     return r;

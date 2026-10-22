@@ -47,7 +47,6 @@
 // - A team wins when it holds every flag of every other team.
 
 #define RR_CTF_FLAG_COUNT (RR_CTF_MAX_TEAMS * RR_CTF_FLAGS_PER_TEAM)
-#define RR_CTF_NONE 255
 
 struct rr_ctf_flag
 {

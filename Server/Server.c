@@ -1340,6 +1340,23 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 client->dev_cheats.fov_percent = powf(fov_percent, 2) * 19 + 1;
                 break;
             }
+#ifdef CTF_TEST
+            case rr_dev_cheat_teleport:
+            {
+                float x = proto_bug_read_float32(&encoder, "teleport x");
+                float y = proto_bug_read_float32(&encoder, "teleport y");
+                if (client->player_info == NULL ||
+                    !rr_simulation_entity_alive(
+                        &this->simulation, client->player_info->flower_id))
+                    break;
+                struct rr_component_physical *physical =
+                    rr_simulation_get_physical(
+                        &this->simulation, client->player_info->flower_id);
+                rr_component_physical_set_x(physical, x);
+                rr_component_physical_set_y(physical, y);
+                break;
+            }
+#endif
 #ifdef PDEV
             case rr_dev_cheat_give_petals:
             {

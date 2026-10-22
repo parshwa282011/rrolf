@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <Client/Assets/RenderFunctions.h>
+#include <Client/Ctf.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -105,7 +106,8 @@ title_screen_loadout_button_should_show(struct rr_ui_element *this,
                                         struct rr_game *game)
 {
     struct loadout_button_metadata *data = this->data;
-    return !game->simulation_ready &&
+    // in a capture the flag match the loadout is changed while playing
+    return (!game->simulation_ready || rr_ctf_client_in_game(game)) &&
            data->pos % RR_MAX_SLOT_COUNT < game->slots_unlocked;
 }
 

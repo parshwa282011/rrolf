@@ -27,6 +27,7 @@
 #endif
 
 #include <Client/Assets/Init.h>
+#include <Client/Ctf.h>
 #include <Client/Assets/RenderFunctions.h>
 #include <Client/DOM.h>
 #include <Client/InputData.h>
@@ -294,8 +295,22 @@ static uint8_t ui_not_hidden_and_simulation_ready(struct rr_ui_element *this,
 static uint8_t ui_not_hidden_and_player_dead(struct rr_ui_element *this,
                                              struct rr_game *game)
 {
-    return (!game->cache.hide_ui && game->flower_dead) ||
+    // in capture the flag the inventory and crafting are open all game
+    return (!game->cache.hide_ui &&
+            (game->flower_dead || rr_ctf_client_in_game(game))) ||
             !game->simulation_ready;
+}
+
+// the loadout bar of the game, which gives way to the loadout editor that
+// capture the flag shows with the inventory open
+static uint8_t loadout_bar_visible(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    if (game->cache.hide_ui || !game->simulation_ready)
+        return 0;
+    return !(rr_ctf_client_in_game(game) &&
+             (game->menu_open == rr_game_menu_inventory ||
+              game->menu_open == rr_game_menu_crafting));
 }
 
 static uint8_t socket_ready(struct rr_ui_element *this, struct rr_game *game)
@@ -418,6 +433,7 @@ void rr_game_init(struct rr_game *this)
 #ifdef PDEV
                     rr_ui_give_petals_toggle_button_init(),
 #endif
+                    rr_ui_ctf_toggle_button_init(),
                     rr_ui_fullscreen_toggle_button_init(),
                     rr_ui_link_toggle(rr_ui_close_button_init(30, abandon_game_on_event), simulation_ready),
                     NULL
@@ -595,6 +611,8 @@ void rr_game_init(struct rr_game *this)
         simulation_not_ready)
     );
     
+    rr_ui_container_add_element(this->window, rr_ui_ctf_hud_init(this));
+    rr_ui_container_add_element(this->window, rr_ui_ctf_loadout_init(this));
     rr_ui_container_add_element(this->window, rr_ui_finished_game_screen_init());
     rr_ui_container_add_element(this->window, rr_ui_loot_container_init());
 
@@ -640,7 +658,7 @@ void rr_game_init(struct rr_game *this)
                     NULL
                 ),
             0, 1),
-        ui_not_hidden_and_simulation_ready)
+        loadout_bar_visible)
     );
 
     rr_ui_container_add_element(
@@ -679,6 +697,7 @@ void rr_game_init(struct rr_game *this)
 #ifdef PDEV
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_give_petals_container_init(this), close_menu_button_init(25))->container);
 #endif
+    rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_ctf_host_container_init(this), close_menu_button_init(25))->container);
 
     this->link_account_tooltip = rr_ui_container_add_element(
         this->window,
@@ -1304,6 +1323,9 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
         case rr_clientbound_account_reply:
             rr_auth_read_reply(this, &encoder);
             break;
+        case rr_clientbound_ctf_state:
+            rr_ctf_client_read_state(this, &encoder);
+            break;
         case rr_clientbound_leaderboard_update:
         {
             this->leaderboard_count =
@@ -1664,6 +1686,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             }
             rr_component_arena_render(player_info->arena, this,
                                       this->simulation);
+            rr_ctf_client_render_world(this);
 
 #define render_component(COMPONENT, filter)                                    \
     for (uint32_t i = 0; i < this->simulation->COMPONENT##_count; ++i)         \
@@ -1850,6 +1873,7 @@ void rr_game_tick(struct rr_game *this, float delta)
     rr_dom_set_cursor(this->cursor);
     rr_platform_tick(this, delta);
     rr_auth_tick(this, delta);
+    rr_ctf_client_tick(this, delta);
     rr_tutorial_tick(this, delta);
     rr_game_crafting_tick(this, delta);
     rr_game_autocraft_tick(this, delta);
@@ -2008,6 +2032,7 @@ void rr_game_connect_socket(struct rr_game *this)
     this->simulation_ready = 0;
     this->socket_pending = 1;
     this->is_dev = 0;
+    rr_ctf_client_reset(this);
     memset(&this->crafting_data, 0, sizeof this->crafting_data);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
         for (uint32_t j = 0; j < RR_SQUAD_MEMBER_COUNT; ++j)

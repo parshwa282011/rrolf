@@ -20,6 +20,7 @@
 #include <Client/Renderer/Renderer.h>
 #include <Client/Socket.h>
 #include <Client/Ui/Ui.h>
+#include <Shared/Ctf.h>
 #include <Shared/Entity.h>
 #include <Shared/Rivet.h>
 #include <Shared/Squad.h>
@@ -54,7 +55,8 @@ enum rr_game_menu
     rr_game_menu_account,
     rr_game_menu_dev_squad_panel,
     rr_game_menu_legal,
-    rr_game_menu_give_petals
+    rr_game_menu_give_petals,
+    rr_game_menu_ctf_host
 };
 
 enum rr_game_cursor
@@ -86,6 +88,79 @@ struct rr_game_crafting_data
     uint32_t temp_attempts;
     double temp_xp;
     uint8_t autocraft;
+};
+
+// what the server last said about the capture the flag match, see Client/Ctf.c
+struct rr_game_ctf_team
+{
+    uint8_t eliminated;
+    uint8_t squad;
+    uint8_t members;
+    uint8_t held;
+    uint8_t banked;
+    uint8_t point_set[RR_CTF_FLAGS_PER_TEAM];
+    float point_x[RR_CTF_FLAGS_PER_TEAM];
+    float point_y[RR_CTF_FLAGS_PER_TEAM];
+    uint8_t setup[RR_CTF_FLAGS_PER_TEAM];
+};
+
+struct rr_game_ctf_flag
+{
+    uint8_t state;
+    uint8_t holder;
+    float x;
+    float y;
+    // what is drawn, follows x and y
+    float lerp_x;
+    float lerp_y;
+};
+
+struct rr_game_ctf_feed_line
+{
+    char text[96];
+    uint32_t color;
+    float age;
+};
+
+struct rr_game_ctf_event
+{
+    uint8_t type;
+    uint8_t a;
+    uint8_t b;
+    uint8_t flag;
+};
+
+struct rr_game_ctf
+{
+    // a state packet has arrived on this connection
+    uint8_t active;
+    uint8_t phase;
+    uint8_t team_count;
+    uint8_t my_team;
+    uint8_t walls_dropped;
+    uint8_t is_host;
+    uint8_t can_start;
+    uint8_t has_body;
+    uint8_t is_leader;
+    uint8_t flags_ready;
+    uint8_t flags_drawn; // the flags have had a position to start from
+    uint8_t winner;
+    uint8_t message;
+    uint8_t message_arg;
+    uint32_t phase_ticks;
+    uint16_t event_seq;
+    uint8_t event_seq_known;
+    struct rr_game_ctf_event events[RR_CTF_EVENT_HISTORY];
+    struct rr_game_ctf_team teams[RR_CTF_MAX_TEAMS];
+    struct rr_game_ctf_flag flags[RR_CTF_MAX_TEAMS * RR_CTF_FLAGS_PER_TEAM];
+    struct rr_game_ctf_feed_line feed[5];
+    // host panel
+    char codes[RR_CTF_MAX_TEAMS - 1][16];
+    float start_confirm; // seconds left of "press start again"
+    uint8_t place_cycle; // which flag point F moves once all are placed
+    uint32_t loadout_sent; // hash of the loadout the server was last sent
+    float loadout_wait;
+    float anim; // seconds, for things that pulse
 };
 
 struct rr_game_chat_message
@@ -171,6 +246,7 @@ struct rr_game
     struct rr_game_crafting_data crafting_data;
     struct rr_game_debug_info debug_info;
     struct rr_game_chat chat;
+    struct rr_game_ctf ctf;
     struct rr_game_cache cache;
     struct rr_game_squad squad;
     struct rr_dev_cheats dev_cheats;

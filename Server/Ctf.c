@@ -660,12 +660,15 @@ void rr_ctf_send_state(struct rr_server *this, struct rr_server_client *client)
     proto_bug_write_uint8(&encoder, m->phase, "ctf phase");
     proto_bug_write_uint8(&encoder, m->team_count, "ctf teams");
     proto_bug_write_uint8(&encoder, team, "ctf my team");
+    // bit 0 walls are down, 1 the client is the host, 2 the host can start, 3 the
+    // rest of the packet follows, 4 the client leads their squad, 5 the flags
+    // exist
+    uint8_t can_start =
+        host && m->phase == rr_ctf_phase_lobby && m->team_count >= 2;
     proto_bug_write_uint8(
         &encoder,
-        rr_ctf_walls_dropped() | host << 1 |
-            (host && m->phase == rr_ctf_phase_lobby && m->team_count >= 2)
-                << 2 |
-            body << 3,
+        rr_ctf_walls_dropped() | host << 1 | can_start << 2 | body << 3 |
+            is_leader(this, client) << 4 | m->flags_ready << 5,
         "ctf flags");
     proto_bug_write_uint8(&encoder, m->winner, "ctf winner");
     proto_bug_write_uint8(&encoder, client->ctf_message, "ctf message");
@@ -686,6 +689,8 @@ void rr_ctf_send_state(struct rr_server *this, struct rr_server_client *client)
             struct rr_ctf_team *team_state = &m->teams[t];
             proto_bug_write_uint8(&encoder, team_state->eliminated,
                                   "ctf team out");
+            proto_bug_write_uint8(&encoder, team_state->squad,
+                                  "ctf team squad");
             proto_bug_write_uint8(&encoder,
                                   this->squads[team_state->squad].member_count,
                                   "ctf team members");

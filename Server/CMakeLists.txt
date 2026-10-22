@@ -116,6 +116,12 @@ if(CTF)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCTF -DPVP")
 endif()
 
+# a capture the flag build for the automated test in tools/ctf. It lets any
+# client move itself, so it must never be deployed
+if(CTF_TEST)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCTF_TEST")
+endif()
+
 # lets a client with the PIN give itself petals, see rr_dev_cheat_give_petals
 if(PDEV)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPDEV")
