@@ -16,7 +16,9 @@
 
 #include <Client/Ui/Ui.h>
 
+#include <emscripten.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -43,7 +45,7 @@ struct crafting_ring_metadata
 
 struct crafting_ring_button_metadata
 {
-    uint32_t count;
+    uint64_t count;
     float secondary_animation;
     uint8_t pos;
     uint8_t prev_id;
@@ -54,7 +56,7 @@ struct crafting_inventory_button_metadata
 {
     uint8_t id;
     uint8_t rarity;
-    uint32_t count;
+    uint64_t count;
     float secondary_animation;
 };
 
@@ -63,6 +65,105 @@ struct craft_captures
     struct rr_game_crafting_data craft;
     struct rr_game *game;
 };
+
+// Shift-clicking a stack of more than PICKER_MIN_STACK petals does not put the
+// whole stack in the grid (one request that big keeps the server busy for
+// seconds or more). It opens this picker instead: a slider and a number box
+// that follow each other, and "Set" puts exactly that many in the grid, so the
+// Craft button asks the server for only that many.
+#define PICKER_MIN_STACK 1000000
+#define PICKER_INPUT "_0x434b"
+
+static struct
+{
+    uint8_t active;
+    uint8_t id;
+    uint8_t rarity;
+    uint64_t max;
+    uint64_t amount;
+    // the slider and the box are compared with what they were last frame to
+    // see which one the player changed
+    float slider;
+    float slider_last;
+    char text[24];
+    char text_last[24];
+    char label[96];
+} picker;
+
+// the slider is logarithmic, from one craft to the whole stack, so it is usable
+// from hundreds to trillions. The box is for exact numbers.
+static uint64_t picker_amount_from_slider(float t)
+{
+    if (t >= 1)
+        return picker.max;
+    if (t <= 0)
+        return PETALS_PER_CRAFT;
+    double lo = log(PETALS_PER_CRAFT);
+    double hi = log((double)picker.max);
+    uint64_t amount = (uint64_t)round(exp(lo + t * (hi - lo)));
+    if (amount < PETALS_PER_CRAFT)
+        return PETALS_PER_CRAFT;
+    return amount > picker.max ? picker.max : amount;
+}
+
+static float picker_slider_from_amount(uint64_t amount)
+{
+    if (amount <= PETALS_PER_CRAFT)
+        return 0;
+    if (amount >= picker.max)
+        return 1;
+    double lo = log(PETALS_PER_CRAFT);
+    double hi = log((double)picker.max);
+    return (log((double)amount) - lo) / (hi - lo);
+}
+
+static void picker_set_text(uint64_t amount)
+{
+    snprintf(picker.text, sizeof picker.text, "%llu",
+             (unsigned long long)amount);
+    memcpy(picker.text_last, picker.text, sizeof picker.text);
+    rr_dom_set_text(PICKER_INPUT, picker.text);
+}
+
+// the whole stack the player could craft with, leaving what the loadout uses
+static uint64_t picker_stack(struct rr_game *game, uint8_t id, uint8_t rarity)
+{
+    if (game->inventory[id][rarity] < game->loadout_counts[id][rarity])
+        return 0;
+    return game->inventory[id][rarity] - game->loadout_counts[id][rarity];
+}
+
+static void picker_open(struct rr_game *game, uint8_t id, uint8_t rarity)
+{
+    picker.active = 1;
+    picker.id = id;
+    picker.rarity = rarity;
+    picker.max = picker_stack(game, id, rarity);
+    // start from what is already in the grid, or one million
+    uint64_t amount = PICKER_MIN_STACK;
+    if (game->crafting_data.crafting_id == id &&
+        game->crafting_data.crafting_rarity == rarity &&
+        game->crafting_data.count >= PETALS_PER_CRAFT)
+        amount = game->crafting_data.count;
+    if (amount > picker.max)
+        amount = picker.max;
+    picker.amount = amount;
+    picker.slider = picker.slider_last = picker_slider_from_amount(amount);
+    picker_set_text(amount);
+}
+
+static void picker_apply(struct rr_game *game)
+{
+    uint64_t max = picker_stack(game, picker.id, picker.rarity);
+    uint64_t amount = picker.amount > max ? max : picker.amount;
+    if (amount < PETALS_PER_CRAFT)
+        return;
+    game->crafting_data.success_count = 0;
+    game->crafting_data.crafting_id = picker.id;
+    game->crafting_data.crafting_rarity = picker.rarity;
+    game->crafting_data.count = amount;
+    picker.active = 0;
+}
 
 static uint8_t can_craft(struct rr_game *game)
 {
@@ -492,7 +593,7 @@ static void crafting_inventory_button_animate(struct rr_ui_element *this,
                                               struct rr_game *game)
 {
     struct crafting_inventory_button_metadata *data = this->data;
-    uint32_t count = data->count =
+    uint64_t count = data->count =
         rr_game_get_adjusted_inventory_count(game, data->id, data->rarity);
     if (this->first_frame)
         data->secondary_animation = count == 0;
@@ -505,7 +606,7 @@ static void crafting_inventory_button_on_event(struct rr_ui_element *this,
                                                struct rr_game *game)
 {
     struct crafting_inventory_button_metadata *data = this->data;
-    uint32_t count = data->count;
+    uint64_t count = data->count;
     if (game->crafting_data.crafting_id == data->id &&
         game->crafting_data.crafting_rarity == data->rarity)
         count += game->crafting_data.count;
@@ -519,27 +620,35 @@ static void crafting_inventory_button_on_event(struct rr_ui_element *this,
             if (game->input_data->mouse_buttons_up_this_tick & 1 &&
                 game->pressed == this)
             {
-                game->crafting_data.success_count = 0;
-                if (game->crafting_data.crafting_id != data->id ||
-                    game->crafting_data.crafting_rarity != data->rarity)
-                {
-                    game->crafting_data.crafting_id = data->id;
-                    game->crafting_data.crafting_rarity = data->rarity;
-                    game->crafting_data.count = 0;
-                    data->count = rr_game_get_adjusted_inventory_count(
-                        game, data->id, data->rarity);
-                }
-                if (rr_bitset_get_bit(game->input_data->keys_pressed, 16))
-                    game->crafting_data.count += data->count;
-                else if (game->crafting_data.count < PETALS_PER_CRAFT)
-                    game->crafting_data.count +=
-                        PETALS_PER_CRAFT - game->crafting_data.count;
-                else if (data->count > PETALS_PER_CRAFT)
-                    game->crafting_data.count += PETALS_PER_CRAFT;
+                if (rr_bitset_get_bit(game->input_data->keys_pressed, 16) &&
+                    picker_stack(game, data->id, data->rarity) >
+                        PICKER_MIN_STACK)
+                    picker_open(game, data->id, data->rarity);
                 else
-                    game->crafting_data.count += data->count;
-                if (data->count > 0)
-                    data->secondary_animation = 0.4;
+                {
+                    picker.active = 0;
+                    game->crafting_data.success_count = 0;
+                    if (game->crafting_data.crafting_id != data->id ||
+                        game->crafting_data.crafting_rarity != data->rarity)
+                    {
+                        game->crafting_data.crafting_id = data->id;
+                        game->crafting_data.crafting_rarity = data->rarity;
+                        game->crafting_data.count = 0;
+                        data->count = rr_game_get_adjusted_inventory_count(
+                            game, data->id, data->rarity);
+                    }
+                    if (rr_bitset_get_bit(game->input_data->keys_pressed, 16))
+                        game->crafting_data.count += data->count;
+                    else if (game->crafting_data.count < PETALS_PER_CRAFT)
+                        game->crafting_data.count +=
+                            PETALS_PER_CRAFT - game->crafting_data.count;
+                    else if (data->count > PETALS_PER_CRAFT)
+                        game->crafting_data.count += PETALS_PER_CRAFT;
+                    else
+                        game->crafting_data.count += data->count;
+                    if (data->count > 0)
+                        data->secondary_animation = 0.4;
+                }
             }
             game->cursor = rr_game_cursor_pointer;
         }
@@ -572,7 +681,7 @@ static void crafting_inventory_button_on_render(struct rr_ui_element *this,
     struct rr_renderer *renderer = game->renderer;
     struct rr_renderer_context_state state;
     rr_renderer_context_state_init(renderer, &state);
-    uint32_t count = data->count;
+    uint64_t count = data->count;
     if (game->crafting_data.crafting_id == data->id &&
         game->crafting_data.crafting_rarity == data->rarity)
         count += game->crafting_data.count;
@@ -660,6 +769,130 @@ static struct rr_ui_element *toggle_autocraft_button_init(struct rr_game *game)
     return this;
 }
 
+static uint8_t picker_should_show(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    // not while a craft runs, or when the menu is closed
+    if (game->menu_open != rr_game_menu_crafting ||
+        game->crafting_data.animation != 0 || game->crafting_data.autocraft)
+        picker.active = 0;
+    return picker.active;
+}
+
+// keeps the slider, the number and the box agreeing with each other
+static void picker_animate(struct rr_ui_element *this, struct rr_game *game)
+{
+    rr_ui_default_animate(this, game);
+    if (!picker.active)
+        return;
+    uint64_t max = picker_stack(game, picker.id, picker.rarity);
+    if (max < picker.max)
+    {
+        // petals were used up elsewhere
+        picker.max = max;
+        if (picker.amount > max)
+        {
+            picker.amount = max;
+            picker.slider = picker.slider_last =
+                picker_slider_from_amount(max);
+            picker_set_text(max);
+        }
+    }
+    if (picker.slider != picker.slider_last)
+    {
+        // the slider was moved
+        picker.slider_last = picker.slider;
+        picker.amount = picker_amount_from_slider(picker.slider);
+        picker_set_text(picker.amount);
+    }
+    else if (strcmp(picker.text, picker.text_last) != 0)
+    {
+        // the box was edited
+        uint64_t typed = strtoull(picker.text, NULL, 10);
+        if (typed > picker.max)
+        {
+            typed = picker.max;
+            picker_set_text(typed);
+        }
+        else
+            memcpy(picker.text_last, picker.text, sizeof picker.text);
+        picker.amount = typed;
+        picker.slider = picker.slider_last = picker_slider_from_amount(typed);
+    }
+    char max_text[32];
+    rr_sprintf(max_text, (double)picker.max);
+    snprintf(picker.label, sizeof picker.label, "%s %s: %d to %s",
+             RR_RARITY_NAMES[picker.rarity], RR_PETAL_NAMES[picker.id],
+             PETALS_PER_CRAFT, max_text);
+}
+
+static void picker_set_on_event(struct rr_ui_element *this,
+                                struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = picker.amount >= PETALS_PER_CRAFT;
+    if (!data->clickable)
+        return;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+        picker_apply(game);
+    game->cursor = rr_game_cursor_pointer;
+}
+
+static void picker_cancel_on_event(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    if (game->input_data->mouse_buttons_up_this_tick & 1)
+        picker.active = 0;
+    game->cursor = rr_game_cursor_pointer;
+}
+
+static struct rr_ui_element *picker_button_init(char *label,
+    void (*on_event)(struct rr_ui_element *, struct rr_game *))
+{
+    struct rr_ui_element *this = rr_ui_labeled_button_init(label, 26, NULL);
+    this->on_event = on_event;
+    return this;
+}
+
+// only digits can be typed in the box
+static struct rr_ui_element *picker_input_init()
+{
+    struct rr_ui_element *input =
+        rr_ui_text_input_init(130, 18, &picker.text[0], 17, PICKER_INPUT);
+    EM_ASM({
+        const element = document.getElementById(UTF8ToString($0));
+        element.inputMode = "numeric";
+        element.addEventListener("input", function() {
+            element.value = element.value.replace(/[^0-9]/g, "");
+        });
+    }, PICKER_INPUT);
+    return input;
+}
+
+// clang-format off
+static struct rr_ui_element *crafting_amount_picker_init()
+{
+    struct rr_ui_element *this = rr_ui_v_container_init(
+        rr_ui_container_init(), 0, 5,
+        rr_ui_text_init(picker.label, 14, 0xffffffff),
+        rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
+            rr_ui_h_slider_init(150, 20, &picker.slider, 1),
+            rr_ui_set_fill_stroke(
+                rr_ui_h_container_init(rr_ui_container_init(), 0, 0,
+                    picker_input_init(), NULL),
+            0x00000000, 0x00000000),
+            picker_button_init("Set", picker_set_on_event),
+            picker_button_init("Cancel", picker_cancel_on_event),
+            NULL),
+        NULL);
+    this->should_show = picker_should_show;
+    this->animate = picker_animate;
+    return this;
+}
+// clang-format on
+
 struct rr_ui_element *rr_ui_crafting_container_init(struct rr_game *game)
 {
     struct rr_ui_element *this =
@@ -697,6 +930,7 @@ struct rr_ui_element *rr_ui_crafting_container_init(struct rr_game *game)
                         rr_ui_container_init(), 0, 25,
                         fixed, craft, NULL),
                     rr_ui_scroll_container_init(this, 300),
+                    crafting_amount_picker_init(),
                     rr_ui_h_container_init(
                         rr_ui_container_init(), 0, 10,
                         rr_ui_text_init("Autocraft", 14, 0xffffffff),

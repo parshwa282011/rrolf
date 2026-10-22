@@ -82,7 +82,7 @@ static void rr_game_read_account(struct rr_game *this, struct proto_bug *decoder
     while ((id = proto_bug_read_uint8(decoder, "id")))
     {
         uint8_t rarity = proto_bug_read_uint8(decoder, "rarity");
-        uint32_t count = proto_bug_read_varuint(decoder, "count");
+        uint64_t count = proto_bug_read_varuint(decoder, "count");
         this->inventory[id][rarity] = count;
     }
     while ((id = proto_bug_read_uint8(decoder, "id")))
@@ -94,15 +94,15 @@ static void rr_game_read_account(struct rr_game *this, struct proto_bug *decoder
     while ((id = proto_bug_read_uint8(decoder, "id")))
     {
         uint8_t rarity = proto_bug_read_uint8(decoder, "rarity");
-        uint32_t count = proto_bug_read_varuint(decoder, "count");
+        uint64_t count = proto_bug_read_varuint(decoder, "count");
         this->cache.mob_kills[id - 1][rarity] = count;
     }
 }
 
-uint32_t rr_game_get_adjusted_inventory_count(struct rr_game *this, uint8_t id,
+uint64_t rr_game_get_adjusted_inventory_count(struct rr_game *this, uint8_t id,
                                               uint8_t rarity)
 {
-    uint32_t cnt =
+    uint64_t cnt =
         this->inventory[id][rarity] - this->loadout_counts[id][rarity];
     if (id == this->crafting_data.crafting_id)
     {
@@ -116,7 +116,7 @@ uint32_t rr_game_get_adjusted_inventory_count(struct rr_game *this, uint8_t id,
 
 static void rr_game_update_significant_rarity(struct rr_game *this)
 {
-    uint32_t count = 0;
+    uint64_t count = 0;
     for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
         for (uint8_t id = 1; id < rr_petal_id_max; ++id)
         {
@@ -190,14 +190,14 @@ static void rr_game_autocraft_tick(struct rr_game *this, float delta)
         return;
     for (uint8_t id = 1; id <= rr_petal_id_meteor; ++id)
     {
-        uint32_t sum = 0;
+        uint64_t sum = 0;
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
             sum += this->inventory[id][rarity];
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max - 1; ++rarity)
         {
             if (sum < this->slots_unlocked + 4)
                 break;
-            uint32_t count =
+            uint64_t count =
                 this->inventory[id][rarity] - this->loadout_counts[id][rarity];
             if (count < 5)
             {
@@ -415,6 +415,9 @@ void rr_game_init(struct rr_game *this)
                     rr_ui_settings_toggle_button_init(),
                     rr_tutorial_target(this, rr_tutorial_target_account, rr_ui_account_toggle_button_init()),
                     rr_ui_dev_panel_toggle_button_init(),
+#ifdef PDEV
+                    rr_ui_give_petals_toggle_button_init(),
+#endif
                     rr_ui_fullscreen_toggle_button_init(),
                     rr_ui_link_toggle(rr_ui_close_button_init(30, abandon_game_on_event), simulation_ready),
                     NULL
@@ -672,6 +675,9 @@ void rr_game_init(struct rr_game *this)
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_account_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_legal_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_dev_panel_container_init(this), close_menu_button_init(25))->container);
+#ifdef PDEV
+    rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_give_petals_container_init(this), close_menu_button_init(25))->container);
+#endif
 
     this->link_account_tooltip = rr_ui_container_add_element(
         this->window,
@@ -1760,7 +1766,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             physical->lerp_y = (rr_frand() - 0.5) * this->renderer->height;
             physical->y = physical->lerp_y;
             physical->on_title_screen = 1;
-            uint32_t sum = 0;
+            uint64_t sum = 0;
             for (uint32_t i = 1; i < rr_petal_id_max; ++i)
                 for (uint32_t r = 0; r < rr_rarity_id_max; ++r)
                     sum += this->inventory[i][r];

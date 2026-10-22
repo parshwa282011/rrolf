@@ -35,8 +35,8 @@ const CLOUD_TOKEN = "cloud.eyJ0eXAiOiJKV1QiLCJhbGciOiJFZERTQSJ9.CKOM_-XtMRCjtLqo
 const NAMESPACE_ID = "04cfba67-e965-4899-bcb9-b7497cc6863b";
 const SERVER_SECRET = "ad904nf3adrgnariwpanyf3qap8unri4t9b384wna3g34ytgdr4bwtvd4y";
 
-const REDIRECT_URI = "https://rysteria.pro/";
-const CLIENT_ID = "1453525695228678349";
+const REDIRECT_URI = "https://game.parshwa.blog/";
+const CLIENT_ID = "1242286155320393859";
 const CLIENT_SECRET = process.env["CLIENT_SECRET"] || "";
 const BOT_TOKEN = process.env["BOT_TOKEN"] || "";
 const PASSWORD_SALT = process.env["PASSWORD_SALT"] || "";
@@ -699,7 +699,7 @@ wss.on("connection", (ws, req) => {
                     break;
                 const user = connected_clients[uuid].user;
                 user.xp = decoder.ReadFloat64();
-                user.score = decoder.ReadVarUint();
+                user.score = decoder.ReadCount();
                 user.checkpoint = {
                     hell_creek: decoder.ReadUint8(),
                     pvp: decoder.ReadUint8(),
@@ -711,7 +711,7 @@ wss.on("connection", (ws, req) => {
                 while (id)
                 {
                     const rarity = decoder.ReadUint8();
-                    const count = decoder.ReadVarUint();
+                    const count = decoder.ReadCount();
                     user.petals[id+':'+rarity] = count;
                     id = decoder.ReadUint8();
                 }
@@ -719,7 +719,7 @@ wss.on("connection", (ws, req) => {
                 while (id)
                 {
                     const rarity = decoder.ReadUint8();
-                    const count = decoder.ReadVarUint();
+                    const count = decoder.ReadCount();
                     user.failed_crafts[id+':'+rarity] = count;
                     id = decoder.ReadUint8();
                 }
@@ -727,7 +727,7 @@ wss.on("connection", (ws, req) => {
                 while (id)
                 {
                     const rarity = decoder.ReadUint8();
-                    const count = decoder.ReadVarUint();
+                    const count = decoder.ReadCount();
                     user.mob_gallery[(id - 1)+':'+rarity] = count;
                     id = decoder.ReadUint8();
                 }

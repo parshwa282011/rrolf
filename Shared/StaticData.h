@@ -77,7 +77,10 @@ enum rr_account_request_kind
     rr_account_request_discord,
     rr_account_request_crazygames,
     rr_account_request_code_create,
-    rr_account_request_code_redeem
+    rr_account_request_code_redeem,
+    // PDEV builds only: answers a rr_dev_cheat_give_petals. Never a valid
+    // rr_serverbound_account_request, the game server answers it itself.
+    rr_account_request_dev_petals
 };
 
 enum rr_dev_cheat_type
@@ -86,7 +89,8 @@ enum rr_dev_cheat_type
     rr_dev_cheat_kill_mobs,
     rr_dev_cheat_flags,
     rr_dev_cheat_speed_percent,
-    rr_dev_cheat_fov_percent
+    rr_dev_cheat_fov_percent,
+    rr_dev_cheat_give_petals
 };
 
 #define RR_MAX_HEALTH_FROM_LEVEL(biome, level)                                 \

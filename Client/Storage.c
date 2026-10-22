@@ -141,7 +141,7 @@ uint32_t rr_local_storage_get_bytes(char *label, void *bytes)
         while (id)                                                             \
         {                                                                      \
             uint8_t rarity = rr_binary_encoder_read_uint8(encoder);            \
-            uint32_t count = rr_binary_encoder_read_varuint(encoder);          \
+            uint64_t count = rr_binary_encoder_read_varuint(encoder);          \
             start[id - 1][rarity] = count;                                     \
             id = rr_binary_encoder_read_uint8(encoder);                        \
         }                                                                      \

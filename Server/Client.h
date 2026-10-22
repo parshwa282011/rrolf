@@ -74,11 +74,13 @@ struct rr_server_client
     char ip_address[100];
     char afk_challenge[7];
 
-    uint32_t inventory[rr_petal_id_max][rr_rarity_id_max];
+    uint64_t inventory[rr_petal_id_max][rr_rarity_id_max];
     uint32_t craft_fails[rr_petal_id_max][rr_rarity_id_max];
-    uint32_t mob_gallery[rr_mob_id_max][rr_rarity_id_max];
+    uint64_t mob_gallery[rr_mob_id_max][rr_rarity_id_max];
     uint32_t ticks_to_next_squad_action;
     uint32_t ticks_to_next_kick_vote;
+    uint32_t ticks_to_next_dev_pin;
+    uint8_t dev_pin_failures;
     uint32_t disconnected_ticks;
     uint32_t afk_ticks;
     uint8_t joined_squad_before[RR_BITSET_ROUND(RR_SQUAD_COUNT)];
@@ -111,7 +113,7 @@ void rr_server_client_write_account_reply(struct rr_server_client *, uint8_t ok,
 void rr_server_client_report_pvp_score(struct rr_server_client *);
 
 void rr_server_client_craft_petal(struct rr_server_client *, struct rr_server *,
-                                  uint8_t, uint8_t, uint32_t);
+                                  uint8_t, uint8_t, uint64_t);
 int rr_server_client_read_from_api(struct rr_server_client *,
                                    struct rr_binary_encoder *);
 void rr_server_client_write_to_api(struct rr_server_client *);

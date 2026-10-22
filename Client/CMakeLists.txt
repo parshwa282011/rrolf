@@ -90,6 +90,7 @@ set(SRCS
     Ui/TitleScreen/Crafting.c
     Ui/TitleScreen/CrazyGames.c
     Ui/TitleScreen/DevSquadPanel.c
+    Ui/TitleScreen/GivePetals.c
     Ui/TitleScreen/Discord.c
     Ui/TitleScreen/Fullscreen.c
     Ui/TitleScreen/Gardn.c

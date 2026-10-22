@@ -53,7 +53,8 @@ enum rr_game_menu
     rr_game_menu_settings,
     rr_game_menu_account,
     rr_game_menu_dev_squad_panel,
-    rr_game_menu_legal
+    rr_game_menu_legal,
+    rr_game_menu_give_petals
 };
 
 enum rr_game_cursor
@@ -75,13 +76,13 @@ struct rr_game_crafting_data
 {
     float animation;
     float autocraft_animation;
-    uint32_t count;
-    uint32_t success_count;
+    uint64_t count;
+    uint64_t success_count;
     uint32_t last_attempts;
     uint8_t crafting_id;
     uint8_t crafting_rarity;
-    uint32_t temp_successes;
-    uint32_t temp_fails;
+    uint64_t temp_successes;
+    uint64_t temp_fails;
     uint32_t temp_attempts;
     double temp_xp;
     uint8_t autocraft;
@@ -108,7 +109,7 @@ struct rr_game_chat
 struct rr_game_cache
 {
     double experience;
-    uint32_t mob_kills[rr_mob_id_max][rr_rarity_id_max];
+    uint64_t mob_kills[rr_mob_id_max][rr_rarity_id_max];
     struct rr_id_rarity_pair loadout[RR_MAX_SLOT_COUNT * 2];
     uint8_t use_mouse;
     uint8_t displaying_debug_information;
@@ -214,7 +215,7 @@ struct rr_game
     struct rr_simulation *deletion_simulation;
     struct rr_component_player_info *player_info;
 
-    uint32_t inventory[rr_petal_id_max][rr_rarity_id_max];
+    uint64_t inventory[rr_petal_id_max][rr_rarity_id_max];
     uint32_t failed_crafts[rr_petal_id_max][rr_rarity_id_max];
     uint8_t loadout_counts[rr_petal_id_max][rr_rarity_id_max];
     EntityIdx player_infos[RR_SQUAD_MEMBER_COUNT];
@@ -307,5 +308,5 @@ void rr_write_dev_cheat_packets(struct rr_game *, uint8_t);
 void rr_game_websocket_on_event_function(enum rr_websocket_event_type, void *,
                                          void *, uint64_t);
 
-uint32_t rr_game_get_adjusted_inventory_count(struct rr_game *, uint8_t,
+uint64_t rr_game_get_adjusted_inventory_count(struct rr_game *, uint8_t,
                                               uint8_t);

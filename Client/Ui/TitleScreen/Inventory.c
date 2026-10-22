@@ -34,7 +34,7 @@ struct inventory_button_metadata
 {
     uint8_t id;
     uint8_t rarity;
-    uint32_t count;
+    uint64_t count;
 };
 
 static void inventory_button_on_event(struct rr_ui_element *this,

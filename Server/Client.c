@@ -221,7 +221,7 @@ void rr_server_client_write_account_reply(struct rr_server_client *client,
 
 void rr_server_client_craft_petal(struct rr_server_client *this,
                                   struct rr_server *server, uint8_t id,
-                                  uint8_t rarity, uint32_t count)
+                                  uint8_t rarity, uint64_t count)
 {
     if (id >= rr_petal_id_max || rarity >= rr_rarity_id_max - 1)
         return;
@@ -229,8 +229,8 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
         return;
     if (this->inventory[id][rarity] < count)
         return;
-    uint32_t now = count;
-    uint32_t success = 0;
+    uint64_t now = count;
+    uint64_t success = 0;
     uint32_t last_fails = this->craft_fails[id][rarity];
     double base = RR_CRAFT_CHANCES[rarity];
     if (id == rr_petal_id_basic)
@@ -250,8 +250,9 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
         xp_gain += CRAFT_XP_GAINS[rarity];
     }
     if (success > 0)
-        printf("[craft] %s: %s %s x%u\n", this->rivet_account.uuid,
-               RR_RARITY_NAMES[rarity + 1], RR_PETAL_NAMES[id], success);
+        printf("[craft] %s: %s %s x%llu\n", this->rivet_account.uuid,
+               RR_RARITY_NAMES[rarity + 1], RR_PETAL_NAMES[id],
+               (unsigned long long)success);
     this->inventory[id][rarity] -= (count - now);
     this->inventory[id][rarity + 1] += success;
     this->experience += xp_gain;
@@ -330,7 +331,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     while (id)
     {
         uint8_t rarity = rr_binary_encoder_read_uint8(encoder);
-        uint32_t count = rr_binary_encoder_read_varuint(encoder);
+        uint64_t count = rr_binary_encoder_read_varuint(encoder);
         if (id < rr_petal_id_max && rarity < rr_rarity_id_max)
             this->inventory[id][rarity] = count;
         id = rr_binary_encoder_read_uint8(encoder);
@@ -348,7 +349,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     while (id)
     {
         uint8_t rarity = rr_binary_encoder_read_uint8(encoder);
-        uint32_t count = rr_binary_encoder_read_varuint(encoder);
+        uint64_t count = rr_binary_encoder_read_varuint(encoder);
         if (id - 1 < rr_mob_id_max && rarity < rr_rarity_id_max)
             this->mob_gallery[id - 1][rarity] = count;
         id = rr_binary_encoder_read_uint8(encoder);

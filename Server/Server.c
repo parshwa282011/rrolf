@@ -18,6 +18,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <inttypes.h>
 #include <math.h>
 #include <pthread.h>
 #include <string.h>
@@ -832,7 +833,7 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 break;
             if (member == NULL)
                 break;
-            uint32_t temp_inv[rr_petal_id_max][rr_rarity_id_max];
+            uint64_t temp_inv[rr_petal_id_max][rr_rarity_id_max];
 
             memcpy(temp_inv, client->inventory, sizeof client->inventory);
             for (uint8_t i = 0; i < loadout_count; i++)
@@ -1030,7 +1031,7 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
         {
             uint8_t id = proto_bug_read_uint8(&encoder, "craft id");
             uint8_t rarity = proto_bug_read_uint8(&encoder, "craft rarity");
-            uint32_t count = proto_bug_read_varuint(&encoder, "craft count");
+            uint64_t count = proto_bug_read_varuint(&encoder, "craft count");
             rr_server_client_craft_petal(client, this, id, rarity, count);
             break;
         }
@@ -1288,6 +1289,79 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 client->dev_cheats.fov_percent = powf(fov_percent, 2) * 19 + 1;
                 break;
             }
+#ifdef PDEV
+            case rr_dev_cheat_give_petals:
+            {
+                // gated by a PIN checked here, not by client->dev, so any
+                // account that knows it can use it. RR_DEV_PIN overrides it.
+                char pin[16] = {0};
+                proto_bug_read_string(&encoder, pin, sizeof pin - 1, "pin");
+                uint8_t id = proto_bug_read_uint8(&encoder, "id");
+                uint8_t rarity = proto_bug_read_uint8(&encoder, "rarity");
+                uint64_t count = proto_bug_read_varuint(&encoder, "count");
+                if (client->ticks_to_next_dev_pin > 0)
+                {
+                    rr_server_client_write_account_reply(
+                        client, 0, rr_account_request_dev_petals,
+                        "Wait a second.", "", "", "");
+                    break;
+                }
+                client->ticks_to_next_dev_pin = 25;
+                char const *expected = getenv("RR_DEV_PIN");
+                if (expected == NULL || expected[0] == 0)
+                    expected = "2011";
+                // compare every byte so the time taken does not leak the PIN
+                uint8_t mismatch = strlen(expected) != strlen(pin);
+                for (uint32_t k = 0; pin[k] && expected[k]; ++k)
+                    mismatch |= pin[k] != expected[k];
+                if (mismatch)
+                {
+                    printf("[dev petals] wrong pin from %s (%s)\n",
+                           client->rivet_account.uuid, client->ip_address);
+                    if (++client->dev_pin_failures >= 5)
+                    {
+                        lws_close_reason(ws, LWS_CLOSE_STATUS_POLICY_VIOLATION,
+                                         (uint8_t *)"too many tries",
+                                         sizeof "too many tries" - 1);
+                        client->pending_kick = 1;
+                        return -1;
+                    }
+                    rr_server_client_write_account_reply(
+                        client, 0, rr_account_request_dev_petals, "Wrong PIN.",
+                        "", "", "");
+                    break;
+                }
+                client->dev_pin_failures = 0;
+                if (id == 0 || id >= rr_petal_id_max ||
+                    rarity >= rr_rarity_id_max || count == 0)
+                {
+                    rr_server_client_write_account_reply(
+                        client, 0, rr_account_request_dev_petals,
+                        "Bad petal, rarity or amount.", "", "", "");
+                    break;
+                }
+                // the master server keeps counts as JS numbers, exact up to
+                // 2^53, and the client shows anything over 1e15 as infinity
+                uint64_t const max_count = 1000000000000000ull;
+                uint64_t owned = client->inventory[id][rarity];
+                uint64_t given = owned >= max_count ? 0 : max_count - owned;
+                if (count < given)
+                    given = count;
+                client->inventory[id][rarity] = owned + given;
+                printf("[dev petals] %s: %s %s x%" PRIu64 "\n",
+                       client->rivet_account.uuid, RR_RARITY_NAMES[rarity],
+                       RR_PETAL_NAMES[id], given);
+                rr_server_client_write_to_api(client);
+                rr_server_client_write_account(client);
+                char message[96];
+                snprintf(message, sizeof message, "Gave %" PRIu64 " %s %s.",
+                         given, RR_RARITY_NAMES[rarity], RR_PETAL_NAMES[id]);
+                rr_server_client_write_account_reply(
+                    client, 1, rr_account_request_dev_petals, message, "", "",
+                    "");
+                break;
+            }
+#endif
             }
             break;
         }
@@ -1640,6 +1714,8 @@ static void server_tick(struct rr_server *this)
             struct rr_server_client *client = &this->clients[i];
             if (client->ticks_to_next_squad_action > 0)
                 --client->ticks_to_next_squad_action;
+            if (client->ticks_to_next_dev_pin > 0)
+                --client->ticks_to_next_dev_pin;
             if (client->ticks_to_next_kick_vote > 0 &&
                 --client->ticks_to_next_kick_vote == 0 && client->in_squad)
             {

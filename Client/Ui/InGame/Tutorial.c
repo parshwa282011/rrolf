@@ -89,7 +89,7 @@ static void auto_equip(struct rr_game *game)
     uint8_t slot = 0;
     for (uint8_t id = 1; id < rr_petal_id_max; ++id)
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
-            for (uint32_t n = game->inventory[id][rarity];
+            for (uint64_t n = game->inventory[id][rarity];
                  n > 0 && slot < game->slots_unlocked; --n)
             {
                 game->cache.loadout[slot].id = id;
@@ -296,9 +296,10 @@ static uint8_t describe(struct rr_game *game, struct view *view)
         uint8_t rarity = game->tutorial.craft_rarity;
         char body[200];
         snprintf(body, sizeof body,
-                 "You have %u %s %s. Open Crafting%s to merge five of them "
+                 "You have %llu %s %s. Open Crafting%s to merge five of them "
                  "into one of the next rarity.",
-                 rr_game_get_adjusted_inventory_count(game, id, rarity),
+                 (unsigned long long)rr_game_get_adjusted_inventory_count(
+                     game, id, rarity),
                  RR_RARITY_NAMES[rarity], RR_PETAL_NAMES[id],
                  mobile ? "" : " (C)");
         set(view, "Time to craft!", body);

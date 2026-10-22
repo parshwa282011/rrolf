@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+const MAX_COUNT = BigInt(Number.MAX_SAFE_INTEGER);
+
 class BinaryWriter
 {
     constructor() {
@@ -27,6 +29,24 @@ class BinaryWriter
     }
     WriteUint8(u8) {
         this.data[this.at++] = u8;
+    }
+    // see BinaryReader.ReadCount, a missing or bad value is written as 0
+    WriteCount(count) {
+        this.WriteVarUint64(Number.isFinite(count) && count > 0
+            ? Math.min(Math.floor(count), Number.MAX_SAFE_INTEGER) : 0);
+    }
+    WriteVarUint64(vu) {
+        vu = BigInt(vu);
+
+        if (vu < 0n || vu > 0xFFFFFFFFFFFFFFFFn)
+            throw new RangeError("VarUint64 out of range");
+
+        while (vu > 127n) {
+            this.WriteUint8(Number(((vu & 127n) << 1n) | 1n));
+            vu >>= 7n;
+        }
+
+        this.WriteUint8(Number(vu << 1n));
     }
     WriteVarUint(vu) {
         while (vu > 127)
@@ -66,6 +86,23 @@ class BinaryReader
     }
     ReadUint8() {
         return this.data[this.at++];
+    }
+    ReadVarUint64() {
+        let byte, data = 0n, shift = 0n;
+
+        do {
+            byte = this.ReadUint8();
+            data |= BigInt((byte & 254) >> 1) << shift;
+            shift += 7n;
+        } while (byte & 1);
+
+        return data;
+    }
+    // A petal count or score: 64 bits on the wire, kept as a number, which is
+    // exact up to MAX_SAFE_INTEGER (about 9e15). Anything bigger is clamped.
+    ReadCount() {
+        const count = this.ReadVarUint64();
+        return count > MAX_COUNT ? Number(MAX_COUNT) : Number(count);
     }
     ReadVarUint() {
         let byte, data = 0, shift = 0;

@@ -184,7 +184,7 @@ void rr_ui_render_tooltip_right(struct rr_ui_element *this,
 }
 
 void rr_ui_set_tooltip_metadata(struct rr_ui_element *this,
-                                uint32_t count, uint8_t pos)
+                                uint64_t count, uint8_t pos)
 {
     struct rr_ui_container_metadata *data = this->data;
     struct rr_ui_tooltip_metadata *tooltip_data = data->data;

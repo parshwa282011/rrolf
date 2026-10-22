@@ -80,7 +80,7 @@ struct rr_ui_tooltip_metadata
 {
     uint8_t id;
     uint8_t rarity;
-    uint32_t count;
+    uint64_t count;
     uint8_t pos;
 };
 
@@ -136,7 +136,7 @@ void rr_ui_render_tooltip_below(struct rr_ui_element *, struct rr_ui_element *,
                                 struct rr_game *);
 void rr_ui_render_tooltip_right(struct rr_ui_element *, struct rr_ui_element *,
                                 struct rr_game *);
-void rr_ui_set_tooltip_metadata(struct rr_ui_element *, uint32_t, uint8_t);
+void rr_ui_set_tooltip_metadata(struct rr_ui_element *, uint64_t, uint8_t);
 uint8_t rr_ui_mouse_over(struct rr_ui_element *, struct rr_game *);
 void rr_ui_element_check_if_focused(struct rr_ui_element *, struct rr_game *);
 uint8_t rr_ui_always_show(struct rr_ui_element *, struct rr_game *);
@@ -252,6 +252,10 @@ extern struct rr_ui_element *rr_ui_in_game_player_hud_init(uint8_t);
 
 extern struct rr_ui_element *rr_ui_dev_panel_toggle_button_init();
 extern struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *);
+
+// PDEV builds only
+extern struct rr_ui_element *rr_ui_give_petals_toggle_button_init();
+extern struct rr_ui_element *rr_ui_give_petals_container_init(struct rr_game *);
 
 extern struct rr_ui_element *rr_ui_fullscreen_toggle_button_init();
 

@@ -59,7 +59,7 @@ static void mob_button_animate(struct rr_ui_element *this, struct rr_game *game)
     struct rr_renderer *renderer = game->renderer;
     rr_renderer_scale(renderer, this->abs_width / 60 * renderer->scale);
     rr_renderer_draw_background(renderer, rr_rarity_id_max, 1);
-    uint32_t count = game->cache.mob_kills[data->id][data->rarity];
+    uint64_t count = game->cache.mob_kills[data->id][data->rarity];
 
     if (this->first_frame)
         data->secondary_animation = count == 0;
@@ -103,7 +103,7 @@ static void mob_button_count_on_render(struct rr_ui_element *this,
 {
     struct rr_renderer *renderer = game->renderer;
     struct mob_button_metadata *data = this->data;
-    uint32_t count = game->cache.mob_kills[data->id][data->rarity];
+    uint64_t count = game->cache.mob_kills[data->id][data->rarity];
     if (count <= 1)
         return;
     rr_renderer_scale(renderer, renderer->scale * this->width / 60);

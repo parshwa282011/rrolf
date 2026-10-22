@@ -36,7 +36,7 @@ class GameClient
         encoder.WriteStringNT(user.discord_id);
         encoder.WriteStringNT(user.cg_id || "");
         encoder.WriteFloat64(user.xp);
-        encoder.WriteVarUint(user.score);
+        encoder.WriteCount(user.score);
         encoder.WriteUint8(user.checkpoint.hell_creek);
         encoder.WriteUint8(user.checkpoint.pvp);
         for (const petal of Object.keys(user.petals))
@@ -46,7 +46,7 @@ class GameClient
             const [id, rarity] = petal.split(":");
             encoder.WriteUint8(id);
             encoder.WriteUint8(rarity);
-            encoder.WriteVarUint(user.petals[petal]);
+            encoder.WriteCount(user.petals[petal]);
         }
         encoder.WriteUint8(0);
         for (const petal of Object.keys(user.failed_crafts))
@@ -56,7 +56,7 @@ class GameClient
             const [id, rarity] = petal.split(":");
             encoder.WriteUint8(id);
             encoder.WriteUint8(rarity);
-            encoder.WriteVarUint(user.failed_crafts[petal]);
+            encoder.WriteCount(user.failed_crafts[petal]);
         }
         encoder.WriteUint8(0);
         for (const mob of Object.keys(user.mob_gallery))
@@ -66,7 +66,7 @@ class GameClient
             const [id, rarity] = mob.split(":");
             encoder.WriteUint8(+id + 1);
             encoder.WriteUint8(rarity);
-            encoder.WriteVarUint(user.mob_gallery[mob]);
+            encoder.WriteCount(user.mob_gallery[mob]);
         }
         encoder.WriteUint8(0);
         this.needs_gameserver_update = false;

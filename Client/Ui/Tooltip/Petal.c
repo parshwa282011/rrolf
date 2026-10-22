@@ -98,7 +98,7 @@ static void get_count(struct rr_ui_element *this, struct rr_game *game)
     struct rr_ui_dynamic_text_metadata *data = this->data;
     struct rr_ui_tooltip_metadata *tooltip_data = data->data;
     if (tooltip_data->count)
-        sprintf(data->text, "x%u", tooltip_data->count);
+        sprintf(data->text, "x%llu", (unsigned long long)tooltip_data->count);
     else
         data->text[0] = 0;
 }
