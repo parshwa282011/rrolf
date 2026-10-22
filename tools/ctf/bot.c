@@ -9,6 +9,7 @@
 // and the capture the flag state, and they move by the test only teleport
 // command.
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +59,10 @@ struct bot
     char uuid[500];
     char token[500];
     int want_close;
+    // what the update packets said about being in the game: how many told the
+    // client to delete its world (2), and the last value
+    int resets;
+    int last_in_game;
     // the inventory the server last sent
     uint64_t inv[rr_petal_id_max][rr_rarity_id_max];
     int have_account;
@@ -201,6 +206,46 @@ static void parse_squad_dump(struct bot *b, struct proto_bug *d)
     }
 }
 
+// the part of the update packet that says whether the player is in the game
+static void parse_update(struct bot *b, struct proto_bug *d)
+{
+    char text[40];
+    proto_bug_read_uint8(d, "kick vote");
+    for (uint32_t i = 0; i < RR_SQUAD_MEMBER_COUNT; ++i)
+    {
+        if (!proto_bug_read_uint8(d, "bitbit"))
+            continue;
+        proto_bug_read_uint8(d, "ready");
+        proto_bug_read_uint8(d, "disconnected");
+        proto_bug_read_uint8(d, "blocked");
+        proto_bug_read_uint8(d, "is_dev");
+        proto_bug_read_uint8(d, "kick votes");
+        proto_bug_read_varuint(d, "level");
+        proto_bug_read_string(d, text, 16, "nickname");
+        proto_bug_read_string(d, text, 16, "role");
+        proto_bug_read_string(d, text, 37, "uuid");
+        proto_bug_read_string(d, text, 20, "discord");
+        for (uint8_t j = 0; j < RR_MAX_SLOT_COUNT * 2; ++j)
+        {
+            proto_bug_read_uint8(d, "id");
+            proto_bug_read_uint8(d, "rar");
+        }
+    }
+    proto_bug_read_uint8(d, "sqidx");
+    proto_bug_read_uint8(d, "sqown");
+    proto_bug_read_uint8(d, "sqpos");
+    proto_bug_read_uint8(d, "private");
+    proto_bug_read_uint8(d, "expose_code");
+    proto_bug_read_uint8(d, "biome");
+    proto_bug_read_string(d, text, 16, "squad code");
+    uint64_t afk = proto_bug_read_varuint(d, "afk_ticks");
+    if (afk > RR_AFK_WARNING)
+        proto_bug_read_string(d, text, 7, "afk_challenge");
+    b->last_in_game = proto_bug_read_uint8(d, "in game");
+    if (b->last_in_game == 2)
+        ++b->resets;
+}
+
 static void parse_ctf_state(struct bot *b, struct proto_bug *d)
 {
     b->have_state = 1;
@@ -297,6 +342,8 @@ static void on_packet(struct bot *b, uint8_t *data, size_t size)
         }
         b->have_account = 1;
     }
+    else if (header == rr_clientbound_update)
+        parse_update(b, &d);
     else if (header == rr_clientbound_squad_dump)
         parse_squad_dump(b, &d);
     else if (header == rr_clientbound_ctf_state)
@@ -371,6 +418,8 @@ static int connect_bot(struct bot *b, int port)
     b->rx_size = 0;
     b->want_close = 0;
     b->have_account = 0;
+    b->resets = 0;
+    b->last_in_game = 0;
     return lws_client_connect_via_info(&c) != NULL;
 }
 
@@ -464,6 +513,13 @@ int main(int argc, char **argv)
          "placement");
     CHECK(!(A->flags & 1), "the walls are up");
     CHECK(!(A->flags >> 5 & 1), "no flags yet");
+    WAIT(A->last_in_game != 0 && B->last_in_game != 0, 3, "both are in the game");
+    pump(0.5); // some more updates
+    CHECK(A->resets == 1 && B->resets == 1,
+          "the update that puts a player in the game tells the client to start from nothing, exactly once (%d, %d)",
+          A->resets, B->resets);
+    CHECK(A->last_in_game == 1 && B->last_in_game == 1, "and the updates after it do not (%d, %d)",
+          A->last_in_game, B->last_in_game);
     pump(0.5);
     place_flag(A, 0, 1, 1);
     WAIT(A->message == rr_ctf_message_bad_spot, 2, "a flag in a wall is refused");
@@ -486,18 +542,33 @@ int main(int argc, char **argv)
     CHECK(A->flags & 1 && B->flags & 1, "the walls dropped, both are told");
 
     printf("a dead player can't take a flag, and comes back\n");
+    int resets_before = B->resets;
     send_simple(B, rr_serverbound_ctf_respawn);
     pump(0.25);
     teleport(B, A->flag[0].x, A->flag[0].y);
     pump(0.4);
     CHECK(B->flag[0].state == rr_ctf_flag_standing, "a dead player did not take the flag");
     pump(2.0); // the respawn takes about a second
+    CHECK(B->resets == resets_before + 1,
+          "a respawn tells the client to delete its world once: %d before, %d after",
+          resets_before, B->resets);
+    CHECK(B->last_in_game == 1, "and the updates after it are normal");
     teleport(B, A->flag[0].x, A->flag[0].y);
     WAIT(B->flag[0].state == rr_ctf_flag_carried, 3, "the respawned player takes it");
-    // let it go again for the main test: die while carrying
+    // carry it to the middle of the map, where nobody is, and die there
+    float mx = (A->teams[0].px[0] + B->teams[1].px[0]) / 2;
+    float my = (A->teams[0].py[0] + B->teams[1].py[0]) / 2;
+    teleport(B, mx, my);
+    pump(0.4);
+    // a flower standing in the open is nudged a little, so not exactly
+    CHECK(fabsf(B->flag[0].x - mx) < 60 && fabsf(B->flag[0].y - my) < 60,
+          "the flag is with its carrier (%.0f, %.0f) vs (%.0f, %.0f)", B->flag[0].x, B->flag[0].y, mx, my);
     send_simple(B, rr_serverbound_ctf_respawn);
     WAIT(B->flag[0].state == rr_ctf_flag_dropped, 3, "a flag drops when its carrier dies");
     CHECK(B->flag[0].holder == 0, "a dropped flag is still A's");
+    CHECK(fabsf(B->flag[0].x - mx) < 60 && fabsf(B->flag[0].y - my) < 60,
+          "it dropped where the carrier died: (%.0f, %.0f), died at (%.0f, %.0f)",
+          B->flag[0].x, B->flag[0].y, mx, my);
     // A's player touches it: it goes home
     pump(1.5);
     teleport(A, B->flag[0].x, B->flag[0].y);
@@ -532,7 +603,9 @@ int main(int argc, char **argv)
     CHECK(kept < RR_CTF_START_PETALS, "B kept what was left after crafting: %llu of %d",
           (unsigned long long)kept, RR_CTF_START_PETALS);
     WAIT(B->my_team == 1 && B->phase == rr_ctf_phase_war, 4, "B is back on its team in the war");
-    pump(1.0);
+    WAIT(B->last_in_game != 0, 4, "B is in the game again");
+    CHECK(B->resets == 1, "the first update after a reconnect starts the client from nothing (%d)", B->resets);
+    pump(1.5);
 
     printf("the give petals PIN works in a match\n");
     {
@@ -595,6 +668,26 @@ int main(int argc, char **argv)
     WAIT(A->phase == rr_ctf_phase_lobby && B->phase == rr_ctf_phase_lobby, 6, "the lobby");
     CHECK(A->team_count == 0, "the squads are free again");
     CHECK(!(A->flags & 1), "the walls are back up");
+
+    printf("a second match on the same server, the host ends it\n");
+    pump(0.8);
+    ctf_create(A, B->code);
+    WAIT(A->team_count == 2, 3, "the squads are linked again");
+    pump(0.8);
+    send_simple(A, rr_serverbound_ctf_start);
+    WAIT(A->phase == rr_ctf_phase_placement && B->phase == rr_ctf_phase_placement, 3,
+         "the second match starts");
+    CHECK(!A->teams[0].eliminated && !A->teams[1].eliminated, "nobody carries over an elimination");
+    CHECK(!(A->flags & 1) && !(B->flags & 1), "the walls are up again");
+    WAIT(A->last_in_game != 0 && B->last_in_game != 0, 3, "both are back in the game");
+    WAIT(A->phase == rr_ctf_phase_farm, 8, "the flags are made again");
+    CHECK(A->teams[0].held == 3 && A->teams[1].held == 3, "3 flags each again");
+    CHECK(A->flag[0].state == rr_ctf_flag_standing && A->flag[3].state == rr_ctf_flag_standing,
+          "every flag stands on its point");
+    pump(0.8);
+    send_simple(A, rr_serverbound_ctf_cancel);
+    WAIT(A->phase == rr_ctf_phase_lobby && A->team_count == 0, 3, "cancelling goes back to the lobby");
+    WAIT(A->last_in_game == 0 && B->last_in_game == 0, 3, "everyone is back at the menu");
 
     printf("\n%d checks, %d failed\n", checks, failures);
     lws_context_destroy(context);

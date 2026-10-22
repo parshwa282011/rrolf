@@ -84,6 +84,9 @@ struct rr_server_client
     // capture the flag: ticks since the flower died, and what the host or
     // player was last told, see Server/Ctf.c
     uint16_t ctf_respawn_ticks;
+    // the next update that puts the player in the game tells the client to throw
+    // away the world it has first, see rr_server_client_broadcast_update
+    uint8_t ctf_world_reset;
     uint8_t ctf_message;
     uint8_t ctf_message_arg;
     uint8_t ctf_message_ticks;

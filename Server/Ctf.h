@@ -110,6 +110,9 @@ struct rr_ctf_player
 {
     uint8_t present; // connected and in the match
     uint8_t alive;
+    // x and y are where the player is. They are known for a dead player too, so
+    // that a flag drops where they died, and not known for one who left
+    uint8_t located;
     uint8_t team;
     float x;
     float y;

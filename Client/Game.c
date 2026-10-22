@@ -1036,9 +1036,12 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             if (this->afk_ticks > RR_AFK_WARNING)
                 proto_bug_read_string(&encoder, this->afk_challenge, 7,
                                       "afk_challenge");
-            if (proto_bug_read_uint8(&encoder, "in game") == 1)
+            uint8_t in_game = proto_bug_read_uint8(&encoder, "in game");
+            if (in_game != 0)
             {
-                if (!this->simulation_ready)
+                // 2: the server put us into the game again and sends the whole
+                // world, so what we have is thrown away first
+                if (!this->simulation_ready || in_game == 2)
                 {
                     rr_simulation_init(this->simulation);
                     rr_simulation_init(this->deletion_simulation);

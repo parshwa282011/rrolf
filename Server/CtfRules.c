@@ -290,7 +290,15 @@ void rr_ctf_step(struct rr_ctf_match *this, struct rr_ctf_player *players)
                 flag->y = p->y;
             }
             else
-                drop_flag(this, flag, players[(uint8_t)flag->carrier].team);
+            {
+                // the flag falls where the carrier went down
+                if (p->located)
+                {
+                    flag->x = p->x;
+                    flag->y = p->y;
+                }
+                drop_flag(this, flag, p->team);
+            }
         }
         else if (flag->state == rr_ctf_flag_dropped)
         {

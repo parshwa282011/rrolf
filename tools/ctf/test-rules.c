@@ -51,7 +51,8 @@ static void start_match(uint8_t teams)
 // player slot p plays for a team, standing somewhere
 static void place(uint8_t p, uint8_t team, float x, float y)
 {
-    players[p] = (struct rr_ctf_player){1, 1, team, x, y};
+    players[p] = (struct rr_ctf_player){
+        .present = 1, .alive = 1, .located = 1, .team = team, .x = x, .y = y};
 }
 
 static void step(int ticks)
@@ -150,6 +151,35 @@ static void test_carry_follows_and_drop()
               m.teams[1].point_flag[1] == 1 * 3 + 1,
           "back on its point after the timer");
     CHECK(flag(1, 1)->x == px(1, 1), "at the point");
+}
+
+static void test_drops_where_the_carrier_died()
+{
+    start_match(2);
+    place(0, 0, flag(1, 1)->x, flag(1, 1)->y);
+    step(1);
+    place(0, 0, 3000, 400);
+    step(1);
+    // the carrier moves and dies in the same tick, the flag falls where they died
+    place(0, 0, 3217, 655);
+    players[0].alive = 0;
+    step(1);
+    CHECK(flag(1, 1)->state == rr_ctf_flag_dropped, "dropped");
+    CHECK(flag(1, 1)->x == 3217 && flag(1, 1)->y == 655,
+          "where they died, not where they were a tick before: %.0f %.0f",
+          flag(1, 1)->x, flag(1, 1)->y);
+    // a carrier who left has no position, the flag stays where it was
+    start_match(2);
+    place(0, 0, flag(1, 1)->x, flag(1, 1)->y);
+    step(1);
+    place(0, 0, 4100, 300);
+    step(1);
+    players[0] = (struct rr_ctf_player){0};
+    step(1);
+    CHECK(flag(1, 1)->state == rr_ctf_flag_dropped, "dropped on leaving");
+    CHECK(flag(1, 1)->x == 4100 && flag(1, 1)->y == 300,
+          "a player who left drops it where it last was, not at the origin: %.0f %.0f",
+          flag(1, 1)->x, flag(1, 1)->y);
 }
 
 static void test_drop_returned_by_owner()
@@ -357,6 +387,7 @@ int main()
     test_own_flags_are_safe();
     test_two_team_game();
     test_carry_follows_and_drop();
+    test_drops_where_the_carrier_died();
     test_drop_returned_by_owner();
     test_one_flag_per_carrier();
     test_three_teams_setup_and_recover();

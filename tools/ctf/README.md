@@ -18,11 +18,22 @@ Give Petals button (PIN) works in a match, the server is built with `-DPDEV`.
    holds none. A team that lost a flag can stand on its empty flag point for 3 s to set a banked flag up
    there. The first team to hold every other team's flags wins, then the server goes back to the lobby.
 
+A flag falls where its carrier died (or left), at the exact spot.
+
 "Holding" means the flags standing on your points plus the ones you banked. A carried or dropped flag
 still counts for the team it was taken from. A dropped flag goes home after 15 s, or at once when its own
 team touches it. A team that is out hands what it banked to the team that finished it.
 
 The minimap shows the 40x40 cells around you. Hover over it to see the whole map.
+
+## Clean worlds
+
+Every player's server record tracks which entities the *client* has, so it can tell the client to delete
+them later. A respawn or a reconnect makes a new record that thinks the client has nothing, while the
+client still shows its old world, and mobs and drops that were gone from the server stayed on screen. So the
+update that puts a player (back) into the game says `in game = 2`, and the client throws its whole world
+away before reading it (`Server/Server.c`, `Client/Game.c`). Between matches the arena's mobs and drops are
+deleted, and during one a drop nobody connected can pick up is deleted each second.
 
 ## Files
 

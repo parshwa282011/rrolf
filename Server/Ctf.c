@@ -28,7 +28,9 @@
 #include <Server/Simulation.h>
 #include <Server/Squad.h>
 
+#include <Shared/Component/Drop.h>
 #include <Shared/Component/Flower.h>
+#include <Shared/Component/Mob.h>
 #include <Shared/Component/Physical.h>
 #include <Shared/Component/PlayerInfo.h>
 #include <Shared/StaticData.h>
@@ -188,6 +190,11 @@ static void spawn_member(struct rr_server *this,
     rr_server_client_create_player_info(this, client);
     rr_server_client_create_flower(client);
     client->ctf_respawn_ticks = 0;
+    // the new player_info starts out thinking the client has seen nothing, but
+    // after a respawn the client still has the world of the last life. Have it
+    // delete all of it with the first update, as if the player had gone to the
+    // menu and back, or mobs and drops that are gone stay on its screen
+    client->ctf_world_reset = 1;
 }
 
 static void remove_from_game(struct rr_server *this,
@@ -227,6 +234,49 @@ static struct rr_server_client *member_client(struct rr_server *this,
                  member_client(THIS, TEAM, _slot);                             \
              CLIENT != NULL; CLIENT = NULL)
 
+// ---- what is left lying around
+
+static void delete_mob(EntityIdx entity, void *captures)
+{
+    struct rr_simulation *simulation = captures;
+    rr_simulation_get_mob(simulation, entity)->no_drop = 1;
+    rr_simulation_request_entity_deletion(simulation, entity);
+}
+
+static void delete_drop(EntityIdx entity, void *captures)
+{
+    rr_simulation_request_entity_deletion(captures, entity);
+}
+
+// the arena is cleared between matches, so that nothing of the last one is in
+// the next
+static void clear_arena(struct rr_server *this)
+{
+    rr_simulation_for_each_mob(&this->simulation, &this->simulation,
+                               delete_mob);
+    rr_simulation_for_each_drop(&this->simulation, &this->simulation,
+                                delete_drop);
+}
+
+// a drop that nobody connected can pick up is deleted. They are only sent to the
+// players who may take them, so it would sit there until it timed out
+static void delete_uncollectable_drop(EntityIdx entity, void *captures)
+{
+    struct rr_server *server = captures;
+    struct rr_component_drop *drop =
+        rr_simulation_get_drop(&server->simulation, entity);
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+    {
+        if (!rr_bitset_get(server->clients_in_use, i) ||
+            server->clients[i].disconnected)
+            continue;
+        if (rr_bitset_get_bit(drop->can_be_picked_up_by, i) &&
+            !rr_bitset_get_bit(drop->picked_up_by, i))
+            return;
+    }
+    rr_simulation_request_entity_deletion(&server->simulation, entity);
+}
+
 static void end_match(struct rr_server *this)
 {
     for (uint8_t t = 0; t < RR_CTF_MAX_TEAMS; ++t)
@@ -235,6 +285,7 @@ static void end_match(struct rr_server *this)
             continue;
         FOR_EACH_MEMBER(this, t, client) remove_from_game(this, client);
     }
+    clear_arena(this);
     rr_ctf_reset_walls();
     unlink_all(this);
 }
@@ -351,6 +402,7 @@ void rr_ctf_on_start(struct rr_server *this, struct rr_server_client *client)
             return;
         }
     printf("[ctf] match starts with %u teams\n", m->team_count);
+    clear_arena(this);
     rr_ctf_reset_walls();
     memset(m->flags, 0, sizeof m->flags);
     m->flags_ready = 0;
@@ -503,10 +555,14 @@ static void write_players(struct rr_server *this,
         players[i].team = team;
         players[i].present = client->player_info != NULL;
         players[i].alive = flower_alive(this, client);
-        if (players[i].alive)
+        // a dead flower is still there, where it died
+        if (client->player_info != NULL &&
+            rr_simulation_entity_alive(&this->simulation,
+                                       client->player_info->flower_id))
         {
             struct rr_component_physical *physical = rr_simulation_get_physical(
                 &this->simulation, client->player_info->flower_id);
+            players[i].located = 1;
             players[i].x = physical->x;
             players[i].y = physical->y;
         }
@@ -558,6 +614,14 @@ void rr_ctf_tick(struct rr_server *this)
             remove_from_game(this, client);
     }
     drop_vanished_squads(this);
+    // once a second while a match is on
+    static uint32_t cleanup_ticks = 0;
+    if (m->phase != rr_ctf_phase_lobby && ++cleanup_ticks >= RR_CTF_TPS)
+    {
+        cleanup_ticks = 0;
+        rr_simulation_for_each_drop(&this->simulation, this,
+                                    delete_uncollectable_drop);
+    }
     switch (m->phase)
     {
     case rr_ctf_phase_lobby:

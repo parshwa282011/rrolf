@@ -276,7 +276,19 @@ void rr_server_client_broadcast_update(struct rr_server_client *this)
     if (this->afk_ticks > RR_AFK_WARNING)
         proto_bug_write_string(&encoder, this->afk_challenge, 7,
                                "afk_challenge");
-    proto_bug_write_uint8(&encoder, this->player_info != NULL, "in game");
+    // 0 not in the game, 1 in it, 2 in it and the client must first delete
+    // everything it has. A player put into the game again (a respawn, a
+    // reconnect) has a new player_info that thinks the client knows nothing,
+    // while the client still shows what it had. What left the view since is
+    // never deleted there, so mobs and drops that are gone from the server
+    // stayed on screen
+    uint8_t in_game = this->player_info != NULL;
+    if (in_game && this->ctf_world_reset)
+    {
+        in_game = 2;
+        this->ctf_world_reset = 0;
+    }
+    proto_bug_write_uint8(&encoder, in_game, "in game");
     if (this->player_info != NULL)
         rr_simulation_write_binary(&server->simulation, &encoder,
                                    this->player_info);
@@ -1597,6 +1609,8 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                 memcpy(client->mob_gallery, this->clients[j].mob_gallery,
                        sizeof client->mob_gallery);
                 client->experience = this->clients[j].experience;
+                // the connection is new, so its world is
+                client->ctf_world_reset = 1;
 #endif
                 client->squad_pos = this->clients[j].squad_pos;
                 client->squad = this->clients[j].squad;
