@@ -5,9 +5,10 @@
 
 #include <Client/Renderer/Renderer.h>
 
+// the points of a hexagon centered on the origin; closed, so it can be stroked
 static void post_hex_path(struct rr_renderer *renderer, float radius)
 {
-    for (uint8_t i = 0; i < 6; ++i)
+    for (uint8_t i = 0; i <= 6; ++i)
     {
         float angle = (float)i * (M_PI / 3.0);
         float x = radius * cosf(angle), y = radius * sinf(angle);
@@ -18,54 +19,58 @@ static void post_hex_path(struct rr_renderer *renderer, float radius)
     }
 }
 
-// A wooden stake driven into the ground with a honeycomb lure mounted on
-// top - distinct from both the plain twig-bundle nest and the beehive
-// core's hex cluster, so it reads as its own structure in the world.
+// The beehive post: a hexagonal hive with honey pooled in the center. It is
+// drawn for a radius of 250 (the post's size in the world is scaled to match),
+// so the outer hexagon just fits inside the post's circle.
 void rr_beehive_post_draw(struct rr_renderer *renderer)
 {
-    // shadow
-    rr_renderer_set_fill(renderer, 0x33000000);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_arc(renderer, 0, 150, 60);
-    rr_renderer_fill(renderer);
+    rr_renderer_set_line_join(renderer, 1);
+    rr_renderer_set_line_cap(renderer, 1);
 
-    // post
-    rr_renderer_set_fill(renderer, 0xff6b4a2a);
-    rr_renderer_set_stroke(renderer, 0xff42301a);
-    rr_renderer_set_line_width(renderer, 4);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -24, 145);
-    rr_renderer_line_to(renderer, -14, -65);
-    rr_renderer_line_to(renderer, 14, -65);
-    rr_renderer_line_to(renderer, 24, 145);
-    rr_renderer_fill(renderer);
-    rr_renderer_stroke(renderer);
-
-    // crossbeam
-    rr_renderer_set_fill(renderer, 0xff7a5731);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -55, -20);
-    rr_renderer_line_to(renderer, 55, -32);
-    rr_renderer_line_to(renderer, 55, -12);
-    rr_renderer_line_to(renderer, -55, 0);
-    rr_renderer_fill(renderer);
-    rr_renderer_stroke(renderer);
-
-    // honeycomb lure on top, double-toned like the honeycomb wall art
-    struct rr_renderer_context_state state;
-    rr_renderer_context_state_init(renderer, &state);
-    rr_renderer_translate(renderer, 0, -115);
-    rr_renderer_set_fill(renderer, 0xff8a651c);
-    rr_renderer_begin_path(renderer);
-    post_hex_path(renderer, 78);
-    rr_renderer_fill(renderer);
+    // outer wall of the hive
     rr_renderer_set_fill(renderer, 0xffb8873a);
+    rr_renderer_set_stroke(renderer, 0xff6b4a1a);
+    rr_renderer_set_line_width(renderer, 14);
     rr_renderer_begin_path(renderer);
-    post_hex_path(renderer, 63);
+    post_hex_path(renderer, 235);
     rr_renderer_fill(renderer);
+    rr_renderer_stroke(renderer);
+
+    // lighter wax ring
     rr_renderer_set_fill(renderer, 0xffd9a95c);
+    rr_renderer_set_stroke(renderer, 0xff8a651c);
+    rr_renderer_set_line_width(renderer, 6);
     rr_renderer_begin_path(renderer);
-    post_hex_path(renderer, 42);
+    post_hex_path(renderer, 188);
     rr_renderer_fill(renderer);
-    rr_renderer_context_state_free(renderer, &state);
+    rr_renderer_stroke(renderer);
+
+    // the six walls between the cells around the honey
+    rr_renderer_begin_path(renderer);
+    for (uint8_t i = 0; i < 6; ++i)
+    {
+        float angle = (float)i * (M_PI / 3.0);
+        rr_renderer_move_to(renderer, 132 * cosf(angle), 132 * sinf(angle));
+        rr_renderer_line_to(renderer, 188 * cosf(angle), 188 * sinf(angle));
+    }
+    rr_renderer_stroke(renderer);
+
+    // the honey: an amber edge, then the bright pool
+    rr_renderer_set_fill(renderer, 0xffe0862f);
+    rr_renderer_set_stroke(renderer, 0xff8a651c);
+    rr_renderer_set_line_width(renderer, 6);
+    rr_renderer_begin_path(renderer);
+    post_hex_path(renderer, 132);
+    rr_renderer_fill(renderer);
+    rr_renderer_stroke(renderer);
+    rr_renderer_set_fill(renderer, 0xfff5c542);
+    rr_renderer_begin_path(renderer);
+    post_hex_path(renderer, 104);
+    rr_renderer_fill(renderer);
+
+    // a shine on the honey
+    rr_renderer_set_fill(renderer, 0x99fff3b0);
+    rr_renderer_begin_path(renderer);
+    rr_renderer_arc(renderer, -30, -34, 24);
+    rr_renderer_fill(renderer);
 }
