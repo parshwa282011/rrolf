@@ -19,6 +19,7 @@
 #include <Shared/Crypto.h>
 #include <Shared/Ctf.h>
 #include <Shared/MagicNumber.h>
+#include <Shared/Rivet.h>
 #include <Shared/StaticData.h>
 #include <Shared/pb.h>
 
@@ -53,6 +54,13 @@ struct bot
     int got_first;
     int packets;
     char code[16];
+    // who the server says this bot is, to connect again as the same player
+    char uuid[500];
+    char token[500];
+    int want_close;
+    // the inventory the server last sent
+    uint64_t inv[rr_petal_id_max][rr_rarity_id_max];
+    int have_account;
     // the last capture the flag state
     int have_state;
     uint8_t phase, team_count, my_team, flags, winner, message, message_arg;
@@ -257,8 +265,8 @@ static void on_packet(struct bot *b, uint8_t *data, size_t size)
         proto_bug_init(&e, b->out + LWS_PRE);
         proto_bug_write_uint64(&e, rr_get_rand(), "useless bytes");
         proto_bug_write_uint64(&e, verification, "verification");
-        proto_bug_write_string(&e, "", 300, "rivet token");
-        proto_bug_write_string(&e, "", 100, "rivet uuid");
+        proto_bug_write_string(&e, b->token, 300, "rivet token");
+        proto_bug_write_string(&e, b->uuid, 100, "rivet uuid");
         proto_bug_write_string(&e, "", 100, "oauth2 code");
         proto_bug_write_varuint(&e, 0, "dev_flag");
         finish(b, &e);
@@ -266,7 +274,30 @@ static void on_packet(struct bot *b, uint8_t *data, size_t size)
     }
     ++b->packets;
     uint8_t header = proto_bug_read_uint8(&d, "header");
-    if (header == rr_clientbound_squad_dump)
+    if (header == rr_clientbound_oauth2_data)
+    {
+        // the identity the master server gave, kept to come back as the same
+        // player
+        char name[500];
+        proto_bug_read_string(&d, b->uuid, sizeof b->uuid, "uuid");
+        proto_bug_read_string(&d, b->token, sizeof b->token, "token");
+        proto_bug_read_string(&d, name, sizeof name, "name");
+    }
+    else if (header == rr_clientbound_account_result)
+    {
+        proto_bug_read_float64(&d, "xp");
+        memset(b->inv, 0, sizeof b->inv);
+        uint8_t id;
+        while ((id = proto_bug_read_uint8(&d, "id")))
+        {
+            uint8_t rarity = proto_bug_read_uint8(&d, "rarity");
+            uint64_t count = proto_bug_read_varuint(&d, "count");
+            if (id < rr_petal_id_max && rarity < rr_rarity_id_max)
+                b->inv[id][rarity] = count;
+        }
+        b->have_account = 1;
+    }
+    else if (header == rr_clientbound_squad_dump)
         parse_squad_dump(b, &d);
     else if (header == rr_clientbound_ctf_state)
         parse_ctf_state(b, &d);
@@ -300,6 +331,11 @@ static int callback(struct lws *wsi, enum lws_callback_reasons reason,
             b->rx_size = 0;
         }
         break;
+    case LWS_CALLBACK_CLIENT_WRITEABLE:
+        // a bot that is told to hang up does it here
+        if (b->want_close)
+            return -1;
+        break;
     case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
         printf("connection error for %s: %s\n", b->name,
                in ? (char *)in : "(none)");
@@ -316,6 +352,27 @@ static int callback(struct lws *wsi, enum lws_callback_reasons reason,
 
 static struct lws_protocols protocols[] = {{"g", callback, 0, 0},
                                            {NULL, NULL, 0, 0}};
+
+static int connect_bot(struct bot *b, int port)
+{
+    struct lws_client_connect_info c;
+    memset(&c, 0, sizeof c);
+    c.context = context;
+    c.address = "127.0.0.1";
+    c.port = port;
+    c.path = "/";
+    c.host = "127.0.0.1";
+    c.origin = "127.0.0.1";
+    c.protocol = "g";
+    c.userdata = b;
+    c.pwsi = &b->wsi;
+    b->got_first = 0;
+    b->packets = 0;
+    b->rx_size = 0;
+    b->want_close = 0;
+    b->have_account = 0;
+    return lws_client_connect_via_info(&c) != NULL;
+}
 
 // ---- the test
 
@@ -354,18 +411,7 @@ int main(int argc, char **argv)
         snprintf(b->name, sizeof b->name, "%c", 'A' + i);
         snprintf(b->xff, sizeof b->xff, "127.0.0.%d", 10 + i);
         b->my_team = 255;
-        struct lws_client_connect_info c;
-        memset(&c, 0, sizeof c);
-        c.context = context;
-        c.address = "127.0.0.1";
-        c.port = port;
-        c.path = "/";
-        c.host = "127.0.0.1";
-        c.origin = "127.0.0.1";
-        c.protocol = "g";
-        c.userdata = b;
-        c.pwsi = &b->wsi;
-        if (!lws_client_connect_via_info(&c))
+        if (!connect_bot(b, port))
         {
             printf("could not connect to port %d\n", port);
             return 2;
@@ -458,6 +504,32 @@ int main(int argc, char **argv)
     WAIT(B->flag[0].state == rr_ctf_flag_standing, 3, "its own team sends it home");
     CHECK(B->flag[0].x == B->teams[0].px[0] && B->flag[0].y == B->teams[0].py[0],
           "it is back on its point");
+
+    printf("a player who reconnects keeps their petals and their place\n");
+    CHECK(B->have_account, "B was sent its account");
+    CHECK(B->inv[rr_petal_id_basic][rr_rarity_id_epic] == RR_CTF_START_PETALS,
+          "B starts with %d Epic Basic, has %llu", RR_CTF_START_PETALS,
+          (unsigned long long)B->inv[rr_petal_id_basic][rr_rarity_id_epic]);
+    {
+        // crafting uses up some of the five, so a reset to five is visible
+        struct proto_bug e = begin(B, rr_serverbound_petals_craft);
+        proto_bug_write_uint8(&e, rr_petal_id_basic, "craft id");
+        proto_bug_write_uint8(&e, rr_rarity_id_epic, "craft rarity");
+        proto_bug_write_varuint(&e, 5, "craft count");
+        finish(B, &e);
+    }
+    pump(0.5);
+    B->want_close = 1;
+    lws_callback_on_writable(B->wsi);
+    WAIT(B->wsi == NULL, 3, "B hangs up");
+    pump(0.5);
+    CHECK(connect_bot(B, port), "B connects again");
+    WAIT(B->have_account, 8, "B is sent its account again");
+    uint64_t kept = B->inv[rr_petal_id_basic][rr_rarity_id_epic];
+    CHECK(kept < RR_CTF_START_PETALS, "B kept what was left after crafting: %llu of %d",
+          (unsigned long long)kept, RR_CTF_START_PETALS);
+    WAIT(B->my_team == 1 && B->phase == rr_ctf_phase_war, 4, "B is back on its team in the war");
+    pump(1.0);
 
     printf("B takes a flag of A and banks it\n");
     pump(1.5);

@@ -594,6 +594,22 @@ void rr_ctf_tick(struct rr_server *this)
         }
         return;
     }
+    // a team whose players all left is out. When nobody is left the match is
+    // over, or the server would stay in it for ever
+    uint8_t anyone = 0;
+    for (uint8_t t = 0; t < m->team_count; ++t)
+    {
+        if (this->squads[m->teams[t].squad].member_count > 0)
+            anyone = 1;
+        else if (!m->teams[t].eliminated && m->flags_ready)
+            rr_ctf_eliminate(m, t, RR_CTF_NONE);
+    }
+    if (!anyone)
+    {
+        printf("[ctf] nobody is left, the match is over\n");
+        end_match(this);
+        return;
+    }
     // the rules
     uint8_t was_eliminated[RR_CTF_MAX_TEAMS];
     for (uint8_t t = 0; t < RR_CTF_MAX_TEAMS; ++t)

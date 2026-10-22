@@ -53,6 +53,7 @@ echo "==> bots"
 "$WORK/bot" 1236
 status=$?
 
+echo "server: $(ps -o %cpu=,rss= -p "$(cat "$WORK/server.pid")" | awk '{printf "%s%% cpu, %d MB", $1, $2 / 1024}')"
 kill "$(cat "$WORK/server.pid")" "$(cat "$WORK/master.pid")" 2> /dev/null
 sleep 0.5
 echo "logs are in $WORK (server.log, master.log)"

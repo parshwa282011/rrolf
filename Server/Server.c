@@ -1586,6 +1586,18 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
 #ifdef PVP
                 client->pvp_points = this->clients[j].pvp_points;
 #endif
+#ifdef CTF
+                // nothing is saved, so what the player farmed in this match
+                // only lives in the old connection. The account read gave the
+                // starting petals
+                memcpy(client->inventory, this->clients[j].inventory,
+                       sizeof client->inventory);
+                memcpy(client->craft_fails, this->clients[j].craft_fails,
+                       sizeof client->craft_fails);
+                memcpy(client->mob_gallery, this->clients[j].mob_gallery,
+                       sizeof client->mob_gallery);
+                client->experience = this->clients[j].experience;
+#endif
                 client->squad_pos = this->clients[j].squad_pos;
                 client->squad = this->clients[j].squad;
                 client->in_squad = this->clients[j].in_squad;
