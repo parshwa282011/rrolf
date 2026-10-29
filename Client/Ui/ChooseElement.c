@@ -74,6 +74,7 @@ struct rr_ui_element *rr_ui_choose_element_init(
     struct rr_ui_choose_element_metadata *data = malloc(sizeof *data);
     data->choose = choose;
     data->not_first_frame = 0;
+    data->previously_shown = 0;
     this->data = data;
     this->resizeable = rr_ui_choose_container;
     rr_ui_container_add_element(this, b);
@@ -91,6 +92,7 @@ struct rr_ui_element *rr_ui_multi_choose_element_init(
     struct rr_ui_choose_element_metadata *data = malloc(sizeof *data);
     data->choose = choose;
     data->not_first_frame = 0;
+    data->previously_shown = 0;
     this->data = data;
     this->resizeable = rr_ui_choose_container;
     va_list args;
