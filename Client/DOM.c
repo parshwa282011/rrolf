@@ -160,7 +160,12 @@ uint8_t rr_is_text_input_focused()
            rr_dom_has_focus("_0x434c") || // ctf host, squad codes
            rr_dom_has_focus("_0x434d") ||
            rr_dom_has_focus("_0x434e") ||
-           rr_dom_has_focus("_0x4523");
+           rr_dom_has_focus("_0x4523") ||
+           // the login / signup / reset fields (ids start with auth_)
+           EM_ASM_INT({
+               const e = document.activeElement;
+               return +(e && e.id && e.id.indexOf("auth_") === 0);
+           });
 }
 
 void rr_copy_string(char const *str)

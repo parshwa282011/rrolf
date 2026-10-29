@@ -70,6 +70,8 @@ static void load_dotenv(void)
 
 int main()
 {
+    // logs go to a file: without this the output only appears at exit
+    setvbuf(stdout, NULL, _IOLBF, 0);
     load_dotenv();
     fprintf(stderr, "gameserver on version %llu\n", RR_SECRET8 ^ 255);
     srand(time(0));
