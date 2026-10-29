@@ -64,12 +64,14 @@ void render_background(struct rr_component_player_info *player_info,
             rr_renderer_scale(renderer, (GRID_SIZE + 2) / 256);
             if (arena->biome == rr_biome_id_beehive)
                 rr_renderer_draw_tile_beehive(renderer, tile_index);
+            else if (arena->biome == rr_biome_id_ant_hole)
+                rr_renderer_draw_tile_ant_hole(renderer);
             else if (this->selected_biome == rr_biome_id_hell_creek ||
                     this->selected_biome == rr_biome_id_pvp ||
                     this->selected_biome == rr_biome_id_ctf)
                 rr_renderer_draw_tile_hell_creek(renderer, tile_index);
             else
-                rr_renderer_draw_tile_garden(renderer, tile_index);
+                rr_renderer_draw_tile_garden(renderer);
             if (arena->biome == rr_biome_id_ctf)
             {
                 // which team's area this is
@@ -90,9 +92,10 @@ void render_background(struct rr_component_player_info *player_info,
     float grid_size;
     uint32_t maze_dim;
     struct rr_maze_grid *grid;
-    if (arena->biome == rr_biome_id_beehive)
+    if (arena->biome == rr_biome_id_beehive ||
+        arena->biome == rr_biome_id_ant_hole)
     {
-        // Beehives pick one of a few pregenerated sizes by rarity tier
+        // Beehives and ant holes pick one of a few pregenerated sizes by rarity tier
         // (synced via size_tier), not the shared per-biome RR_MAZES[] table.
         struct rr_maze_declaration *tier =
             &RR_BEEHIVE_MAZE_TIERS[arena->size_tier];
@@ -106,14 +109,22 @@ void render_background(struct rr_component_player_info *player_info,
         maze_dim = RR_MAZES[arena->biome].maze_dim;
         grid = RR_MAZES[arena->biome].maze;
     }
-    rr_renderer_set_fill(renderer, 0xff000000);
-    rr_renderer_set_global_alpha(renderer, 0.5f);
+    // walls are shadows everywhere, except in the Garden where they are hedges
+    uint32_t wall_color = 0xff000000;
+    float wall_alpha = 0.5f;
+    if (arena->biome == rr_biome_id_garden)
+    {
+        wall_color = 0xff153d22;
+        wall_alpha = 0.85f;
+    }
+    rr_renderer_set_fill(renderer, wall_color);
+    rr_renderer_set_global_alpha(renderer, wall_alpha);
     int32_t nx = floorf(leftX / grid_size);
     int32_t ny = floorf(topY / grid_size);
     for (; nx < rightX / grid_size; ++nx)
         for (int32_t currY = ny; currY < bottomY / grid_size; ++currY)
         {
-            rr_renderer_set_fill(renderer, 0xff000000);
+            rr_renderer_set_fill(renderer, wall_color);
             uint8_t tile =
                 (nx < 0 || currY < 0 || nx >= maze_dim || currY >= maze_dim)
                     ? 0

@@ -144,6 +144,17 @@ void rr_auth_read_reply(void *game, void *_decoder)
     proto_bug_read_string(decoder, code, sizeof code - 1, "code");
     if (code[0])
         snprintf(this->transfer_code, sizeof this->transfer_code, "%s", code);
+    if (kind == rr_account_request_dev_unlock)
+    {
+        // the answer to the dev panel's PIN: a wrong one locks it again
+        this->dev_unlocked = ok;
+        if (!ok)
+            this->dev_pin[0] = 0;
+        else
+            rr_write_dev_cheat_packets(this, 1);
+        set_message(this, message);
+        return;
+    }
     if (!ok || kind == rr_account_request_code_create || !uuid[0] || !token[0])
     {
         set_message(this, message);

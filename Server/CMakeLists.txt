@@ -22,6 +22,7 @@ project(rrolf-server)
 include_directories(..)
 
 set(SRCS
+    MobAi/Ant.c
     MobAi/Helpers.c
     MobAi/Hybrid.c
     System/Ai.c
@@ -36,6 +37,7 @@ set(SRCS
     System/Velocity.c
     System/Web.c
     System/BeehiveGen.c
+    System/AntHoleGen.c
     Main.c
     EntityAllocation.c
     EntityDetection.c
@@ -71,6 +73,7 @@ set(SRCS
     ../Shared/Ctf.c
     Ctf.c
     CtfRules.c
+    Snail.c
     ../Shared/Utilities.c
     ../Shared/Vector.c
 )
@@ -110,6 +113,11 @@ if(PVP)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPVP")
 endif()
 
+# the garden server: a bug filled backyard with its own map, see RR_MAZES
+if(GARDEN)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGARDEN")
+endif()
+
 # capture the flag minigame. It reuses everything the pvp build does (teams per
 # squad, who can see whom, kill drops), so it turns that on too
 if(CTF)
@@ -128,6 +136,14 @@ if(PDEV)
 endif()
 
 add_executable(rrolf-server ${SRCS})
+
+# tools/garden/run-sim-test.sh: the garden's mobs on a simulation with no network
+if(GARDEN_SIM_TEST)
+    set(TEST_SRCS ${SRCS})
+    list(REMOVE_ITEM TEST_SRCS Main.c)
+    add_executable(garden-sim-test ${TEST_SRCS} ../tools/garden/sim-test.c)
+    target_link_libraries(garden-sim-test pthread websockets m curl)
+endif()
 
 if (WINDOWS)
     target_link_directories(rrolf-server PRIVATE /c/libwebsockets/unix-build/bin)

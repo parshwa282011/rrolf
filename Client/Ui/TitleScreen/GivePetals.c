@@ -32,10 +32,12 @@
 #include <Shared/Utilities.h>
 #include <Shared/pb.h>
 
-// PDEV builds only. A panel to ask the game server for petals: the PIN, the
-// petal, its rarity and the amount are sent in a rr_dev_cheat_give_petals
-// packet, and the server (PDEV build) checks the PIN and answers with a
-// rr_clientbound_account_reply, whose message shows in the panel.
+// PDEV builds only. The dev panel, behind the + button. It asks for a PIN, and
+// once the game server says it is right (rr_dev_cheat_unlock, answered with a
+// rr_clientbound_account_reply) it turns into the dev tools (DevSquadPanel.c)
+// and a way to ask for petals. The PIN is kept in game->dev_pin and goes with
+// every cheat packet (rr_dev_cheat_begin), the game server checks it each time.
+// It replaces the dev panel of accounts that are marked dev, in these builds.
 
 #define PIN_INPUT "_0x4349"
 #define AMOUNT_INPUT "_0x434a"
@@ -57,6 +59,18 @@ static uint8_t selected_rarity()
 {
     uint8_t rarity = rarity_slider * rr_rarity_id_max;
     return rarity >= rr_rarity_id_max ? rr_rarity_id_max - 1 : rarity;
+}
+
+static uint8_t locked_should_show(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    return !game->dev_unlocked;
+}
+
+static uint8_t unlocked_should_show(struct rr_ui_element *this,
+                                    struct rr_game *game)
+{
+    return game->dev_unlocked;
 }
 
 static uint8_t give_petals_container_should_show(struct rr_ui_element *this,
@@ -130,10 +144,7 @@ static void give_button_on_event(struct rr_ui_element *this,
         if (game->input_data->mouse_buttons_up_this_tick & 1)
         {
             uint64_t amount = strtoull(amount_text, NULL, 10);
-            if (pin_text[0] == 0)
-                snprintf(game->auth_message, sizeof game->auth_message,
-                         "Enter the PIN.");
-            else if (amount == 0)
+            if (amount == 0)
                 snprintf(game->auth_message, sizeof game->auth_message,
                          "Enter an amount.");
             else
@@ -141,20 +152,44 @@ static void give_button_on_event(struct rr_ui_element *this,
                 snprintf(game->auth_message, sizeof game->auth_message,
                          "Checking...");
                 struct proto_bug encoder;
-                proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-                proto_bug_write_uint8(&encoder, game->socket.quick_verification,
-                                      "qv");
-                proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat,
-                                      "header");
-                proto_bug_write_uint8(&encoder, rr_dev_cheat_give_petals,
-                                      "cheat type");
-                proto_bug_write_string(&encoder, pin_text, sizeof pin_text,
-                                       "pin");
+                rr_dev_cheat_begin(game, &encoder, rr_dev_cheat_give_petals);
                 proto_bug_write_uint8(&encoder, selected_petal(), "id");
                 proto_bug_write_uint8(&encoder, selected_rarity(), "rarity");
                 proto_bug_write_varuint(&encoder, amount, "count");
                 rr_websocket_send(&game->socket,
                                   encoder.current - encoder.start);
+            }
+        }
+        game->cursor = rr_game_cursor_pointer;
+        data->clickable = 1;
+    }
+    else
+        data->clickable = 0;
+}
+
+static void unlock_button_on_event(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    if (game->socket_ready)
+    {
+        if (game->input_data->mouse_buttons_up_this_tick & 1)
+        {
+            if (pin_text[0] == 0)
+                snprintf(game->auth_message, sizeof game->auth_message,
+                         "Enter the PIN.");
+            else
+            {
+                snprintf(game->auth_message, sizeof game->auth_message,
+                         "Checking...");
+                snprintf(game->dev_pin, sizeof game->dev_pin, "%s", pin_text);
+                struct proto_bug encoder;
+                rr_dev_cheat_begin(game, &encoder, rr_dev_cheat_unlock);
+                rr_websocket_send(&game->socket,
+                                  encoder.current - encoder.start);
+                // the box is emptied, the PIN stays in game->dev_pin only
+                pin_text[0] = 0;
+                rr_dom_set_text(PIN_INPUT, pin_text);
             }
         }
         game->cursor = rr_game_cursor_pointer;
@@ -248,22 +283,41 @@ struct rr_ui_element *rr_ui_give_petals_container_init(struct rr_game *game)
     struct rr_ui_element *give = rr_ui_labeled_button_init("Give", 30, 0);
     give->on_event = give_button_on_event;
     give->animate = give_button_animate;
+    struct rr_ui_element *unlock = rr_ui_labeled_button_init("Unlock", 30, 0);
+    unlock->on_event = unlock_button_on_event;
+    unlock->animate = give_button_animate;
+    // before the PIN
+    struct rr_ui_element *locked = rr_ui_v_container_init(
+        rr_ui_container_init(), 10, 10,
+        rr_ui_text_init("Enter the PIN to open the dev tools", 14, 0xffbbbbbb),
+        labeled_input_init("PIN:", pin_text, PIN_INPUT, sizeof pin_text - 1,
+                           100, 1),
+        unlock,
+        rr_ui_text_init(game->auth_message, 14, 0xffbbbbbb),
+        NULL);
+    locked->should_show = locked_should_show;
+    // after it: the cheats and the petals
+    struct rr_ui_element *unlocked = rr_ui_v_container_init(
+        rr_ui_container_init(), 10, 10,
+        rr_ui_dev_tools_init(game),
+        rr_ui_text_init("Give Petals", 18, 0xffffffff),
+        petal_slider_init(),
+        rarity_slider_init(),
+        labeled_input_init("Amount:", amount_text, AMOUNT_INPUT,
+                           sizeof amount_text - 1, 100, 0),
+        give,
+        rr_ui_text_init(game->auth_message, 14, 0xffbbbbbb),
+        NULL);
+    unlocked->should_show = unlocked_should_show;
     struct rr_ui_element *this = rr_ui_pad(
         rr_ui_set_background(
             rr_ui_v_pad(
                 rr_ui_set_justify(
                     rr_ui_v_container_init(
                         rr_ui_container_init(), 10, 10,
-                        rr_ui_text_init("Give Petals", 24, 0xffffffff),
-                        labeled_input_init("PIN:", pin_text, PIN_INPUT,
-                                           sizeof pin_text - 1, 100, 1),
-                        petal_slider_init(),
-                        rarity_slider_init(),
-                        labeled_input_init("Amount:", amount_text,
-                                           AMOUNT_INPUT, sizeof amount_text - 1,
-                                           100, 0),
-                        give,
-                        rr_ui_text_init(game->auth_message, 14, 0xffbbbbbb),
+                        rr_ui_text_init("Developer", 24, 0xffffffff),
+                        locked,
+                        unlocked,
                         NULL),
                     -1, -1),
                 50),

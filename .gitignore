@@ -2,6 +2,7 @@ build/
 build-default/
 build-pvp/
 build-ctf/
+build-garden/
 frontend_release_build/
 node_modules/
 .vs/

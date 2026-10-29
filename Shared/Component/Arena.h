@@ -41,6 +41,7 @@ struct rr_component_arena
     RR_SERVER_ONLY(uint8_t first_squad_to_enter;)
     RR_SERVER_ONLY(uint8_t player_entered;)
     RR_SERVER_ONLY(EntityIdx mob_count;)
+    RR_SERVER_ONLY(uint16_t ant_egg_count;) // live eggs in an ant hole
     RR_SERVER_ONLY(struct rr_maze_declaration *maze;)
     RR_SERVER_ONLY(struct rr_spatial_hash spatial_hash;)
     RR_SERVER_ONLY(uint8_t pvp;)

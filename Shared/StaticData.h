@@ -74,7 +74,8 @@ enum rr_clientbound_packet_header
     rr_clientbound_oauth2_data,
     rr_clientbound_leaderboard_update,
     rr_clientbound_account_reply,
-    rr_clientbound_ctf_state
+    rr_clientbound_ctf_state,
+    rr_clientbound_snail_state
 };
 
 // what a rr_serverbound_account_request asks the master server (through the
@@ -87,7 +88,9 @@ enum rr_account_request_kind
     rr_account_request_code_redeem,
     // PDEV builds only: answers a rr_dev_cheat_give_petals. Never a valid
     // rr_serverbound_account_request, the game server answers it itself.
-    rr_account_request_dev_petals
+    rr_account_request_dev_petals,
+    // PDEV builds only: answers a rr_dev_cheat_unlock, ok if the PIN was right
+    rr_account_request_dev_unlock
 };
 
 enum rr_dev_cheat_type
@@ -99,7 +102,12 @@ enum rr_dev_cheat_type
     rr_dev_cheat_fov_percent,
     rr_dev_cheat_give_petals,
     // only in a -DCTF_TEST server, which is for tests and never deployed
-    rr_dev_cheat_teleport
+    rr_dev_cheat_teleport,
+    // starts a snail run of the given rarity, Garden only
+    rr_dev_cheat_snail_run,
+    // PDEV builds only: does nothing but check the PIN every cheat carries, for
+    // the dev panel's Unlock button. Answered with a rr_clientbound_account_reply
+    rr_dev_cheat_unlock
 };
 
 #define RR_MAX_HEALTH_FROM_LEVEL(biome, level)                                 \
@@ -125,8 +133,13 @@ enum rr_biome_id
     rr_biome_id_garden,
     rr_biome_id_beehive,
     rr_biome_id_ctf,
+    rr_biome_id_ant_hole, // lives inside other arenas, like the beehive
     rr_biome_id_max
 };
+
+// biomes whose checkpoint is saved on the account, in the order the game
+// server and MasterServer exchange them: hell creek, pvp, garden
+#define RR_CLIENT_SAVED_BIOMES 3
 
 enum rr_rarity_id
 {
@@ -179,7 +192,7 @@ enum rr_petal_id
     rr_petal_id_mint,      // 32
     rr_petal_id_bee_egg,      // 33
     rr_petal_id_beehive_post, // 34
-    rr_petal_id_dev_stinger,  // 35
+    rr_petal_id_nazar,        // 35
 
     rr_petal_id_max,       // 36
 };
@@ -210,7 +223,15 @@ enum rr_mob_id
     rr_mob_id_queen_bee,          // 20
     rr_mob_id_beehive_core,       // 21
 
-    rr_mob_id_max,                // 22
+    rr_mob_id_bush,               // 22
+    rr_mob_id_ant_hole,           // 23
+    rr_mob_id_queen_ant,          // 24
+    rr_mob_id_ant_egg,            // 25
+    rr_mob_id_baby_ant,           // 26
+    rr_mob_id_digger_ant,         // 27
+    rr_mob_id_snail,              // 28
+
+    rr_mob_id_max,                // 29
 };
 
 struct rr_petal_base_stat_scale
@@ -281,6 +302,63 @@ struct rr_beehive_rarity_scale
 
 extern struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max];
 
+// When a plant is killed by a player it can leave a hive or a hole behind
+#define RR_BEEHIVE_FROM_TREE_CHANCE 0.05
+#define RR_ANT_HOLE_FROM_BUSH_CHANCE 0.05
+#define RR_ANT_HOLE_FROM_FERN_CHANCE 0.02
+
+// The nazar petal saves you from the next RR_NAZAR_CHARGES hits that would have
+// killed you (98% of such a hit is blocked, and what is left can't kill you), then
+// needs RR_NAZAR_RELOAD_TICKS[rarity] ticks to recharge all of them. Hits that
+// would not have killed you are not touched and use nothing. Every extra nazar in
+// the loadout adds a charge
+#define RR_NAZAR_CHARGES 3
+#define RR_NAZAR_BLOCK 0.98f
+extern uint16_t RR_NAZAR_RELOAD_TICKS[rr_rarity_id_max];
+// The chance in percent that saving you uses up one of the charges. The higher
+// the rarity of the nazar (the best one in the loadout counts), the less likely
+extern float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max];
+
+// Snail run rewards. Players near the snail when it arrives each get, for every
+// reward petal, one a tier below the snail's rarity and a chance at the snail's
+// own tier. RR_SNAIL_NAZAR_CHANCE[snail rarity][nazar rarity] is the chance in
+// percent of a nazar of that rarity, rolled on its own
+#define RR_SNAIL_OWN_TIER_CHANCE 0.4f
+// A snail is at least epic and starts in the part of the map of its own rarity:
+// an epic one in e/E, a legendary in l/L, a mythic in m/M, an exotic in x/X and an
+// ancient in a/A (template difficulty 8 * rarity to 8 * rarity + 4), so what it
+// meets on its way is not too much for it. It waits there, hurt by nothing, until
+// a player comes within RR_SNAIL_WAKE_RADIUS of it. Only once it sets off does it
+// keep the area around it loaded, and then the mobs that spawn around it are as
+// rare as it is wherever it walks (snail_difficulty in struct rr_maze_grid), so
+// its way home stays a challenge in the easier parts as well.
+#define RR_SNAIL_MIN_RARITY rr_rarity_id_epic
+#define RR_SNAIL_ZONE_MIN(rarity) (8 * (rarity))
+#define RR_SNAIL_ZONE_MAX(rarity) (8 * (rarity) + 4)
+#define RR_SNAIL_HUNT_DIFFICULTY(rarity) (8 * (rarity))
+#define RR_SNAIL_WAKE_RADIUS 2500
+#define RR_SNAIL_REWARD_RADIUS 5000
+extern float RR_SNAIL_NAZAR_CHANCE[rr_rarity_id_max][rr_rarity_id_max];
+// how likely each rarity is when a snail run starts, relative to each other
+extern float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max];
+
+// How an ant hole's population scales with the rarity of the hole. It uses the
+// same pregenerated burrow sizes as the beehive (RR_BEEHIVE_MAZE_TIERS).
+// There are never more than two diggers: the first one spawns with
+// digger_first_chance, the second only if the first did, with
+// digger_second_chance.
+struct rr_ant_hole_rarity_scale
+{
+    uint8_t size_tier; // index into RR_BEEHIVE_MAZE_TIERS
+    uint32_t worker_count;
+    uint32_t baby_ant_count;
+    uint32_t egg_count; // also how many eggs the queen keeps alive
+    float digger_first_chance;
+    float digger_second_chance;
+};
+
+extern struct rr_ant_hole_rarity_scale RR_ANT_HOLE_RARITY_SCALING[rr_rarity_id_max];
+
 extern struct rr_petal_data RR_PETAL_DATA[rr_petal_id_max];
 extern char const *RR_PETAL_NAMES[rr_petal_id_max];
 extern char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max];
@@ -312,6 +390,7 @@ struct rr_maze_grid
     uint32_t grid_points;
     float local_difficulty;
     float overload_factor;
+    float snail_difficulty; // see RR_SNAIL_HUNT_DIFFICULTY, 0 with no snail near
 #endif
     uint8_t value;
     float difficulty;
@@ -351,6 +430,7 @@ struct rr_maze_declaration
 RR_DECLARE_MAZE(HELL_CREEK, 80)
 RR_DECLARE_MAZE(BURROW, 4)
 RR_DECLARE_MAZE(PVP, 80)
+RR_DECLARE_MAZE(GARDEN, 80)
 RR_DECLARE_MAZE(CTF, 158)
 RR_DECLARE_MAZE(BURROW_SMALL, 24)
 RR_DECLARE_MAZE(BURROW_MEDIUM, 32)

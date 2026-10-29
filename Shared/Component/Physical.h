@@ -61,6 +61,7 @@ struct rr_component_physical
     RR_CLIENT_ONLY(uint8_t on_title_screen;)
     RR_SERVER_ONLY(uint8_t bubbling : 1;)
     RR_SERVER_ONLY(uint8_t bubbling_to_death : 1;)
+    RR_SERVER_ONLY(uint8_t tunneling : 1;) // digger ants, ignores maze walls
     RR_SERVER_ONLY(uint32_t stun_ticks;)
     RR_SERVER_ONLY(uint32_t pachy_stun_ticks;)
     RR_SERVER_ONLY(uint32_t shell_ignore_ticks;)

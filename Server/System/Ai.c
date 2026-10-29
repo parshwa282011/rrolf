@@ -43,6 +43,9 @@ static void system_for_each(EntityIdx entity, void *simulation)
     struct rr_component_mob *mob = rr_simulation_get_mob(this, entity);
     struct rr_component_physical *physical =
         rr_simulation_get_physical(this, entity);
+    // the snail run moves the snail itself (Server/Snail.c)
+    if (mob->id == rr_mob_id_snail)
+        return;
     if (ai->target_entity != RR_NULL_ENTITY &&
         (!rr_simulation_entity_alive(simulation, ai->target_entity) ||
          is_dead_flower(simulation, ai->target_entity) ||
@@ -115,6 +118,18 @@ static void system_for_each(EntityIdx entity, void *simulation)
         break;
     case rr_mob_id_quetzalcoatlus:
         tick_ai_quetzalcoaltus(entity, this);
+        break;
+    case rr_mob_id_queen_ant:
+        tick_ai_queen_ant(entity, this);
+        break;
+    case rr_mob_id_ant_egg:
+        tick_ai_ant_egg(entity, this);
+        break;
+    case rr_mob_id_baby_ant:
+        tick_ai_default(entity, this, RR_PLAYER_SPEED * 1.3);
+        break;
+    case rr_mob_id_digger_ant:
+        tick_ai_digger_ant(entity, this);
         break;
     case rr_mob_id_fern:
     case rr_mob_id_tree:

@@ -30,6 +30,10 @@ struct rr_component_mob
 {
     RR_SERVER_ONLY(struct rr_maze_grid *zone;)
     RR_SERVER_ONLY(uint16_t ticks_to_despawn;)
+    // a hive or hole nobody has gone into yet unloads like any wild mob when no
+    // one is near. ticks_to_despawn can't be used for that: once somebody is
+    // inside it is the collapse timer
+    RR_SERVER_ONLY(uint16_t unvisited_ticks;)
     EntityIdx parent_id;
     RR_SERVER_ONLY(uint8_t protocol_state;)
     uint8_t id;

@@ -60,6 +60,140 @@ static struct rr_ui_element *tooltip_petal_icon_init(uint8_t id, uint8_t rarity)
     return this;
 }
 
+static void add_label_line(struct rr_ui_element *, char const *, char *);
+
+// 25%, 0.15%, 0.003%: as many decimals as it takes to show something
+static char *percent_text(float pct)
+{
+    char *d = malloc(16);
+    if (pct >= 10)
+        sprintf(d, "%.0f%%", pct);
+    else if (pct >= 1)
+        sprintf(d, "%.1f%%", pct);
+    else if (pct >= 0.1)
+        sprintf(d, "%.2f%%", pct);
+    else
+        sprintf(d, "%.3f%%", pct);
+    return d;
+}
+
+// What a snail that gets home gives the players near it, see reward_players in
+// Server/Snail.c: nazars by the table, and for shell and mint one a tier below
+// for sure and the snail's own tier sometimes. A snail has no loot[] of its own
+static void add_snail_drops(struct rr_ui_element *this, uint8_t rarity)
+{
+    rr_ui_container_add_element(
+        this, rr_ui_set_justify(
+                  rr_ui_text_init("Rewards for those near it at the hole", 12,
+                                  0xffafafaf),
+                  -1, 0));
+    if (rarity >= RR_SNAIL_MIN_RARITY)
+    {
+        float total = 0;
+        for (uint8_t r = 0; r < rr_rarity_id_max; ++r)
+            total += RR_SNAIL_RARITY_WEIGHTS[r];
+        char *text = malloc(16);
+        sprintf(text, "%.3g%%", 100 * RR_SNAIL_RARITY_WEIGHTS[rarity] / total);
+        add_label_line(this, "Chance a snail run is this rarity: ", text);
+    }
+    if (rarity < RR_SNAIL_MIN_RARITY)
+    {
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(rr_ui_text_init("Never found below Epic", 11,
+                                                    0xffffffff),
+                                    -1, 0));
+        return;
+    }
+    static uint8_t const rewards[3] = {rr_petal_id_nazar, rr_petal_id_shell,
+                                       rr_petal_id_mint};
+    for (uint8_t i = 0; i < 3; ++i)
+    {
+        uint8_t petal = rewards[i];
+        uint8_t min = RR_PETAL_DATA[petal].min_rarity;
+        struct rr_ui_element *row =
+            rr_ui_h_container_init(rr_ui_container_init(), 0, 10, NULL);
+        for (uint8_t r = 0; r < rr_rarity_id_max; ++r)
+        {
+            float pct = 0;
+            if (petal == rr_petal_id_nazar)
+                pct = RR_SNAIL_NAZAR_CHANCE[rarity][r];
+            else if (r + 1 == rarity && r >= min)
+                pct = 100;
+            else if (r == rarity && r >= min)
+                pct = 100 * RR_SNAIL_OWN_TIER_CHANCE;
+            if (pct <= 0)
+                continue;
+            rr_ui_container_add_element(
+                row, rr_ui_v_container_init(
+                         rr_ui_container_init(), 0, 5,
+                         tooltip_petal_icon_init(petal, r),
+                         rr_ui_text_init(percent_text(pct), 11, 0xffffffff),
+                         NULL));
+        }
+        if (row->elements.size == 0)
+            continue;
+        rr_ui_h_container_set(row);
+        row->width = row->abs_width;
+        row->height = row->abs_height;
+        rr_ui_container_add_element(this, rr_ui_set_justify(row, -1, -1));
+    }
+}
+
+static void add_label_line(struct rr_ui_element *this, char const *label,
+                           char *value)
+{
+    rr_ui_container_add_element(
+        this, rr_ui_set_justify(
+                  rr_ui_h_container_init(
+                      rr_ui_container_init(), 0, 0,
+                      rr_ui_text_init((char *)label, 12, 0xffffd966),
+                      rr_ui_text_init(value, 12, 0xffffffff), NULL),
+                  -1, 0));
+}
+
+// What a mob makes besides itself: plants that leave a hive or a hole behind
+// when they die (Shared/Component/Mob.c), the queen ant's eggs and what they
+// become (Server/MobAi/Ant.c). The numbers are the ones the server uses
+static void add_spawn_lines(struct rr_ui_element *this, uint8_t id,
+                            uint8_t rarity)
+{
+    char *text = malloc(96);
+    switch (id)
+    {
+    case rr_mob_id_tree:
+        sprintf(text, "%s of %.0f%%, as rare as the tree",
+                RR_MOB_NAMES[rr_mob_id_beehive],
+                100 * RR_BEEHIVE_FROM_TREE_CHANCE);
+        add_label_line(this, "May leave behind: ", text);
+        break;
+    case rr_mob_id_bush:
+        sprintf(text, "%s of %.0f%%, as rare as the bush",
+                RR_MOB_NAMES[rr_mob_id_ant_hole],
+                100 * RR_ANT_HOLE_FROM_BUSH_CHANCE);
+        add_label_line(this, "May leave behind: ", text);
+        break;
+    case rr_mob_id_fern:
+        sprintf(text, "%s of %.0f%% in the Garden",
+                RR_MOB_NAMES[rr_mob_id_ant_hole],
+                100 * RR_ANT_HOLE_FROM_FERN_CHANCE);
+        add_label_line(this, "May leave behind: ", text);
+        break;
+    case rr_mob_id_queen_ant:
+        sprintf(text, "%s every 8s, up to %u at a time",
+                RR_MOB_NAMES[rr_mob_id_ant_egg],
+                RR_ANT_HOLE_RARITY_SCALING[rarity].egg_count);
+        add_label_line(this, "Lays: ", text);
+        break;
+    case rr_mob_id_ant_egg:
+        sprintf(text, "%s after 6 to 9s", RR_MOB_NAMES[rr_mob_id_baby_ant]);
+        add_label_line(this, "Hatches into: ", text);
+        break;
+    default:
+        free(text);
+        return;
+    }
+}
+
 struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
 {
     char *hp = malloc((sizeof *hp) * 16);
@@ -138,7 +272,10 @@ struct rr_ui_element *rr_ui_mob_tooltip_init(uint8_t id, uint8_t rarity)
                           rr_ui_text_init(extra, 12, 0xffffffff), NULL),
                       -1, 0));
     }
+    add_spawn_lines(this, id, rarity);
     rr_ui_container_add_element(this, rr_ui_static_space_init(10));
+    if (id == rr_mob_id_snail)
+        add_snail_drops(this, rarity);
     for (uint8_t i = 0; i < 4; ++i)
     {
         if (RR_MOB_DATA[id].loot[i].id == 0)

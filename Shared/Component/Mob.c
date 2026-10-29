@@ -29,6 +29,7 @@
 #include <Server/EntityAllocation.h>
 #include <Server/Server.h>
 #include <Server/Simulation.h>
+#include <Server/System/AntHoleGen.h>
 #include <Server/System/BeehiveGen.h>
 
 #include <Shared/StaticData.h>
@@ -53,6 +54,7 @@ void rr_component_mob_init(struct rr_component_mob *this,
 {
     memset(this, 0, sizeof *this);
     RR_SERVER_ONLY(this->ticks_to_despawn = 120 * 25;)
+    RR_SERVER_ONLY(this->unvisited_ticks = 30 * 25;)
 }
 
 void rr_component_mob_free(struct rr_component_mob *this,
@@ -83,13 +85,29 @@ void rr_component_mob_free(struct rr_component_mob *this,
     struct rr_component_arena *arena =
         rr_simulation_get_arena(simulation, physical->arena);
     --arena->mob_count;
-    if (this->id == rr_mob_id_beehive_core)
+    // a core or queen that was left behind when its hive collapsed lives in the
+    // main arena (1). There is nothing to tear down then, and the teardown
+    // would delete the main arena itself
+    if (this->id == rr_mob_id_beehive_core && physical->arena != 1)
         rr_beehive_core_teardown(simulation, this->parent_id, physical->arena);
+    if (this->id == rr_mob_id_queen_ant && physical->arena != 1)
+        rr_ant_hole_queen_teardown(simulation, this->parent_id, physical->arena);
+    if (this->id == rr_mob_id_ant_egg && arena->ant_egg_count > 0)
+        --arena->ant_egg_count;
     if (this->no_drop)
         return;
-    if (this->id == rr_mob_id_tree && rr_frand() < 0.05)
+    // plants sometimes leave a hive or a hole behind
+    if (this->id == rr_mob_id_tree && rr_frand() < RR_BEEHIVE_FROM_TREE_CHANCE)
         rr_simulation_alloc_mob(simulation, physical->arena, physical->x,
                                 physical->y, rr_mob_id_beehive, this->rarity,
+                                relations->team);
+    else if ((this->id == rr_mob_id_bush &&
+              rr_frand() < RR_ANT_HOLE_FROM_BUSH_CHANCE) ||
+             (this->id == rr_mob_id_fern &&
+              RR_GLOBAL_BIOME == rr_biome_id_garden &&
+              rr_frand() < RR_ANT_HOLE_FROM_FERN_CHANCE))
+        rr_simulation_alloc_mob(simulation, physical->arena, physical->x,
+                                physical->y, rr_mob_id_ant_hole, this->rarity,
                                 relations->team);
 #ifdef PVP
     if (arena->pvp && rr_simulation_entity_alive(simulation, health->last_attacker))

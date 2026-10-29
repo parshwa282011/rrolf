@@ -96,7 +96,9 @@ struct rr_server_client
     char blocked_clients[RR_MAX_CLIENT_COUNT][37];
     uint8_t squad_pos;
     uint8_t squad;
-    uint8_t checkpoint[2];
+    // hell creek, pvp and garden are saved (see RR_CLIENT_SAVED_BIOMES), the
+    // other biomes only need the slot so indexing by RR_GLOBAL_BIOME is safe
+    uint8_t checkpoint[rr_biome_id_max];
     uint8_t received_first_packet : 1;
     uint8_t verified : 1;
     uint8_t dev : 1;

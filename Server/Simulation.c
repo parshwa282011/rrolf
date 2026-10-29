@@ -27,6 +27,7 @@
 #include <Server/EntityAllocation.h>
 #include <Server/EntityDetection.h>
 #include <Server/MobAi/Ai.h>
+#include <Server/Server.h>
 #include <Server/SpatialHash.h>
 #include <Server/System/System.h>
 #include <Server/Waves.h>
@@ -119,6 +120,34 @@ uint8_t pter_edmo_zone()
                                                : rr_mob_id_pteranodon;
 }
 
+// garden zones
+uint8_t bed_zone()
+{
+    double seed = rr_frand();
+    return seed < 0.55 ? rr_mob_id_bush
+                       : seed < 0.8 ? rr_mob_id_honeybee : rr_mob_id_ant;
+}
+uint8_t veg_zone()
+{
+    double seed = rr_frand();
+    return seed < 0.4 ? rr_mob_id_fern
+                      : seed < 0.7 ? rr_mob_id_spider
+                                   : rr_mob_id_house_centipede;
+}
+uint8_t hedge_zone()
+{
+    double seed = rr_frand();
+    return seed < 0.5 ? rr_mob_id_bush
+                      : seed < 0.9 ? rr_mob_id_spider : ALL_MOBS;
+}
+uint8_t compost_zone()
+{
+    double seed = rr_frand();
+    return seed < 0.4 ? rr_mob_id_house_centipede
+                      : seed < 0.7 ? rr_mob_id_lanternfly
+                                   : rr_mob_id_fighter_bee;
+}
+
 struct zone
 {
     uint32_t x;
@@ -147,8 +176,27 @@ static struct zone zone_positions[ZONE_POSITION_COUNT] = {
     {26, 6,  3,  4, pter_edmo_zone},   // 13
 };
 
+#define GARDEN_ZONE_POSITION_COUNT 4
+
+static struct zone garden_zone_positions[GARDEN_ZONE_POSITION_COUNT] = {
+    {2,  23, 11, 15, bed_zone},     // flower beds
+    {27, 23, 11, 14, veg_zone},     // vegetable patch
+    {2,  2,  12, 16, hedge_zone},   // hedge maze
+    {27, 2,  11, 17, compost_zone}, // compost heap
+};
+
 static void set_spawn_zones()
 {
+    if (RR_GLOBAL_BIOME == rr_biome_id_garden)
+    {
+        for (uint64_t i = 0; i < GARDEN_ZONE_POSITION_COUNT; i++)
+        {
+            struct zone zone = garden_zone_positions[i];
+            set_special_zone(rr_biome_id_garden, zone.spawn_func, zone.x,
+                             zone.y, zone.w, zone.h);
+        }
+        return;
+    }
 #ifndef PVP
     for (uint64_t i = 0; i < ZONE_POSITION_COUNT; i++)
     {
@@ -216,6 +264,9 @@ static int too_close(struct rr_simulation *this, float x, float y, float r)
 static void spawn_mob(struct rr_simulation *this, uint32_t grid_x,
                       uint32_t grid_y)
 {
+    // for the automated tests, which can't have a bot killed by the wildlife
+    if (getenv("RR_TEST_NO_SPAWNS") != NULL)
+        return;
     struct rr_component_arena *arena = rr_simulation_get_arena(this, 1);
     struct rr_maze_grid *grid =
         rr_component_arena_get_grid(arena, grid_x, grid_y);
@@ -240,8 +291,7 @@ static void spawn_mob(struct rr_simulation *this, uint32_t grid_x,
     }
     else
         id = get_spawn_id(RR_GLOBAL_BIOME, grid);
-    uint8_t rarity =
-        get_spawn_rarity(grid->difficulty + grid->local_difficulty * 0);
+    uint8_t rarity = get_spawn_rarity(fmaxf(grid->difficulty, grid->snail_difficulty));
     if (!should_spawn_at(id, rarity))
         return;
     for (uint32_t n = 0; n < 10; ++n)
@@ -306,6 +356,45 @@ static void count_flower_vicinity(EntityIdx entity, void *_simulation)
         }
 }
 
+// a snail that has set off keeps the area around it as loaded as a player does:
+// mobs spawn there and stay, as rare as the snail (see Server/Snail.c)
+static void count_snail_vicinity(EntityIdx entity, void *_simulation)
+{
+    struct rr_simulation *this = _simulation;
+    if (rr_simulation_get_mob(this, entity)->id != rr_mob_id_snail)
+        return;
+    // asleep, it loads nothing: the mobs around it are the ones the players
+    // that come close to it load themselves
+    if (this->server != NULL && rr_snail_is_asleep(this->server, entity))
+        return;
+    struct rr_component_physical *physical =
+        rr_simulation_get_physical(this, entity);
+    if (physical->arena != 1)
+        return;
+    struct rr_component_arena *arena = rr_simulation_get_arena(this, 1);
+#define FOV 3072
+    uint32_t sx = rr_fclamp((physical->x - FOV) / arena->maze->grid_size, 0,
+                            arena->maze->maze_dim - 1);
+    uint32_t sy = rr_fclamp((physical->y - FOV) / arena->maze->grid_size, 0,
+                            arena->maze->maze_dim - 1);
+    uint32_t ex = rr_fclamp((physical->x + FOV) / arena->maze->grid_size, 0,
+                            arena->maze->maze_dim - 1);
+    uint32_t ey = rr_fclamp((physical->y + FOV) / arena->maze->grid_size, 0,
+                            arena->maze->maze_dim - 1);
+#undef FOV
+    for (uint32_t x = sx; x <= ex; ++x)
+        for (uint32_t y = sy; y <= ey; ++y)
+        {
+            struct rr_maze_grid *grid = rr_component_arena_get_grid(arena, x, y);
+            grid->player_count += grid->player_count < PLAYER_COUNT_CAP;
+            // and what spawns there hunts it, as rare as the snail is
+            float hunt = RR_SNAIL_HUNT_DIFFICULTY(
+                rr_simulation_get_mob(this, entity)->rarity);
+            if (hunt > grid->snail_difficulty)
+                grid->snail_difficulty = hunt;
+        }
+}
+
 static void despawn_mob(EntityIdx entity, void *_simulation)
 {
     struct rr_simulation *this = _simulation;
@@ -313,13 +402,19 @@ static void despawn_mob(EntityIdx entity, void *_simulation)
         rr_simulation_get_physical(this, entity);
     if (physical->arena != 1)
         return;
-    if (rr_simulation_has_arena(this, entity))
-        return;
     struct rr_component_arena *arena = rr_simulation_get_arena(this, 1);
     struct rr_component_mob *mob = rr_simulation_get_mob(this, entity);
     struct rr_component_ai *ai = rr_simulation_get_ai(this, entity);
-    if (mob->player_spawned)
+    if (mob->player_spawned || mob->id == rr_mob_id_snail)
         return;
+    uint16_t *timer = &mob->ticks_to_despawn;
+    if (rr_simulation_has_arena(this, entity))
+    {
+        // a hive or hole: once somebody went in it collapses on its own timer
+        if (rr_simulation_get_arena(this, entity)->player_entered)
+            return;
+        timer = &mob->unvisited_ticks;
+    }
     if (rr_component_arena_get_grid(
             arena,
             rr_fclamp(physical->x / arena->maze->grid_size, 0,
@@ -328,16 +423,16 @@ static void despawn_mob(EntityIdx entity, void *_simulation)
                       arena->maze->maze_dim - 1))
             ->player_count == 0)
     {
-        if (mob->ticks_to_despawn > 30 * 25)
-            mob->ticks_to_despawn = 30 * 25;
-        if (--mob->ticks_to_despawn == 0)
+        if (*timer > 30 * 25)
+            *timer = 30 * 25;
+        if (--*timer == 0)
         {
             mob->no_drop = 1;
             rr_simulation_request_entity_deletion(this, entity);
         }
     }
     else
-        mob->ticks_to_despawn = 30 * 25;
+        *timer = 30 * 25;
 }
 
 static float get_max_points(struct rr_simulation *this,
@@ -401,8 +496,11 @@ static void tick_maze(struct rr_simulation *this)
     for (uint32_t i = 0; i < arena->maze->maze_dim * arena->maze->maze_dim; ++i)
         arena->maze->maze[i].local_difficulty =
             arena->maze->maze[i].player_count = 0;
+    for (uint32_t i = 0; i < arena->maze->maze_dim * arena->maze->maze_dim; ++i)
+        arena->maze->maze[i].snail_difficulty = 0;
 
     rr_simulation_for_each_flower(this, this, count_flower_vicinity);
+    rr_simulation_for_each_mob(this, this, count_snail_vicinity);
     rr_simulation_for_each_mob(this, this, despawn_mob);
     for (uint32_t grid_x = 0; grid_x < arena->maze->maze_dim; grid_x += 2)
     {

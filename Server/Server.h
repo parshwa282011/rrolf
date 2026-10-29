@@ -19,6 +19,7 @@
 #include <Server/Client.h>
 #include <Server/Ctf.h>
 #include <Server/Simulation.h>
+#include <Server/Snail.h>
 #include <Server/Squad.h>
 
 #ifndef NDEBUG
@@ -46,6 +47,8 @@ struct rr_server
     struct rr_squad squads[RR_MAX_CLIENT_COUNT];
     // capture the flag, only used by the -DCTF build
     struct rr_ctf_match ctf;
+    // the Garden's snail run, only ticks in the Garden
+    struct rr_snail snail;
     uint8_t api_ws_ready;
     char server_alias[16];
 };

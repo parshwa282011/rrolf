@@ -252,6 +252,7 @@ extern struct rr_ui_element *rr_ui_in_game_player_hud_init(uint8_t);
 
 extern struct rr_ui_element *rr_ui_dev_panel_toggle_button_init();
 extern struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *);
+extern struct rr_ui_element *rr_ui_dev_tools_init(struct rr_game *);
 
 // PDEV builds only
 extern struct rr_ui_element *rr_ui_give_petals_toggle_button_init();

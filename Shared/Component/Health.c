@@ -22,6 +22,7 @@
 
 #include <Shared/Entity.h>
 #include <Shared/SimulationCommon.h>
+#include <Shared/Utilities.h>
 #include <Shared/pb.h>
 
 #define FOR_EACH_PUBLIC_FIELD                                                  \
@@ -81,7 +82,8 @@ void rr_component_health_do_damage(struct rr_simulation *simulation,
 {
     uint8_t no_reduction = this->flags & 4;
     this->flags &= ~4;
-    if (dev_cheat_enabled(simulation, this->parent_id, invulnerable))
+    if (this->invulnerable ||
+        dev_cheat_enabled(simulation, this->parent_id, invulnerable))
         return;
     if (this->health == 0)
         return;
@@ -107,6 +109,18 @@ void rr_component_health_do_damage(struct rr_simulation *simulation,
     }
     if (v < 0)
         v = 0;
+    if (this->nazar_charges > 0 && v >= this->health)
+    {
+        // a hit that would have killed: the evil eye takes it. Nearly all of it
+        // goes, and whatever is left can't kill either
+        v *= 1 - RR_NAZAR_BLOCK;
+        if (v >= this->health)
+            v = this->health > 1 ? this->health - 1 : 0;
+        // better nazars sometimes save you without using a charge up
+        if (rr_frand() * 100 < RR_NAZAR_CONSUME_PERCENT[this->nazar_rarity] &&
+            --this->nazar_charges == 0)
+            this->nazar_reload_ticks = 0;
+    }
     v = this->health - v;
     if (v < 0)
         v = 0;

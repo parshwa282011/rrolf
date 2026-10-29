@@ -59,6 +59,11 @@ struct rr_component_ai
     RR_SERVER_ONLY(uint8_t has_prediction;)
     RR_SERVER_ONLY(float aggro_range;)
     RR_SERVER_ONLY(struct rr_vector return_pos;)
+    // for the mobs of the garden update: the queen ant's egg timer, an egg's
+    // hatch timer, how long a digger ant has left to dig. special_cooldown is
+    // the pause before it digs again
+    RR_SERVER_ONLY(uint32_t special_ticks;)
+    RR_SERVER_ONLY(uint32_t special_cooldown;)
 };
 
 void rr_component_ai_init(struct rr_component_ai *, struct rr_simulation *);

@@ -38,6 +38,14 @@ struct rr_component_health
     RR_SERVER_ONLY(float secondary_damage;)
     RR_SERVER_ONLY(float damage_reduction;)
     RR_SERVER_ONLY(float damage_reduction_ratio;)
+    // the nazar petal: hits it still blocks, how many it holds, and the ticks
+    // spent recharging once they ran out (see petal_modifiers)
+    // takes no damage at all, a snail waiting for someone to find it
+    RR_SERVER_ONLY(uint8_t invulnerable;)
+    RR_SERVER_ONLY(uint8_t nazar_charges;)
+    RR_SERVER_ONLY(uint8_t nazar_max;)
+    RR_SERVER_ONLY(uint8_t nazar_rarity;) // the best nazar equipped
+    RR_SERVER_ONLY(uint16_t nazar_reload_ticks;)
     RR_SERVER_ONLY(float poison;)
     RR_SERVER_ONLY(uint16_t poison_ticks;)
     EntityIdx parent_id;

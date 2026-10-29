@@ -17,6 +17,7 @@
 #include <Server/EntityAllocation.h>
 #include <Server/Client.h>
 #include <Server/Simulation.h>
+#include <Server/System/AntHoleGen.h>
 #include <Server/System/BeehiveGen.h>
 #include <Server/Waves.h>
 
@@ -229,12 +230,29 @@ EntityIdx rr_simulation_alloc_mob(struct rr_simulation *this,
         ai->ai_type = rr_ai_type_neutral;
     if (rarity_id >= mob_data->ai_aggro_rarity)
         ai->ai_type = rr_ai_type_aggro;
+    if (mob_id == rr_mob_id_queen_ant)
+    {
+        // she stays around where she was put, and lays an egg every 8 s
+        ai->return_pos.x = x;
+        ai->return_pos.y = y;
+        ai->special_ticks = 4 * 25;
+    }
+    else if (mob_id == rr_mob_id_ant_egg)
+        ai->special_ticks = 6 * 25 + rand() % 75;
     if (mob_id == rr_mob_id_beehive)
     {
         struct rr_component_arena *arena =
             rr_simulation_add_arena(this, entity);
         rr_component_arena_set_biome(arena, rr_biome_id_beehive);
         rr_beehive_generate_layout(this, entity, arena, rarity_id, team_id);
+    }
+    else if (mob_id == rr_mob_id_ant_hole)
+    {
+        // same idea as the beehive: no health, entered by touching it
+        struct rr_component_arena *arena =
+            rr_simulation_add_arena(this, entity);
+        rr_component_arena_set_biome(arena, rr_biome_id_ant_hole);
+        rr_ant_hole_generate_layout(this, entity, arena, rarity_id, team_id);
     }
     else
     {

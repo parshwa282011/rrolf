@@ -341,7 +341,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     }
     this->experience = rr_binary_encoder_read_float64(encoder);
     this->pvp_points = rr_binary_encoder_read_varuint(encoder);
-    for (uint8_t biome = 0; biome < 2; ++biome)
+    for (uint8_t biome = 0; biome < RR_CLIENT_SAVED_BIOMES; ++biome)
     {
         this->checkpoint[biome] = rr_binary_encoder_read_uint8(encoder);
         if (this->checkpoint[biome] >= RR_MAZES[biome].checkpoint_count)
@@ -391,7 +391,7 @@ void rr_server_client_write_to_api(struct rr_server_client *this)
     rr_binary_encoder_write_nt_string(&encoder, this->rivet_account.uuid);
     rr_binary_encoder_write_float64(&encoder, this->experience);
     rr_binary_encoder_write_varuint(&encoder, this->pvp_points);
-    for (uint8_t biome = 0; biome < 2; ++biome)
+    for (uint8_t biome = 0; biome < RR_CLIENT_SAVED_BIOMES; ++biome)
         rr_binary_encoder_write_uint8(&encoder, this->checkpoint[biome]);
     for (uint8_t id = 1; id < rr_petal_id_max; ++id)
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)

@@ -158,13 +158,25 @@ static void mob_container_animate(struct rr_ui_element *this,
                               this->animation * game->renderer->scale);
 }
 
+// the mobs the gallery has a page for. The containers and the objectives of
+// the hives and holes are left out, they are not something you kill for loot
+static uint8_t in_gallery(uint8_t id)
+{
+    return id != rr_mob_id_beehive && id != rr_mob_id_beehive_core &&
+           id != rr_mob_id_ant_hole;
+}
+
 struct rr_ui_element *rr_ui_mob_container_init()
 {
-    struct rr_ui_element *this = rr_ui_2d_container_init(
-        rr_rarity_id_max, rr_mob_id_edmontosaurus + 1, 15, 15);
-    for (uint8_t id = 0; id <= rr_mob_id_edmontosaurus; ++id)
-        for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
-            rr_ui_container_add_element(this, mob_button_init(id, rarity));
+    uint8_t rows = 0;
+    for (uint8_t id = 0; id < rr_mob_id_max; ++id)
+        rows += in_gallery(id);
+    struct rr_ui_element *this =
+        rr_ui_2d_container_init(rr_rarity_id_max, rows, 15, 15);
+    for (uint8_t id = 0; id < rr_mob_id_max; ++id)
+        if (in_gallery(id))
+            for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
+                rr_ui_container_add_element(this, mob_button_init(id, rarity));
     rr_ui_set_background(this, 0x00000000);
     struct rr_ui_element *c = rr_ui_set_background(
         rr_ui_pad(rr_ui_set_justify(

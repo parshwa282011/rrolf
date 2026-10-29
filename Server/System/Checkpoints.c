@@ -51,7 +51,7 @@ static void system_for_each_function(EntityIdx entity, void *_captures)
             grid_y >= checkpoint.y * 2 &&
             grid_y < (checkpoint.y + checkpoint.h) * 2)
         {
-            if (arena->biome < 2 &&
+            if (arena->biome < RR_CLIENT_SAVED_BIOMES &&
                 player_info->client->checkpoint[arena->biome] != i)
             {
                 player_info->client->checkpoint[arena->biome] = i;

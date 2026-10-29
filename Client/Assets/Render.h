@@ -101,6 +101,16 @@ void rr_queen_bee_leg_draw(struct rr_renderer *);
 void rr_queen_bee_wing_draw(struct rr_renderer *);
 
 void rr_beehive_core_draw(struct rr_renderer *);
+
+// the garden update, Assets/Mob/Garden.c
+void rr_bush_draw(struct rr_renderer *);
+void rr_ant_hole_draw(struct rr_renderer *);
+void rr_ant_egg_draw(struct rr_renderer *);
+void rr_queen_ant_abdomen_draw(struct rr_renderer *);
+void rr_digger_ant_claw_draw(struct rr_renderer *);
+void rr_snail_body_draw(struct rr_renderer *);
+void rr_snail_shell_draw(struct rr_renderer *);
+void rr_snail_hole_draw(struct rr_renderer *);
 void rr_beehive_post_draw(struct rr_renderer *);
 
 void rr_spider_abdomen_draw(struct rr_renderer *);
@@ -119,9 +129,8 @@ void rr_hc_tile_1_draw(struct rr_renderer *);
 void rr_hc_tile_2_draw(struct rr_renderer *);
 void rr_hc_tile_3_draw(struct rr_renderer *);
 
-void rr_ga_tile_1_draw(struct rr_renderer *);
-void rr_ga_tile_2_draw(struct rr_renderer *);
-void rr_ga_tile_3_draw(struct rr_renderer *);
+void rr_ga_tile_draw(struct rr_renderer *);
+void rr_ah_tile_draw(struct rr_renderer *);
 
 void rr_oc_tile_1_draw(struct rr_renderer *);
 void rr_oc_tile_2_draw(struct rr_renderer *);

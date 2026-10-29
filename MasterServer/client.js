@@ -39,6 +39,7 @@ class GameClient
         encoder.WriteCount(user.score);
         encoder.WriteUint8(user.checkpoint.hell_creek);
         encoder.WriteUint8(user.checkpoint.pvp);
+        encoder.WriteUint8((user.checkpoint.garden || 0));
         for (const petal of Object.keys(user.petals))
         {
             if (!(user.petals[petal] > 0))

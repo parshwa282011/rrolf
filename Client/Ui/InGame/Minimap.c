@@ -22,6 +22,7 @@
 
 #include <Client/Assets/RenderFunctions.h>
 #include <Client/Ctf.h>
+#include <Client/Snail.h>
 #include <Client/Game.h>
 #include <Client/Renderer/Renderer.h>
 #include <Client/Simulation.h>
@@ -30,7 +31,9 @@
 
 struct rr_renderer minimap;
 
-static uint8_t previous_biome = 255;
+// what the image was drawn for: the biome, and for a hive or hole which of the
+// pregenerated sizes it is
+static uint16_t previous_biome = 0xffff;
 // pixels of the minimap image per maze cell, set when it is drawn
 static float cell_px = 1;
 
@@ -47,9 +50,9 @@ static float to_box(float world, float view_center, float span, float size)
 }
 
 #define DRAW_MINIMAP(renderer, grid)                                           \
-    if (arena->biome != previous_biome)                                        \
+    if (arena->biome * 16 + arena->size_tier != previous_biome)                \
     {                                                                          \
-        previous_biome = arena->biome;                                         \
+        previous_biome = arena->biome * 16 + arena->size_tier;                 \
         float s = floorf(this->abs_width / maze_dim);                          \
         if (s < 2)                                                             \
             s = 2;                                                             \
@@ -125,7 +128,8 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     float grid_size;
     uint32_t maze_dim;
     struct rr_maze_grid *grid;
-    if (arena->biome == rr_biome_id_beehive)
+    if (arena->biome == rr_biome_id_beehive ||
+        arena->biome == rr_biome_id_ant_hole)
     {
         struct rr_maze_declaration *tier =
             &RR_BEEHIVE_MAZE_TIERS[arena->size_tier];
@@ -172,6 +176,8 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     rr_renderer_set_line_width(renderer, 2);
     if (arena->biome == rr_biome_id_ctf)
         rr_ctf_minimap_overlay(game, this->abs_width, view_x, view_y, span);
+    if (arena->biome == rr_biome_id_garden)
+        rr_snail_minimap_overlay(game, this->abs_width, view_x, view_y, span);
     if (arena->biome == rr_biome_id_pvp)
     {
         rr_renderer_set_fill(renderer, 0xffff0000);
@@ -254,10 +260,10 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
 
 static void minimap_redraw(void *captures)
 {
-    previous_biome = 255;
+    previous_biome = 0xffff;
 }
 
-void rr_minimap_invalidate() { previous_biome = 255; }
+void rr_minimap_invalidate() { previous_biome = 0xffff; }
 
 struct rr_ui_element *rr_ui_minimap_init(struct rr_game *game)
 {

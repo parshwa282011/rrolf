@@ -143,4 +143,18 @@ void rr_component_flower_render(EntityIdx entity, struct rr_game *game,
             rr_renderer_context_state_free(renderer, &state);
         }
     }
+    // one small eye below the flower for every hit a nazar still blocks
+    if (flower->nazar_charges && !flower->dead)
+    {
+        float width = 9.0f;
+        float start = -(flower->nazar_charges - 1) * width / 2;
+        for (uint8_t i = 0; i < flower->nazar_charges; ++i)
+        {
+            rr_renderer_context_state_init(renderer, &state);
+            rr_renderer_translate(renderer, start + i * width, 29);
+            rr_renderer_scale(renderer, 0.42f);
+            rr_renderer_draw_petal(renderer, rr_petal_id_nazar, 0);
+            rr_renderer_context_state_free(renderer, &state);
+        }
+    }
 }

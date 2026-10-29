@@ -196,7 +196,8 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
     data->data = tooltip_data;
 
     if (id != rr_petal_id_crest && id != rr_petal_id_third_eye &&
-        id != rr_petal_id_lightning && id != rr_petal_id_fireball)
+        id != rr_petal_id_lightning && id != rr_petal_id_fireball &&
+        id != rr_petal_id_nazar)
         rr_ui_container_add_element(
             this,
             rr_ui_set_justify(rr_ui_h_container_init(
@@ -205,7 +206,8 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
                                   rr_ui_text_init(hp, 12, 0xffffffff), NULL),
                               -1, 0));
     if (id != rr_petal_id_shell && id != rr_petal_id_crest &&
-        id != rr_petal_id_third_eye && id != rr_petal_id_meat)
+        id != rr_petal_id_third_eye && id != rr_petal_id_meat &&
+        id != rr_petal_id_nazar)
         rr_ui_container_add_element(
             this,
             rr_ui_set_justify(rr_ui_h_container_init(
@@ -351,6 +353,42 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
                                   rr_ui_text_init("Heal: ", 12, 0xffffff44),
                                   rr_ui_text_init(extra, 12, 0xffffffff), NULL),
                               -1, 0));
+    }
+    else if (id == rr_petal_id_nazar)
+    {
+        char *extra = malloc((sizeof *extra) * 16);
+        sprintf(extra, "%u killing hits", RR_NAZAR_CHARGES);
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Saves you from: ", 12, 0xff6fb4ff),
+                          rr_ui_text_init(extra, 12, 0xffffffff), NULL),
+                      -1, 0));
+        extra = malloc((sizeof *extra) * 8);
+        sprintf(extra, "%.0f%%", RR_NAZAR_CONSUME_PERCENT[rarity]);
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Chance a save is used up: ", 12,
+                                          0xffafafaf),
+                          rr_ui_text_init(extra, 12, 0xffffffff), NULL),
+                      -1, 0));
+        extra = malloc((sizeof *extra) * 8);
+        sprintf(extra, "%.1fs", RR_NAZAR_RELOAD_TICKS[rarity] / 25.0f);
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_h_container_init(
+                          rr_ui_container_init(), 0, 0,
+                          rr_ui_text_init("Recharge: ", 12, 0xffafafaf),
+                          rr_ui_text_init(extra, 12, 0xffffffff), NULL),
+                      -1, 0));
+        rr_ui_container_add_element(
+            this, rr_ui_set_justify(
+                      rr_ui_text_init("Each extra Nazar adds a save", 12,
+                                      0xffafafaf),
+                      -1, 0));
     }
     else if (id == rr_petal_id_bone)
     {

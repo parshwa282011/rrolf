@@ -28,6 +28,7 @@
 
 #include <Client/Assets/Init.h>
 #include <Client/Ctf.h>
+#include <Client/Snail.h>
 #include <Client/Assets/RenderFunctions.h>
 #include <Client/DOM.h>
 #include <Client/InputData.h>
@@ -429,8 +430,10 @@ void rr_game_init(struct rr_game *this)
                 rr_ui_h_container_init(rr_ui_container_init(), 10, 10,
                     rr_ui_settings_toggle_button_init(),
                     rr_tutorial_target(this, rr_tutorial_target_account, rr_ui_account_toggle_button_init()),
+                    // the squads, and for dev accounts the cheats
                     rr_ui_dev_panel_toggle_button_init(),
 #ifdef PDEV
+                    // the cheats are behind the + button here, with a PIN
                     rr_ui_give_petals_toggle_button_init(),
 #endif
                     rr_ui_ctf_toggle_button_init(),
@@ -450,8 +453,9 @@ void rr_game_init(struct rr_game *this)
                     rr_tutorial_target(this, rr_tutorial_target_cg_login, rr_ui_crazygames_login_button_init()),
                     rr_ui_crazygames_user_init(this),
                     rr_ui_gardn_toggle_button_init(),
-                    rr_ui_github_toggle_button_init(),
-                    rr_ui_discord_toggle_button_init(),
+                    // the Github and Discord buttons are off for now
+                    // rr_ui_github_toggle_button_init(),
+                    // rr_ui_discord_toggle_button_init(),
                     NULL
                 ),
             1, -1),
@@ -516,6 +520,7 @@ void rr_game_init(struct rr_game *this)
                                 rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                                     rr_ui_biome_button_init("Hell Creek", 0xff990000, rr_biome_id_hell_creek),
                                     rr_ui_biome_button_init("PvP", 0xff3a6ee0, rr_biome_id_pvp),
+                                    rr_ui_biome_button_init("Garden", 0xff3f9b3a, rr_biome_id_garden),
                                     rr_ui_biome_button_init("CTF", 0xff2f9e44, rr_biome_id_ctf),
                                     NULL
                                 ),
@@ -612,6 +617,7 @@ void rr_game_init(struct rr_game *this)
     );
     
     rr_ui_container_add_element(this->window, rr_ui_ctf_hud_init(this));
+    rr_ui_container_add_element(this->window, rr_ui_snail_hud_init(this));
     rr_ui_container_add_element(this->window, rr_ui_ctf_loadout_init(this));
     rr_ui_container_add_element(this->window, rr_ui_finished_game_screen_init());
     rr_ui_container_add_element(this->window, rr_ui_loot_container_init());
@@ -1329,6 +1335,9 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
         case rr_clientbound_ctf_state:
             rr_ctf_client_read_state(this, &encoder);
             break;
+        case rr_clientbound_snail_state:
+            rr_snail_client_read_state(this, &encoder);
+            break;
         case rr_clientbound_leaderboard_update:
         {
             this->leaderboard_count =
@@ -1573,10 +1582,28 @@ static void write_serverbound_packet_desktop(struct rr_game *this)
     }
 }
 
+void rr_dev_cheat_begin(struct rr_game *this, struct proto_bug *encoder,
+                        uint8_t type)
+{
+    proto_bug_init(encoder, RR_OUTGOING_PACKET);
+    proto_bug_write_uint8(encoder, this->socket.quick_verification, "qv");
+    proto_bug_write_uint8(encoder, rr_serverbound_dev_cheat, "header");
+    proto_bug_write_uint8(encoder, type, "cheat type");
+#ifdef PDEV
+    proto_bug_write_string(encoder, this->dev_pin, sizeof this->dev_pin, "pin");
+#endif
+}
+
 void rr_write_dev_cheat_packets(struct rr_game *this, uint8_t force)
 {
+#ifdef PDEV
+    // the server wants the PIN for these, which only the dev panel has
+    if (!this->dev_unlocked)
+        return;
+#else
     if (!this->is_dev)
         return;
+#endif
     uint8_t cheat_flags = 0;
     cheat_flags |= this->dev_cheats.invisible << 0;
     cheat_flags |= this->dev_cheats.invulnerable << 1;
@@ -1588,10 +1615,7 @@ void rr_write_dev_cheat_packets(struct rr_game *this, uint8_t force)
     {
         this->dev_cheats.flags_last_tick = cheat_flags;
         struct proto_bug encoder;
-        proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-        proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
-        proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat, "header");
-        proto_bug_write_uint8(&encoder, rr_dev_cheat_flags, "cheat type");
+        rr_dev_cheat_begin(this, &encoder, rr_dev_cheat_flags);
         proto_bug_write_uint8(&encoder, cheat_flags, "cheat flags");
         rr_websocket_send(&this->socket, encoder.current - encoder.start);
     }
@@ -1601,10 +1625,7 @@ void rr_write_dev_cheat_packets(struct rr_game *this, uint8_t force)
         this->dev_cheats.speed_percent_last_tick =
             this->dev_cheats.speed_percent;
         struct proto_bug encoder;
-        proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-        proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
-        proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat, "header");
-        proto_bug_write_uint8(&encoder, rr_dev_cheat_speed_percent, "cheat type");
+        rr_dev_cheat_begin(this, &encoder, rr_dev_cheat_speed_percent);
         proto_bug_write_float32(&encoder, this->dev_cheats.speed_percent,
                                 "speed percent");
         rr_websocket_send(&this->socket, encoder.current - encoder.start);
@@ -1615,10 +1636,7 @@ void rr_write_dev_cheat_packets(struct rr_game *this, uint8_t force)
         this->dev_cheats.fov_percent_last_tick =
             this->dev_cheats.fov_percent;
         struct proto_bug encoder;
-        proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-        proto_bug_write_uint8(&encoder, this->socket.quick_verification, "qv");
-        proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat, "header");
-        proto_bug_write_uint8(&encoder, rr_dev_cheat_fov_percent, "cheat type");
+        rr_dev_cheat_begin(this, &encoder, rr_dev_cheat_fov_percent);
         proto_bug_write_float32(&encoder, this->dev_cheats.fov_percent,
                                 "fov percent");
         rr_websocket_send(&this->socket, encoder.current - encoder.start);
@@ -1690,6 +1708,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             rr_component_arena_render(player_info->arena, this,
                                       this->simulation);
             rr_ctf_client_render_world(this);
+            rr_snail_client_render_world(this);
 
 #define render_component(COMPONENT, filter)                                    \
     for (uint32_t i = 0; i < this->simulation->COMPONENT##_count; ++i)         \
@@ -1767,7 +1786,7 @@ void rr_game_tick(struct rr_game *this, float delta)
                     rr_renderer_draw_tile_hell_creek(this->renderer,
                                                      tile_index);
                 else
-                    rr_renderer_draw_tile_garden(this->renderer, tile_index);
+                    rr_renderer_draw_tile_garden(this->renderer);
                 rr_renderer_context_state_free(this->renderer, &state);
             }
         }
@@ -1877,6 +1896,7 @@ void rr_game_tick(struct rr_game *this, float delta)
     rr_platform_tick(this, delta);
     rr_auth_tick(this, delta);
     rr_ctf_client_tick(this, delta);
+    rr_snail_client_tick(this, delta);
     rr_tutorial_tick(this, delta);
     rr_game_crafting_tick(this, delta);
     rr_game_autocraft_tick(this, delta);
@@ -2036,6 +2056,7 @@ void rr_game_connect_socket(struct rr_game *this)
     this->socket_pending = 1;
     this->is_dev = 0;
     rr_ctf_client_reset(this);
+    rr_snail_client_reset(this);
     memset(&this->crafting_data, 0, sizeof this->crafting_data);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
         for (uint32_t j = 0; j < RR_SQUAD_MEMBER_COUNT; ++j)

@@ -155,6 +155,7 @@ static void teleport(struct bot *b, float x, float y)
 {
     struct proto_bug e = begin(b, rr_serverbound_dev_cheat);
     proto_bug_write_uint8(&e, rr_dev_cheat_teleport, "cheat type");
+    proto_bug_write_string(&e, "09282011", 16, "pin"); // every cheat has the PIN
     proto_bug_write_float32(&e, x, "teleport x");
     proto_bug_write_float32(&e, y, "teleport y");
     finish(b, &e);
@@ -444,7 +445,7 @@ static void pump(double seconds)
 
 int main(int argc, char **argv)
 {
-    int port = argc > 1 ? atoi(argv[1]) : 1236;
+    int port = argc > 1 ? atoi(argv[1]) : 1237;
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof info);
     info.port = CONTEXT_PORT_NO_LISTEN;
@@ -623,7 +624,7 @@ int main(int argc, char **argv)
         pump(1.0); // the PIN has a cooldown
         e = begin(B, rr_serverbound_dev_cheat);
         proto_bug_write_uint8(&e, rr_dev_cheat_give_petals, "cheat type");
-        proto_bug_write_string(&e, "2011", 16, "pin");
+        proto_bug_write_string(&e, "09282011", 16, "pin");
         proto_bug_write_uint8(&e, rr_petal_id_stinger, "id");
         proto_bug_write_uint8(&e, rr_rarity_id_epic, "rarity");
         proto_bug_write_varuint(&e, 7, "count");

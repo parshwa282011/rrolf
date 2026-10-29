@@ -28,6 +28,15 @@
 #include <Shared/Utilities.h>
 #include <Shared/pb.h>
 
+// A dev account's toggles start on. In a PDEV build anybody who knows the PIN
+// has them, and they all start off: "No grid influence" alone stops mobs from
+// spawning around you
+#ifdef PDEV
+#define DEV_TOGGLE_DEFAULT 0
+#else
+#define DEV_TOGGLE_DEFAULT 1
+#endif
+
 static uint8_t dev_squad_panel_container_should_show(struct rr_ui_element *this,
                                                      struct rr_game *game)
 {
@@ -61,10 +70,12 @@ static uint8_t dev_squad_panel_button_should_show(struct rr_ui_element *this,
     return 0;
 }
 
+#ifndef PDEV
 static uint8_t dev_tools_should_show(struct rr_ui_element *this, struct rr_game *game)
 {
     return game->is_dev;
 }
+#endif
 
 static void dev_squad_panel_container_animate(struct rr_ui_element *this,
                                               struct rr_game *game)
@@ -188,10 +199,7 @@ static void summon_mob_button_on_event(struct rr_ui_element *this,
             if (rarity == rr_rarity_id_max)
                 rarity = rand() % rr_rarity_id_max;
             struct proto_bug encoder;
-            proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-            proto_bug_write_uint8(&encoder, game->socket.quick_verification, "qv");
-            proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat, "header");
-            proto_bug_write_uint8(&encoder, rr_dev_cheat_summon_mob, "cheat type");
+            rr_dev_cheat_begin(game, &encoder, rr_dev_cheat_summon_mob);
             proto_bug_write_uint8(&encoder, id, "id");
             proto_bug_write_uint8(&encoder, rarity, "rarity");
             proto_bug_write_uint8(&encoder, 1, "count");
@@ -214,10 +222,7 @@ static void kill_mobs_button_on_event(struct rr_ui_element *this,
         if (game->input_data->mouse_buttons_up_this_tick & 1)
         {
             struct proto_bug encoder;
-            proto_bug_init(&encoder, RR_OUTGOING_PACKET);
-            proto_bug_write_uint8(&encoder, game->socket.quick_verification, "qv");
-            proto_bug_write_uint8(&encoder, rr_serverbound_dev_cheat, "header");
-            proto_bug_write_uint8(&encoder, rr_dev_cheat_kill_mobs, "cheat type");
+            rr_dev_cheat_begin(game, &encoder, rr_dev_cheat_kill_mobs);
             rr_websocket_send(&game->socket, encoder.current - encoder.start);
         }
         game->cursor = rr_game_cursor_pointer;
@@ -225,6 +230,43 @@ static void kill_mobs_button_on_event(struct rr_ui_element *this,
     }
     else
         data->clickable = 0;
+}
+
+// Starts a snail of the rarity of the summon slider. It only exists in the
+// Garden, so the button only works there, and pressing it again starts another
+// snail (up to RR_SNAIL_MAX_RUNS - 1 extra ones at once)
+static void snail_run_button_on_event(struct rr_ui_element *this,
+                                      struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    if (game->simulation_ready && game->selected_biome == rr_biome_id_garden)
+    {
+        if (game->input_data->mouse_buttons_up_this_tick & 1)
+        {
+            uint8_t rarity = game->dev_cheats.summon_mob_rarity * rr_rarity_id_max;
+            if (rarity == rr_rarity_id_max)
+                rarity = rand() % rr_rarity_id_max;
+            struct proto_bug encoder;
+            rr_dev_cheat_begin(game, &encoder, rr_dev_cheat_snail_run);
+            proto_bug_write_uint8(&encoder, rarity, "snail rarity");
+            rr_websocket_send(&game->socket, encoder.current - encoder.start);
+        }
+        game->cursor = rr_game_cursor_pointer;
+        data->clickable = 1;
+    }
+    else
+        data->clickable = 0;
+}
+
+// grey outside the Garden
+static void snail_run_button_animate(struct rr_ui_element *this,
+                                     struct rr_game *game)
+{
+    rr_ui_default_animate(this, game);
+    if (!game->simulation_ready || game->selected_biome != rr_biome_id_garden)
+        rr_ui_set_background(this, 0x80999999);
+    else
+        rr_ui_set_background(this, 0x80ffffff);
 }
 
 static void summon_mob_button_animate(struct rr_ui_element *this,
@@ -266,6 +308,15 @@ static void summon_mob_rarity_slider_animate(struct rr_ui_element *this,
     static char name[16];
     strcpy(name, rarity == rr_rarity_id_max ? "Random" : RR_RARITY_NAMES[rarity]);
     sprintf(game->dev_cheats.summon_mob_rarity_text, "%u (%s)", rarity, name);
+}
+
+static struct rr_ui_element *snail_run_button_init()
+{
+    struct rr_ui_element *element =
+        rr_ui_labeled_button_init("Snail Run (Garden only)", 30, 0);
+    element->on_event = snail_run_button_on_event;
+    element->animate = snail_run_button_animate;
+    return element;
 }
 
 static struct rr_ui_element *summon_mob_button_init()
@@ -325,7 +376,7 @@ static struct rr_ui_element *invisible_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.invisible),
             rr_ui_text_init("Invisible", 16, 0xffffffff), NULL);
-    game->dev_cheats.invisible = 1;
+    game->dev_cheats.invisible = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -336,7 +387,7 @@ static struct rr_ui_element *invulnerable_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.invulnerable),
             rr_ui_text_init("Invulnerable", 16, 0xffffffff), NULL);
-    game->dev_cheats.invulnerable = 1;
+    game->dev_cheats.invulnerable = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -347,7 +398,7 @@ static struct rr_ui_element *no_aggro_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.no_aggro),
             rr_ui_text_init("No aggro", 16, 0xffffffff), NULL);
-    game->dev_cheats.no_aggro = 1;
+    game->dev_cheats.no_aggro = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -358,7 +409,7 @@ static struct rr_ui_element *no_wall_collision_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.no_wall_collision),
             rr_ui_text_init("No wall collision", 16, 0xffffffff), NULL);
-    game->dev_cheats.no_wall_collision = 1;
+    game->dev_cheats.no_wall_collision = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -369,7 +420,7 @@ static struct rr_ui_element *no_collision_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.no_collision),
             rr_ui_text_init("No collision", 16, 0xffffffff), NULL);
-    game->dev_cheats.no_collision = 1;
+    game->dev_cheats.no_collision = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -380,7 +431,7 @@ static struct rr_ui_element *no_grid_influence_toggle_init(struct rr_game *game)
             rr_ui_container_init(), 0, 10,
             rr_ui_toggle_box_init(&game->dev_cheats.no_grid_influence),
             rr_ui_text_init("No grid influence", 16, 0xffffffff), NULL);
-    game->dev_cheats.no_grid_influence = 1;
+    game->dev_cheats.no_grid_influence = DEV_TOGGLE_DEFAULT;
     return element;
 }
 
@@ -424,9 +475,12 @@ static uint8_t dev_tools_squad_should_show(struct rr_ui_element *this,
     return squad_container->should_show(squad_container, game);
 }
 
-struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
+// the cheats: summon mobs, kill mobs, start a snail run, the toggles, speed and
+// FOV. The dev panel below has them for dev accounts, and in a PDEV build the
+// panel behind the + button (GivePetals.c) has them for anyone who knows the PIN
+struct rr_ui_element *rr_ui_dev_tools_init(struct rr_game *game)
 {
-    struct rr_ui_element *dev_tools = rr_ui_v_container_init(
+    return rr_ui_v_container_init(
         rr_ui_container_init(), 10, 10,
         rr_ui_h_container_init(
             rr_ui_container_init(), 0, 10,
@@ -435,7 +489,12 @@ struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
             summon_mob_rarity_slider_init(game),
             NULL
         ),
-        kill_mobs_button_init(),
+        rr_ui_h_container_init(
+            rr_ui_container_init(), 0, 10,
+            kill_mobs_button_init(),
+            snail_run_button_init(),
+            NULL
+        ),
         rr_ui_set_justify(invisible_toggle_init(game), -1, -1),
         rr_ui_set_justify(invulnerable_toggle_init(game), -1, -1),
         rr_ui_set_justify(no_aggro_toggle_init(game), -1, -1),
@@ -445,7 +504,17 @@ struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
         rr_ui_set_justify(speed_slider_init(game), 1, 1),
         rr_ui_set_justify(fov_slider_init(game), 1, 1),
         NULL);
+}
+
+struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
+{
+#ifdef PDEV
+    // the cheats are in the panel behind the + button, which wants a PIN
+    struct rr_ui_element *dev_tools = rr_ui_static_space_init(0);
+#else
+    struct rr_ui_element *dev_tools = rr_ui_dev_tools_init(game);
     dev_tools->should_show = dev_tools_should_show;
+#endif
     struct rr_ui_element *inner = rr_ui_v_container_init(
         rr_ui_container_init(), 10, 10, NULL);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)

@@ -7,7 +7,7 @@
 # runs the bot.
 #
 # Usage: tools/ctf/run-bot-test.sh [work dir]
-#   needs the ports 55554 and 1236 to be free
+#   needs the ports 55554 and 1237 to be free
 
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,7 +18,7 @@ BREW_PREFIX="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
 export CPATH="$BREW_PREFIX/opt/curl/include:$BREW_PREFIX/include${CPATH:+:$CPATH}"
 export LIBRARY_PATH="$BREW_PREFIX/opt/curl/lib:$BREW_PREFIX/lib${LIBRARY_PATH:+:$LIBRARY_PATH}"
 
-for port in 55554 1236; do
+for port in 55554 1237; do
     if nc -z localhost "$port" 2>/dev/null; then
         echo "port $port is in use, stop whatever runs there first" >&2
         exit 2
@@ -47,10 +47,10 @@ echo "==> capture the flag server, phases shortened"
 (cd "$WORK/server" && exec env RR_CTF_PLACEMENT_SECONDS=3 RR_CTF_FARM_SECONDS=4 RR_CTF_ENDED_SECONDS=2 \
     ./rrolf-server > "$WORK/server.log" 2>&1) &
 echo $! > "$WORK/server.pid"
-for _ in $(seq 1 40); do nc -z localhost 1236 2>/dev/null && break; sleep 0.25; done
+for _ in $(seq 1 40); do nc -z localhost 1237 2>/dev/null && break; sleep 0.25; done
 
 echo "==> bots"
-"$WORK/bot" 1236
+"$WORK/bot" 1237
 status=$?
 
 echo "server: $(ps -o %cpu=,rss= -p "$(cat "$WORK/server.pid")" | awk '{printf "%s%% cpu, %d MB", $1, $2 / 1024}')"

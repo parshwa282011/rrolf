@@ -1,6 +1,6 @@
 # Capture the flag
 
-A minigame on its own server (`-DCTF`, port 1236, `ctf-game.parshwa.blog`). Nothing is saved: everyone
+A minigame on its own server (`-DCTF`, port 1237, `ctf-game.parshwa.blog`). Nothing is saved: everyone
 starts at level 30 (6 slots) with 5 Epic Basic and 1 Epic Azalea and the account is untouched. The
 Give Petals button (PIN) works in a match, the server is built with `-DPDEV`.
 
@@ -57,7 +57,7 @@ tools/ctf/run-bot-test.sh              two bots play a whole match against a rea
 ```
 
 The bot test builds a `-DCTF_TEST` server (it lets a client teleport, never deploy it) and runs a copy of
-the master server, so the real accounts database is not touched. Ports 55554 and 1236 have to be free.
+the master server, so the real accounts database is not touched. Ports 55554 and 1237 have to be free.
 
 ## Trying it by hand
 

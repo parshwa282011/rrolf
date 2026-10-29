@@ -640,6 +640,9 @@ static void petal_modifiers(struct rr_simulation *simulation,
     float fov_bonus = 0;
     uint8_t crest_count = 0;
     uint8_t third_eye_count = 0;
+    uint8_t nazar_max = 0;
+    uint16_t nazar_reload = 0;
+    uint8_t nazar_rarity = 0;
     for (uint64_t outer = 0; outer < player_info->slot_count; ++outer)
     {
         struct rr_component_player_info_petal_slot *slot =
@@ -671,6 +674,16 @@ static void petal_modifiers(struct rr_simulation *simulation,
             fov_bonus += (1 / (1 - 0.1 * slot->rarity) - 1) *
                              crest_diminish_factor;
             crest_diminish_factor *= 0.5;
+        }
+        else if (data->id == rr_petal_id_nazar)
+        {
+            // one charge per nazar, recharging as fast as the best one allows
+            ++nazar_max;
+            if (slot->rarity > nazar_rarity)
+                nazar_rarity = slot->rarity;
+            if (nazar_reload == 0 ||
+                RR_NAZAR_RELOAD_TICKS[slot->rarity] < nazar_reload)
+                nazar_reload = RR_NAZAR_RELOAD_TICKS[slot->rarity];
         }
         else if (data->id == rr_petal_id_droplet)
             ++rot_count;
@@ -704,8 +717,26 @@ static void petal_modifiers(struct rr_simulation *simulation,
             }
         }
     }
+    // charges: a nazar equipped (or one more of them) starts charged, one taken
+    // out takes its charge with it. Once they ran out they come back together
+    uint8_t charges_max = nazar_max ? RR_NAZAR_CHARGES + nazar_max - 1 : 0;
+    if (health->nazar_max != charges_max)
+    {
+        if (health->nazar_charges == health->nazar_max)
+            health->nazar_charges = charges_max;
+        health->nazar_max = charges_max;
+    }
+    health->nazar_rarity = nazar_rarity;
+    if (health->nazar_charges > health->nazar_max)
+        health->nazar_charges = health->nazar_max;
+    if (health->nazar_max > 0 && health->nazar_charges == 0)
+    {
+        if (++health->nazar_reload_ticks >= nazar_reload)
+            health->nazar_charges = health->nazar_max;
+    }
     rr_component_flower_set_crest_count(flower, crest_count);
     rr_component_flower_set_third_eye_count(flower, third_eye_count);
+    rr_component_flower_set_nazar_charges(flower, health->nazar_charges);
     player_info->global_rotation +=
         to_rotate * ((rot_count % 3) ? (rot_count % 3 == 2) ? 0 : -1 : 1);
     rr_component_player_info_set_camera_fov(

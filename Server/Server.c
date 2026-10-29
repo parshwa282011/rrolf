@@ -325,8 +325,8 @@ void rr_server_init(struct rr_server *this)
     RR_FOR_EACH_COMPONENT;
 #undef XX
     memset(this, 0, sizeof *this);
-#ifndef RIVET_BUILD
-    // RR_GLOBAL_BIOME = rr_biome_id_garden;
+#ifdef GARDEN
+    RR_GLOBAL_BIOME = rr_biome_id_garden;
 #endif
 #ifdef PVP
     RR_GLOBAL_BIOME = rr_biome_id_pvp;
@@ -338,6 +338,7 @@ void rr_server_init(struct rr_server *this)
     rr_simulation_init(&this->simulation);
     this->simulation.server = this;
     rr_ctf_match_reset(&this->ctf);
+    rr_snail_init(this);
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
         rr_squad_init(&this->squads[i], this, i);
 }
@@ -1235,11 +1236,52 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
 #endif
         case rr_serverbound_dev_cheat:
         {
-            switch (proto_bug_read_uint8(&encoder, "cheat type"))
+            uint8_t cheat_type = proto_bug_read_uint8(&encoder, "cheat type");
+            uint8_t authorized = client->dev;
+#ifdef PDEV
+            // In a PDEV build every cheat carries the PIN and is allowed to
+            // whoever knows it, whatever the account. RR_DEV_PIN overrides 09282011.
+            // A right PIN costs nothing, wrong guesses are one a second and
+            // five of them disconnect
+            {
+                char pin[16] = {0};
+                proto_bug_read_string(&encoder, pin, sizeof pin - 1, "pin");
+                char const *expected = getenv("RR_DEV_PIN");
+                if (expected == NULL || expected[0] == 0)
+                    expected = "09282011";
+                // compare every byte so the time taken does not leak the PIN
+                uint8_t mismatch = strlen(expected) != strlen(pin);
+                for (uint32_t k = 0; pin[k] && expected[k]; ++k)
+                    mismatch |= pin[k] != expected[k];
+                authorized = !mismatch;
+                if (authorized)
+                    client->dev_pin_failures = 0;
+                else if (client->ticks_to_next_dev_pin == 0)
+                {
+                    client->ticks_to_next_dev_pin = 25;
+                    printf("[dev] wrong pin from %s (%s)\n",
+                           client->rivet_account.uuid, client->ip_address);
+                    if (++client->dev_pin_failures >= 5)
+                    {
+                        lws_close_reason(ws, LWS_CLOSE_STATUS_POLICY_VIOLATION,
+                                         (uint8_t *)"too many tries",
+                                         sizeof "too many tries" - 1);
+                        client->pending_kick = 1;
+                        return -1;
+                    }
+                    rr_server_client_write_account_reply(
+                        client, 0, rr_account_request_dev_unlock, "Wrong PIN.",
+                        "", "", "");
+                }
+                if (!authorized)
+                    break;
+            }
+#endif
+            switch (cheat_type)
             {
             case rr_dev_cheat_summon_mob:
             {
-                if (!client->dev)
+                if (!authorized)
                 {
                     puts("summon mob request by non-dev");
                     break;
@@ -1278,14 +1320,25 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                             pos.x, pos.y, id, rarity, rr_simulation_team_id_mobs);
                         struct rr_component_mob *mob =
                             rr_simulation_get_mob(&this->simulation, e);
-                        mob->no_drop = no_drop;
+                        //mob->no_drop = no_drop;
                         break;
                     }
                 break;
             }
+            case rr_dev_cheat_snail_run:
+            {
+                if (!authorized)
+                {
+                    puts("snail run request by non-dev");
+                    break;
+                }
+                rr_snail_dev_start(
+                    this, proto_bug_read_uint8(&encoder, "snail rarity"));
+                break;
+            }
             case rr_dev_cheat_kill_mobs:
             {
-                if (!client->dev)
+                if (!authorized)
                 {
                     puts("kill mobs request by non-dev");
                     break;
@@ -1302,7 +1355,7 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             }
             case rr_dev_cheat_flags:
             {
-                if (!client->dev)
+                if (!authorized)
                 {
                     puts("cheat flags request by non-dev");
                     break;
@@ -1328,7 +1381,7 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             }
             case rr_dev_cheat_speed_percent:
             {
-                if (!client->dev)
+                if (!authorized)
                 {
                     puts("speed percent request by non-dev");
                     break;
@@ -1341,7 +1394,7 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             }
             case rr_dev_cheat_fov_percent:
             {
-                if (!client->dev)
+                if (!authorized)
                 {
                     puts("fov percent request by non-dev");
                     break;
@@ -1370,48 +1423,36 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             }
 #endif
 #ifdef PDEV
+            case rr_dev_cheat_unlock:
+            {
+                // the PIN was right, or we would not be here. It also fills the
+                // mob gallery: at least one of every mob at every rarity, kept
+                // and saved with the account (never lowers a count)
+                uint8_t filled = 0;
+                for (uint8_t id = 0; id < rr_mob_id_max; ++id)
+                    for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
+                        if (client->mob_gallery[id][rarity] == 0)
+                        {
+                            client->mob_gallery[id][rarity] = 1;
+                            filled = 1;
+                        }
+                if (filled)
+                {
+                    rr_server_client_write_to_api(client);
+                    rr_server_client_write_account(client);
+                }
+                rr_server_client_write_account_reply(
+                    client, 1, rr_account_request_dev_unlock,
+                    filled ? "Dev tools unlocked. Gallery filled."
+                           : "Dev tools unlocked.",
+                    "", "", "");
+                break;
+            }
             case rr_dev_cheat_give_petals:
             {
-                // gated by a PIN checked here, not by client->dev, so any
-                // account that knows it can use it. RR_DEV_PIN overrides it.
-                char pin[16] = {0};
-                proto_bug_read_string(&encoder, pin, sizeof pin - 1, "pin");
                 uint8_t id = proto_bug_read_uint8(&encoder, "id");
                 uint8_t rarity = proto_bug_read_uint8(&encoder, "rarity");
                 uint64_t count = proto_bug_read_varuint(&encoder, "count");
-                if (client->ticks_to_next_dev_pin > 0)
-                {
-                    rr_server_client_write_account_reply(
-                        client, 0, rr_account_request_dev_petals,
-                        "Wait a second.", "", "", "");
-                    break;
-                }
-                client->ticks_to_next_dev_pin = 25;
-                char const *expected = getenv("RR_DEV_PIN");
-                if (expected == NULL || expected[0] == 0)
-                    expected = "2011";
-                // compare every byte so the time taken does not leak the PIN
-                uint8_t mismatch = strlen(expected) != strlen(pin);
-                for (uint32_t k = 0; pin[k] && expected[k]; ++k)
-                    mismatch |= pin[k] != expected[k];
-                if (mismatch)
-                {
-                    printf("[dev petals] wrong pin from %s (%s)\n",
-                           client->rivet_account.uuid, client->ip_address);
-                    if (++client->dev_pin_failures >= 5)
-                    {
-                        lws_close_reason(ws, LWS_CLOSE_STATUS_POLICY_VIOLATION,
-                                         (uint8_t *)"too many tries",
-                                         sizeof "too many tries" - 1);
-                        client->pending_kick = 1;
-                        return -1;
-                    }
-                    rr_server_client_write_account_reply(
-                        client, 0, rr_account_request_dev_petals, "Wrong PIN.",
-                        "", "", "");
-                    break;
-                }
-                client->dev_pin_failures = 0;
                 if (id == 0 || id >= rr_petal_id_max ||
                     rarity >= rr_rarity_id_max || count == 0)
                 {
@@ -1770,6 +1811,7 @@ static void server_tick(struct rr_server *this)
 #ifdef CTF
     rr_ctf_tick(this);
 #endif
+    rr_snail_tick(this);
 
 #ifdef PVP
     uint8_t lb_top_n = 0;
@@ -1872,6 +1914,7 @@ static void server_tick(struct rr_server *this)
 #ifdef CTF
             rr_ctf_send_state(this, client);
 #endif
+            rr_snail_send_state(this, client);
             if (client->player_info != NULL)
             {
                 if (rr_simulation_entity_alive(

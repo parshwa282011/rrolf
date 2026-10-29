@@ -24,6 +24,7 @@
 #include <Shared/Entity.h>
 #include <Shared/Rivet.h>
 #include <Shared/Squad.h>
+#include <Shared/Snail.h>
 #include <Shared/StaticData.h>
 #include <Shared/pb.h>
 
@@ -120,6 +121,40 @@ struct rr_game_ctf_feed_line
     char text[96];
     uint32_t color;
     float age;
+};
+
+struct rr_game_snail_event
+{
+    uint8_t type;
+    uint8_t rarity;
+    uint8_t count;
+};
+
+// one snail on its way
+struct rr_game_snail_run
+{
+    uint8_t rarity;
+    uint16_t route_cells;
+    uint16_t cells_left;
+    uint8_t hp;
+    uint8_t waiting; // asleep until a player comes close
+    float x;
+    float y;
+};
+
+// the snail run, see Client/Snail.c
+struct rr_game_snail
+{
+    // a state packet has arrived on this connection
+    uint8_t active;
+    uint8_t run_count;
+    struct rr_game_snail_run runs[RR_SNAIL_MAX_RUNS];
+    float hole_x;
+    float hole_y;
+    uint16_t event_seq;
+    uint8_t event_seq_known;
+    struct rr_game_ctf_feed_line feed[3];
+    float anim; // seconds, for things that pulse
 };
 
 struct rr_game_ctf_event
@@ -247,6 +282,7 @@ struct rr_game
     struct rr_game_debug_info debug_info;
     struct rr_game_chat chat;
     struct rr_game_ctf ctf;
+    struct rr_game_snail snail;
     struct rr_game_cache cache;
     struct rr_game_squad squad;
     struct rr_dev_cheats dev_cheats;
@@ -337,6 +373,11 @@ struct rr_game
     char cg_label[96];
     char afk_challenge[7];
     char auth_message[96];
+    // PDEV builds: the dev panel behind the + button is opened with a PIN, which
+    // is kept here and sent with every cheat. Nothing is trusted on this side,
+    // the game server checks the PIN each time (see rr_dev_cheat_unlock)
+    char dev_pin[16];
+    uint8_t dev_unlocked;
     char transfer_code[24];
     char enter_code[16];
     // an account request waiting for the connection, and the account to
@@ -380,6 +421,10 @@ void rr_game_select_biome(struct rr_game *, uint8_t);
 void rr_game_join_squad_by_code(struct rr_game *, char const *code);
 void rr_simulation_read_binary(struct rr_game *, struct proto_bug *);
 void rr_write_dev_cheat_packets(struct rr_game *, uint8_t);
+// starts a dev cheat packet: the header and the type, and in a PDEV build the
+// PIN, which the game server wants with every cheat. The caller adds the rest
+struct proto_bug;
+void rr_dev_cheat_begin(struct rr_game *, struct proto_bug *, uint8_t type);
 
 void rr_game_websocket_on_event_function(enum rr_websocket_event_type, void *,
                                          void *, uint64_t);

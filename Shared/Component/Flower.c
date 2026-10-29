@@ -30,7 +30,8 @@
     X(level, varuint)                                                          \
     X(dead, uint8)                                                             \
     X(crest_count, uint8)                                                      \
-    X(third_eye_count, uint8)
+    X(third_eye_count, uint8)                                                  \
+    X(nazar_charges, uint8)
 
 enum
 {
@@ -41,7 +42,8 @@ enum
     state_flags_dead = 0b010000,
     state_flags_crest_count = 0b100000,
     state_flags_third_eye_count = 0b1000000,
-    state_flags_all = 0b1111111
+    state_flags_nazar_charges = 0b10000000,
+    state_flags_all = 0b11111111
 };
 
 void rr_component_flower_init(struct rr_component_flower *this,
@@ -211,6 +213,7 @@ RR_DEFINE_PUBLIC_FIELD(flower, float, eye_angle)
 RR_DEFINE_PUBLIC_FIELD(flower, uint32_t, level)
 RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, crest_count)
 RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, third_eye_count)
+RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, nazar_charges)
 #endif
 
 #ifdef RR_CLIENT

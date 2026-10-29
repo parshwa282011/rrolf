@@ -210,6 +210,58 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         rr_renderer_translate(renderer, 70, 0);
         render_sprite(renderer, id, 0, flags);
         break;
+    case rr_mob_id_bush:
+        rr_renderer_scale(renderer, 0.21f);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_ant_hole:
+        rr_renderer_scale(renderer, 0.3f);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_ant_egg:
+        rr_renderer_scale(renderer, 0.21f);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_queen_ant:
+        rr_renderer_scale(renderer, 0.17f);
+        rr_renderer_translate(renderer, -125, 0);
+        render_sprite(renderer, id, 2, flags);
+        rr_renderer_translate(renderer, 105, 0);
+        render_sprite(renderer, id, 1, flags);
+        rr_renderer_translate(renderer, 80, 0);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_baby_ant:
+        rr_renderer_scale(renderer, 0.21f);
+        rr_renderer_translate(renderer, -35, 0);
+        render_sprite(renderer, id, 1, flags);
+        rr_renderer_translate(renderer, 70, 0);
+        render_sprite(renderer, id, 0, flags);
+        break;
+    case rr_mob_id_digger_ant:
+        rr_renderer_scale(renderer, 0.385f);
+        rr_renderer_translate(renderer, -35, 0);
+        render_sprite(renderer, id, 1, flags);
+        rr_renderer_translate(renderer, 70, 0);
+        render_sprite(renderer, id, 0, flags);
+        // two scoops at the front, opening and closing as it digs
+        for (int8_t side = -1; side <= 1; side += 2)
+        {
+            rr_renderer_context_state_init(renderer, &state);
+            rr_renderer_translate(renderer, 52, side * 16);
+            rr_renderer_rotate(renderer,
+                               side * (0.3f + 0.15f * animation_tick));
+            render_sprite(renderer, id, 2, flags);
+            rr_renderer_context_state_free(renderer, &state);
+        }
+        break;
+    case rr_mob_id_snail:
+        rr_renderer_scale(renderer, 0.3f);
+        rr_renderer_translate(renderer, -4 * animation_tick, 0);
+        render_sprite(renderer, id, 0, flags);
+        rr_renderer_translate(renderer, -18, -2);
+        render_sprite(renderer, id, 1, flags);
+        break;
     case rr_mob_id_queen_bee:
         rr_renderer_scale(renderer, 0.28f);
         rr_renderer_translate(renderer, -90, 0);
@@ -417,6 +469,22 @@ static void friendly_mask(struct rr_renderer *renderer)
     rr_renderer_add_color_filter(renderer, 0xffffff45, 0.3);
 }
 
+// the ants of an ant hole reuse the worker's head and thorax, tinted
+static void queen_mask(struct rr_renderer *renderer)
+{
+    rr_renderer_add_color_filter(renderer, 0xffb04a3a, 0.35);
+}
+
+static void baby_mask(struct rr_renderer *renderer)
+{
+    rr_renderer_add_color_filter(renderer, 0xffe8d8a8, 0.45);
+}
+
+static void digger_mask(struct rr_renderer *renderer)
+{
+    rr_renderer_add_color_filter(renderer, 0xffb5893f, 0.35);
+}
+
 void rr_renderer_mob_cache_init()
 {
     rr_renderer_spritesheet_init(
@@ -528,4 +596,32 @@ void rr_renderer_mob_cache_init()
 
     rr_renderer_spritesheet_init(&mob_sprites[21], NULL, 400, 400,
                                  rr_beehive_core_draw, 0);
+
+    // the garden update
+    rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_bush], NULL, 384, 384,
+                                 rr_bush_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_ant_hole], NULL, 384,
+                                 384, rr_ant_hole_draw, 0);
+
+    rr_renderer_spritesheet_init(
+        &mob_sprites[rr_mob_id_queen_ant], queen_mask, 192, 192,
+        rr_ant_head_draw, 192, 192, rr_ant_thorax_draw, 240, 240,
+        rr_queen_ant_abdomen_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_ant_egg], NULL, 192,
+                                 192, rr_ant_egg_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_baby_ant], baby_mask,
+                                 192, 192, rr_ant_head_draw, 192, 192,
+                                 rr_ant_thorax_draw, 0);
+
+    rr_renderer_spritesheet_init(
+        &mob_sprites[rr_mob_id_digger_ant], digger_mask, 192, 192,
+        rr_ant_head_draw, 192, 192, rr_ant_thorax_draw, 192, 192,
+        rr_digger_ant_claw_draw, 0);
+
+    rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_snail], NULL, 288, 144,
+                                 rr_snail_body_draw, 192, 192,
+                                 rr_snail_shell_draw, 0);
 }

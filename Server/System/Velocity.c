@@ -284,7 +284,7 @@ static void system_velocity(EntityIdx id, void *simulation)
          rr_simulation_get_petal(simulation, id)->id != rr_petal_id_nest &&
          rr_simulation_get_petal(simulation, id)->id != rr_petal_id_meat &&
          rr_simulation_get_petal(simulation, id)->id != rr_petal_id_peas) ||
-        physical->bubbling_to_death ||
+        physical->bubbling_to_death || physical->tunneling ||
         dev_cheat_enabled(simulation, id, no_wall_collision))
     {
         rr_component_physical_set_x(physical, now_x);

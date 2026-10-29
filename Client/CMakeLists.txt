@@ -27,6 +27,7 @@ set(SRCS
     Assets/MapFeature/WaterLettuce.c
     Assets/Mob/Ankylosaurus.c
     Assets/Mob/Ant.c
+    Assets/Mob/Garden.c
     Assets/Mob/Beehive.c
     Assets/Mob/Dakotaraptor.c
     Assets/Mob/Dragonfly.c
@@ -48,6 +49,7 @@ set(SRCS
     Assets/Mob/Fern.c
     Assets/Mob/Meteor.c
     Assets/Mob/Tree.c
+    Assets/Tile/AntHole.c
     Assets/Tile/Beehive.c
     Assets/Tile/Garden.c
     Assets/Tile/HellCreek.c
@@ -98,6 +100,7 @@ set(SRCS
     Ui/TitleScreen/GivePetals.c
     Ui/TitleScreen/CtfHost.c
     Ui/InGame/CtfHud.c
+    Ui/InGame/SnailHud.c
     Ui/TitleScreen/Discord.c
     Ui/TitleScreen/Fullscreen.c
     Ui/TitleScreen/Gardn.c
@@ -117,6 +120,7 @@ set(SRCS
     Ui/Tooltip/Squad.c
     Game.c
     Ctf.c
+    Snail.c
     InputData.c
     Main.c
     Mobile.c

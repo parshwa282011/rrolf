@@ -2206,20 +2206,31 @@ void rr_renderer_draw_petal(struct rr_renderer *renderer, uint8_t id,
             rr_renderer_fill(renderer);
             break;
         }
-        case rr_petal_id_dev_stinger:
-            rr_renderer_set_fill(renderer, 0xffff00c8);
-            rr_renderer_set_stroke(renderer, 0xff5c0047);
-            rr_renderer_set_line_width(renderer, 3.0f);
-            rr_renderer_set_line_join(renderer, 1.0f);
-            rr_renderer_set_line_cap(renderer, 1.0f);
+        case rr_petal_id_nazar:
+        {
+            // the evil eye: blue, a white ring, a light blue ring, a black pupil
+            static float const ring[4][2] = {{10.0f, 0}, {7.6f, 1}, {5.2f, 2},
+                                             {2.4f, 3}};
+            static uint32_t const colors[4] = {0xff1d4fb8, 0xfff4f4f4,
+                                               0xff4aa8e6, 0xff0b1230};
+            rr_renderer_set_stroke(renderer, 0xff0d2a66);
+            rr_renderer_set_line_width(renderer, 1.6f);
+            for (uint8_t i = 0; i < 4; ++i)
+            {
+                rr_renderer_set_fill(renderer, colors[i]);
+                rr_renderer_begin_path(renderer);
+                rr_renderer_arc(renderer, 0, 0, ring[i][0]);
+                rr_renderer_fill(renderer);
+                if (i == 0)
+                    rr_renderer_stroke(renderer);
+            }
+            // a little shine
+            rr_renderer_set_fill(renderer, 0xffffffff);
             rr_renderer_begin_path(renderer);
-            rr_renderer_move_to(renderer, 10.00, 0.00);
-            rr_renderer_line_to(renderer, -5.00, 8.66);
-            rr_renderer_line_to(renderer, -5.00, -8.66);
-            rr_renderer_line_to(renderer, 10.00, 0.00);
+            rr_renderer_arc(renderer, -1.0f, -1.0f, 0.9f);
             rr_renderer_fill(renderer);
-            rr_renderer_stroke(renderer);
             break;
+        }
         default:
             break;
         }

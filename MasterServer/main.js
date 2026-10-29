@@ -126,7 +126,7 @@ function apply_missing_defaults(account)
         petals: {"1:0": 5},
         failed_crafts: {},
         mob_gallery: {},
-        checkpoint: { hell_creek: 0, pvp: 0 },
+        checkpoint: { hell_creek: 0, pvp: 0, garden: 0 },
         score: 0,
         discord_id: "",
         cg_id: "",
@@ -148,12 +148,14 @@ function apply_missing_defaults(account)
     }
 
     if (typeof account.checkpoint === "number") {
-        account.checkpoint = { hell_creek: account.checkpoint, pvp: 0 };
+        account.checkpoint = { hell_creek: account.checkpoint, pvp: 0, garden: 0 };
     }
     if (!account.checkpoint.hasOwnProperty("hell_creek"))
         account.checkpoint.hell_creek = 0;
     if (!account.checkpoint.hasOwnProperty("pvp"))
         account.checkpoint.pvp = 0;
+    if (!account.checkpoint.hasOwnProperty("garden"))
+        account.checkpoint.garden = 0;
 
     // if (account.inflated_up_to < MAX_PETAL_COUNT)
     // {
@@ -413,7 +415,7 @@ function merge_accounts(survivor, absorbed)
     apply_missing_defaults(survivor);
     apply_missing_defaults(absorbed);
     survivor.xp = (Number(survivor.xp) || 0) + (Number(absorbed.xp) || 0);
-    for (const biome of ["hell_creek", "pvp"])
+    for (const biome of ["hell_creek", "pvp", "garden"])
         survivor.checkpoint[biome] = Math.max(survivor.checkpoint[biome], absorbed.checkpoint[biome]);
     merge_petals(survivor.petals, absorbed.petals);
     merge_petals(survivor.mob_gallery, absorbed.mob_gallery);
@@ -703,6 +705,7 @@ wss.on("connection", (ws, req) => {
                 user.checkpoint = {
                     hell_creek: decoder.ReadUint8(),
                     pvp: decoder.ReadUint8(),
+                    garden: decoder.ReadUint8(),
                 };
                 user.petals = {};
                 user.failed_crafts = {};

@@ -84,7 +84,8 @@ struct rr_petal_data RR_PETAL_DATA[rr_petal_id_max] = {
     {rr_petal_id_mint,      rr_rarity_id_unusual,   offensive,  5.0f,  10.0f,  10.0f,  50, 25, {1,1,1,1,1,1,1,1}},
     {rr_petal_id_bee_egg,      rr_rarity_id_unusual,   defensive,  1.0f,  75.0f,  10.0f,  25,100, {3,3,3,2,2,2,1,1}},
     {rr_petal_id_beehive_post, rr_rarity_id_legendary, defensive,  5.0f,  25.0f,   0.0f, 250, 13, {1,1,1,1,1,1,1,1}},
-    {rr_petal_id_dev_stinger,  rr_rarity_id_common,    offensive,  1000000000.0f, 3.0f, 10.0f,  10,  0, {1,1,1,1,1,1,1,1}},
+    // a passive petal like the crest: no entity, see petal_modifiers
+    {rr_petal_id_nazar,        rr_rarity_id_common,    offensive,  0.0f,   0.0f,   0.0f,   0,  0, {0,0,0,0,0,0,0,0}},
 };
 
 char const *RR_PETAL_NAMES[rr_petal_id_max] = {
@@ -93,7 +94,7 @@ char const *RR_PETAL_NAMES[rr_petal_id_max] = {
     "Bone",     "Web",       "Seed",      "Gravel", "Club",     "Crest",   "Droplet",
     "Beak",     "Lightning", "Third Eye", "Nest",   "Fireball", "Meat",    "Bubble",
     "Meteor",   "Mandible",  "Wax",       "Sand",   "Mint",
-    "Bee Egg",  "Beehive Post", "Dev Stinger",
+    "Bee Egg",  "Beehive Post", "Nazar",
 };
     
 char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max] = {
@@ -132,7 +133,7 @@ char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max] = {
     "Remember to feed your pets",
     "Spawns a friendly fighter bee to protect you",
     "Place it down. Attracts nearby mobs and speeds up bee egg hatching",
-    "For testing. 1,000,000,000 damage in one hit"
+    "Keeps the evil eye away. Saves you from a hit that would have killed you, then needs a while to recharge"
 };
 
 struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
@@ -149,16 +150,25 @@ struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
     {rr_mob_id_meteor,             rr_rarity_id_common, rr_rarity_id_ancient, 100, 10, 32.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_magnet,   0.5},{rr_petal_id_uranium,   0.05},{rr_petal_id_fireball,   1.0},{rr_petal_id_meteor, 2.0}}},
     {rr_mob_id_quetzalcoatlus,     rr_rarity_id_common, rr_rarity_id_ancient,  65, 20, 28.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_beak,    0.05},{rr_petal_id_fossil,     0.1},{rr_petal_id_lightning, 0.01}}},
     {rr_mob_id_edmontosaurus,      rr_rarity_id_common, rr_rarity_id_ancient,  50, 15, 30.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_max,     {{rr_petal_id_bone,    0.01},{rr_petal_id_fossil,     0.1},{rr_petal_id_third_eye, 0.05}}},
-    {rr_mob_id_ant,                rr_rarity_id_common, rr_rarity_id_ancient,  10, 10, 20.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,   0.1},{rr_petal_id_leaf,       0.1},{rr_petal_id_mandible,  0.05}}},
+    {rr_mob_id_ant,                rr_rarity_id_common, rr_rarity_id_ancient,  10, 10, 20.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_rare,        {{rr_petal_id_pellet,   0.1},{rr_petal_id_leaf,       0.1},{rr_petal_id_mandible,  0.05}}},
     {rr_mob_id_fighter_bee,        rr_rarity_id_common, rr_rarity_id_ancient,  28, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_stinger,  0.1},{rr_petal_id_crest,     0.05}}},
-    {rr_mob_id_dragonfly,          rr_rarity_id_common, rr_rarity_id_ancient,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,   0.1},{rr_petal_id_magnet,    0.05}}},
+    {rr_mob_id_dragonfly,          rr_rarity_id_common, rr_rarity_id_ancient,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_rare,    rr_rarity_id_epic,        {{rr_petal_id_pellet,   0.1},{rr_petal_id_magnet,    0.05}}},
     {rr_mob_id_honeybee,           rr_rarity_id_common, rr_rarity_id_ancient,  12, 25, 22.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_wax,     0.05},{rr_petal_id_stinger,   0.05}}},
     {rr_mob_id_beehive,            rr_rarity_id_common, rr_rarity_id_ancient,   0,  0, 45.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_wax,     0.05},{rr_petal_id_azalea,    0.05}}},
-    {rr_mob_id_spider,             rr_rarity_id_common, rr_rarity_id_ancient,  20, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_web,      0.1},{rr_petal_id_third_eye, 0.01}}},
-    {rr_mob_id_house_centipede,    rr_rarity_id_common, rr_rarity_id_ancient,  25, 10, 23.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_peas,     0.1},{rr_petal_id_sand,      0.05}}},
-    {rr_mob_id_lanternfly,         rr_rarity_id_common, rr_rarity_id_ancient,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_mint,     0.1},{rr_petal_id_sand,      0.05}}},
+    {rr_mob_id_spider,             rr_rarity_id_common, rr_rarity_id_ancient,  20, 25, 25.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_epic,        {{rr_petal_id_web,      0.1},{rr_petal_id_third_eye, 0.01}}},
+    {rr_mob_id_house_centipede,    rr_rarity_id_common, rr_rarity_id_ancient,  25, 10, 23.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_epic,        {{rr_petal_id_peas,     0.1},{rr_petal_id_sand,      0.05}}},
+    {rr_mob_id_lanternfly,         rr_rarity_id_common, rr_rarity_id_ancient,  20, 10, 25.0f, rr_rarity_id_common, rr_rarity_id_rare,    rr_rarity_id_legendary,     {{rr_petal_id_mint,     0.1},{rr_petal_id_sand,      0.05}}},
     {rr_mob_id_queen_bee,          rr_rarity_id_common, rr_rarity_id_ancient, 100, 50, 32.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_wax, 0.1},{rr_petal_id_mandible, 0.02},{rr_petal_id_bee_egg, 0.02}}},
     {rr_mob_id_beehive_core,       rr_rarity_id_common, rr_rarity_id_ancient, 500,  0, 45.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_wax, 0.05},{rr_petal_id_azalea, 0.05},{rr_petal_id_beehive_post, 0.0005}}},
+    // the garden update
+    {rr_mob_id_bush,               rr_rarity_id_common, rr_rarity_id_ancient,  15,  5, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_leaf,    0.15},{rr_petal_id_azalea,    0.15},{rr_petal_id_berry,     0.1}}},
+    {rr_mob_id_ant_hole,           rr_rarity_id_common, rr_rarity_id_ancient,   0,  0, 45.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,  0.05},{rr_petal_id_mandible,  0.05}}},
+    {rr_mob_id_queen_ant,          rr_rarity_id_common, rr_rarity_id_ancient, 120, 40, 36.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_mandible, 0.1},{rr_petal_id_pellet,     0.1},{rr_petal_id_sand,      0.03},{rr_petal_id_egg, 0.03}}},
+    {rr_mob_id_ant_egg,            rr_rarity_id_common, rr_rarity_id_ancient,   8,  0, 14.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,  0.02}}},
+    {rr_mob_id_baby_ant,           rr_rarity_id_common, rr_rarity_id_ancient,   4,  5, 12.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_pellet,  0.03}}},
+    {rr_mob_id_digger_ant,         rr_rarity_id_common, rr_rarity_id_ancient,  30, 20, 22.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_sand,     0.1},{rr_petal_id_gravel,    0.05},{rr_petal_id_mandible, 0.05}}},
+    // the snail comes from the snail run (Server/Snail.c), it never drops anything
+    {rr_mob_id_snail,              rr_rarity_id_common, rr_rarity_id_ancient,  60,  0, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{0, 0}}},
 };
 
 char const *RR_MOB_NAMES[rr_mob_id_max] = {
@@ -166,7 +176,8 @@ char const *RR_MOB_NAMES[rr_mob_id_max] = {
 "Pachycephalosaurus","Ornithomimus","Ankylosaurus","Meteor",
 "Quetzalcoatlus","Edmontosaurus","Ant","Fighter Bee","Dragonfly",
 "Honeybee","Beehive","Spider","House Centipede","Lanternfly","Queen Bee",
-"Beehive Core"
+"Beehive Core","Bush","Ant Hole","Queen Ant","Ant Egg","Baby Ant",
+"Digger Ant","Snail"
 };
 
 uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
@@ -182,6 +193,25 @@ uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
     1, //meteor
     5, //quetz
     3, //edmo
+    // the garden spawns these in the open. Everything that only lives inside
+    // a hive or a hole, or comes from an event, costs nothing
+    1, //ant
+    3, //fighter bee
+    2, //dragonfly
+    2, //honeybee
+    0, //beehive
+    3, //spider
+    3, //house centipede
+    2, //lanternfly
+    0, //queen bee
+    0, //beehive core
+    1, //bush
+    0, //ant hole
+    0, //queen ant
+    0, //ant egg
+    0, //baby ant
+    0, //digger ant
+    0, //snail
 };
 
 double RR_HELL_CREEK_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
@@ -199,7 +229,34 @@ double RR_HELL_CREEK_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     25,   //edmo
 };
 
-double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 10};
+// Fern and bush are common, the tree is rare. Beehives and ant holes are not
+// here on purpose: they only appear where a tree, bush or fern dies
+// (Shared/Component/Mob.c)
+double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
+    0,    //tric
+    0,    //trex
+    40,   //fern
+    0.5,  //tree
+    0,    //pter
+    0,    //dako
+    0,    //pachy
+    0,    //ornith
+    0,    //anky
+    0,    //meteor
+    0,    //quetz
+    0,    //edmo
+    40,   //ant
+    10,   //fighter bee
+    25,   //dragonfly
+    30,   //honeybee
+    0,    //beehive
+    30,   //spider
+    20,   //house centipede
+    25,   //lanternfly
+    0,    //queen bee
+    0,    //beehive core
+    35,   //bush
+};
 
 struct rr_petal_rarity_scale RR_PETAL_RARITY_SCALE[rr_rarity_id_max] = {
     {1,    240, 45 },
@@ -233,6 +290,43 @@ struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max] = {
     {2,          20,                30}, // mythic
     {3,          26,                36}, // exotic
     {3,          32,                44}, // ultimate
+};
+
+// nothing below RR_SNAIL_MIN_RARITY
+float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max] = {0, 0, 0, 55, 25, 12, 6, 2};
+
+// 100% for a common nazar down to 60% for an ancient one, in even steps
+float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max] = {
+    100.0f, 94.3f, 88.6f, 82.9f, 77.1f, 71.4f, 65.7f, 60.0f};
+
+uint16_t RR_NAZAR_RELOAD_TICKS[rr_rarity_id_max] = {
+    20 * 25, 17 * 25, 14 * 25, 11 * 25, 8 * 25, 6 * 25, 112 /* 4.5 s */,
+    3 * 25};
+
+// percent. Rows are the snail's rarity, columns the nazar's. A snail never drops
+// a nazar of its own rarity from exotic up, ancient nazars are only crafted
+float RR_SNAIL_NAZAR_CHANCE[rr_rarity_id_max][rr_rarity_id_max] = {
+//    C     U     R     E      L       M      X      A
+    { 1,    0,    0,    0,     0,      0,     0,     0}, // common
+    { 1.5f, 0.3f, 0,    0,     0,      0,     0,     0}, // unusual
+    {10,    2,    0.3f, 0,     0,      0,     0,     0}, // rare
+    {25,    8,    2,    0.15f, 0,      0,     0,     0}, // epic
+    {40,    15,   5,    1,     0.03f,  0,     0,     0}, // legendary
+    {55,    25,   10,   2.5f,  0.4f,   0.015f, 0,    0}, // mythic
+    {70,    35,   16,   5,     1,      0.15f, 0,     0}, // exotic: up to mythic
+    {85,    50,   25,   10,    2.5f,   0.5f,  0.1f,  0}, // ancient: up to exotic
+};
+
+struct rr_ant_hole_rarity_scale RR_ANT_HOLE_RARITY_SCALING[rr_rarity_id_max] = {
+//   size_tier  workers  baby_ants  eggs  digger_first  digger_second
+    {0,          6,       6,         4,    0.25f,        0.00f}, // common
+    {0,          8,       8,         4,    0.40f,        0.00f}, // unusual
+    {1,          10,      10,        5,    0.60f,        0.05f}, // rare
+    {1,          14,      14,        6,    0.80f,        0.10f}, // epic
+    {2,          18,      18,        6,    1.00f,        0.15f}, // legendary
+    {2,          22,      22,        7,    1.00f,        0.20f}, // mythic
+    {3,          28,      28,        8,    1.00f,        0.25f}, // exotic
+    {3,          34,      34,        8,    1.00f,        0.30f}, // ancient
 };
 // clang-format on
 
@@ -483,6 +577,7 @@ void rr_static_data_init()
     init(HELL_CREEK);
     init(BURROW);
     init(PVP);
+    init(GARDEN);
     init(CTF);
     init(BURROW_SMALL);
     init(BURROW_MEDIUM);
@@ -636,6 +731,52 @@ RR_DEFINE_MAZE(PVP, 80) = {
 {_,_,_,_,_,_,_,e,e,e,e,e,e,e,e,_,_,_,_,E,E,E,E,E,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 38
 {_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 39
 };
+// the Garden: a bug filled backyard, laid out by tools/garden/gen-map.py and
+// edited by hand since. tools/garden/check-map.py checks it.
+RR_DEFINE_MAZE(GARDEN, 80) = {
+//                     11  13  15  17  19  21  23  25  27  29  31  33  35  37  39
+// 1 2 3 4 5 6 7 8 9 10  12  14  16  18  20  22  24  26  28  30  32  34  36  38
+{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 0
+{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 1
+{_,_,a,a,X,_,x,x,x,_,m,m,L,_,_,_,_,_,_,_,_,_,_,_,_,_,_,m,m,m,m,M,M,M,M,x,x,x,_,_}, // 2
+{_,_,_,_,X,_,x,_,_,_,m,_,L,_,_,_,_,_,_,_,_,_,_,_,_,_,_,L,m,m,m,m,M,M,M,M,x,x,_,_}, // 3
+{_,_,x,X,X,_,M,M,M,M,m,_,L,_,_,_,_,_,_,_,_,_,_,_,_,_,_,L,L,_,m,m,_,M,M,_,M,x,_,_}, // 4
+{_,_,x,_,_,_,x,_,_,_,_,_,L,_,_,_,_,_,_,_,_,_,_,_,_,_,_,L,L,L,m,m,m,m,M,M,M,M,_,_}, // 5
+{_,_,x,_,X,_,x,_,A,_,L,L,l,_,_,_,_,_,_,_,_,_,_,_,_,_,_,L,L,L,L,m,m,m,m,M,M,M,_,_}, // 6
+{_,_,x,_,X,_,x,_,A,_,L,_,l,_,_,_,_,_,_,_,_,_,_,_,_,_,_,l,L,_,L,L,_,m,m,_,M,M,_,_}, // 7
+{_,_,M,_,X,X,x,_,A,_,L,_,l,_,_,_,_,_,_,_,_,_,_,_,_,_,_,l,l,L,L,L,L,m,m,m,m,M,_,_}, // 8
+{_,_,M,_,X,_,_,_,A,_,m,_,l,_,_,_,_,_,_,_,_,_,_,_,_,_,_,l,l,l,L,L,L,L,m,m,m,m,_,_}, // 9
+{_,_,M,_,X,a,a,a,a,_,m,_,l,_,_,_,_,_,_,e,e,_,_,_,_,_,_,l,l,_,l,L,_,L,L,_,m,m,_,_}, // 10
+{_,_,M,_,_,_,_,_,_,_,m,_,E,E,E,E,e,e,e,e,e,e,e,E,E,E,E,l,l,l,l,l,L,L,L,L,m,m,_,_}, // 11
+{_,_,m,m,m,_,m,M,M,M,m,_,E,E,E,e,e,e,e,R,e,e,e,e,E,E,E,E,l,l,l,l,l,L,L,L,L,m,_,_}, // 12
+{_,_,_,_,m,_,m,_,_,_,_,_,E,E,e,e,e,e,R,R,R,e,e,e,e,E,E,E,E,_,l,l,_,l,L,_,L,L,_,_}, // 13
+{_,_,L,L,L,_,m,_,l,E,E,_,E,e,e,e,e,_,_,R,R,_,_,e,e,e,E,E,E,E,l,l,l,l,l,L,L,L,_,_}, // 14
+{_,_,L,_,_,_,m,_,l,_,E,_,e,e,e,e,R,_,_,R,R,_,_,e,e,e,e,E,E,E,E,l,l,l,l,l,L,L,_,_}, // 15
+{_,_,l,L,L,L,L,_,l,_,E,e,e,e,e,R,R,_,_,r,R,_,_,R,e,e,e,e,E,_,E,E,_,l,l,_,l,L,_,_}, // 16
+{_,_,l,_,_,_,_,_,_,_,_,_,_,_,R,R,R,_,_,r,r,_,_,R,R,e,e,e,e,E,E,E,E,l,l,l,l,l,_,_}, // 17
+{_,_,l,_,_,_,_,_,_,_,_,_,_,R,R,R,R,r,r,r,r,r,R,R,R,R,e,e,e,e,E,E,E,E,l,l,l,l,_,_}, // 18
+{_,_,l,_,_,_,_,_,_,_,_,_,_,R,R,R,r,r,r,r,r,r,r,R,R,R,R,_,_,_,_,_,_,l,_,_,_,_,_,_}, // 19
+{_,_,l,E,_,_,_,_,_,_,_,_,_,R,R,r,r,r,r,U,r,r,r,r,R,R,R,_,_,_,_,_,_,l,_,_,_,_,_,_}, // 20
+{_,_,E,E,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,U,U,_,_,_,_,_,_,_,_,_,_,_,_,l,_,_,_,_,_,_}, // 21
+{_,_,E,E,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,U,U,_,_,_,_,_,_,_,_,_,_,_,_,l,_,_,_,_,_,_}, // 22
+{_,_,E,E,e,_,e,e,R,_,R,R,R,_,_,_,_,_,_,U,U,_,_,_,_,_,_,m,m,L,L,L,L,l,L,L,L,L,_,_}, // 23
+{_,_,E,e,e,e,e,R,R,R,R,r,R,_,_,_,_,_,_,u,U,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,m,_,_}, // 24
+{_,_,e,e,e,_,R,R,R,_,r,r,r,_,_,_,_,_,_,u,u,_,_,_,_,_,_,x,x,x,x,M,M,M,M,m,m,m,_,_}, // 25
+{_,_,_,e,_,_,_,R,_,_,_,r,_,_,_,_,_,_,_,u,u,_,_,_,_,_,_,X,_,_,_,_,_,_,_,_,_,_,_,_}, // 26
+{_,_,e,e,R,_,R,R,r,_,r,r,r,_,_,_,_,_,_,u,u,_,_,_,_,_,_,X,X,X,X,x,x,x,x,M,M,M,_,_}, // 27
+{_,_,e,R,R,R,R,r,r,r,r,U,r,_,_,_,_,_,_,C,u,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,M,_,_}, // 28
+{_,_,R,R,R,_,r,r,r,_,U,U,U,_,_,_,_,_,_,C,C,_,_,_,_,_,_,l,l,l,L,L,L,L,m,m,m,m,_,_}, // 29
+{_,_,_,R,_,_,_,r,_,_,_,U,_,_,_,_,_,_,_,C,C,_,_,_,_,_,_,l,_,_,_,_,_,_,_,_,_,_,_,_}, // 30
+{_,_,R,R,r,_,r,r,U,_,U,U,u,_,_,_,_,_,_,C,C,_,_,_,_,_,_,l,E,E,E,E,e,e,e,e,R,R,_,_}, // 31
+{_,_,R,r,r,r,r,U,U,U,U,u,u,_,_,_,_,_,_,c,C,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,R,_,_}, // 32
+{_,_,R,R,r,_,r,r,U,_,u,u,u,_,C,C,C,C,c,c,c,C,C,C,C,u,_,u,u,U,U,U,U,r,r,r,r,R,_,_}, // 33
+{_,_,_,R,_,_,_,r,_,_,_,u,u,C,C,C,C,c,c,c,c,c,C,C,C,C,_,u,u,_,_,_,_,_,_,_,_,_,_,_}, // 34
+{_,_,R,R,r,_,r,r,U,_,u,u,u,_,C,C,c,_,c,c,c,c,_,C,C,C,C,u,u,u,u,U,U,U,U,r,r,r,_,_}, // 35
+{_,_,R,r,r,r,r,U,U,U,U,u,u,_,C,c,c,c,c,c,c,c,c,c,C,C,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 36
+{_,_,R,R,r,_,r,r,U,_,U,U,u,_,C,C,c,_,c,c,c,c,_,C,C,C,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 37
+{_,_,_,_,_,_,_,_,_,_,_,_,_,_,C,C,C,c,c,c,c,c,C,C,C,C,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 38
+{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}, // 39
+};
 // the capture the flag map, made by tools/ctf/gen-map.js. It uses the tile
 // letters above, so it has to stay in this stretch of the file
 #include <Shared/CtfMap.inc>
@@ -753,9 +894,18 @@ struct rr_maze_declaration RR_MAZES[rr_biome_id_max] = {
         { 9, 30, 3, 3, 10, 31, 80},  // 4
         {31, 35, 3, 3, 32, 36, 100}, // 5
     }},
-    {MAZE_ENTRY(HELL_CREEK, 1024), 0},
+    {MAZE_ENTRY(GARDEN, 1024), 7, {
+        {18, 34, 3, 3, 19, 35,   1}, // 0 gate lawn (start)
+        {18, 19, 4, 2, 20, 20,  20}, // 1 pond bank, next to the snail hole
+        { 6, 27, 3, 3,  7, 28,  40}, // 2 flower bed
+        {29, 31, 4, 1, 30, 31,  60}, // 3 vegetable patch, middle row
+        {30, 14, 2, 2, 31, 15,  80}, // 4 compost heap, south
+        {33,  2, 3, 2, 34,  3, 100}, // 5 compost heap, north
+        { 2,  2, 2, 1,  3,  2, 120}, // 6 hedge maze, deepest corner
+    }},
     {MAZE_ENTRY(BURROW, 512), 0},
     {MAZE_ENTRY(CTF, 256), 0},
+    {MAZE_ENTRY(BURROW, 512), 0}, // ant hole, the real maze is picked per hole
 };
 
 struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {
@@ -768,9 +918,10 @@ struct rr_maze_declaration RR_BEEHIVE_MAZE_TIERS[RR_BEEHIVE_MAZE_TIER_COUNT] = {
 struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
     {"default",   1234,           "hc"}, // hell creek
     {"pvp",       1235,          "pvp"}, // pvp
-    {NULL,           0,           NULL}, // garden, doesn't have a server
+    {"garden",    1236,           "ga"}, // garden
     {NULL,           0,           NULL}, // beehive, lives inside other arenas
-    {"ctf",       1236,          "ctf"}, // capture the flag
+    {"ctf",       1237,          "ctf"}, // capture the flag
+    {NULL,           0,           NULL}, // ant hole, lives inside other arenas
 };
 
 uint8_t RR_GLOBAL_BIOME = rr_biome_id_hell_creek;
