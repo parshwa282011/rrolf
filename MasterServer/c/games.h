@@ -21,19 +21,27 @@
 // runs on the event loop thread except ms_games_kick_uuid().
 //
 // Opcodes, game server -> master (first byte):
-//   0   join   uuid\0 pos:u8 pl_p\0
-//   1   leave  uuid\0 pos:u8
-//   2   save   uuid\0 xp:f64 checkpoint:u8 petals..0 failed_crafts..0
-//              [mob_kills..0 loadout..0 nickname\0]
+//   0   join   uuid\0 token\0 (the player's PL-P) code\0 (unused) nonce:varuint
+//              pos:u8
+//   1   leave  uuid\0
+//   2   save   uuid\0 xp:f64 pvp_points:varuint checkpoint:u8 x3 (hell creek,
+//              pvp, garden) petals..0 failed_crafts..0 mob_gallery..0
+//              [loadout..0 nickname\0]
 //   3   build log (accepted and ignored)
+//   4   CrazyGames score (ignored)
+//   5   account request pos:u8 nonce:varuint kind:u8 crazygames:u8 payload\0
+//       (answered with "not available", accounts live on the login screen)
 //   101 server id (rivet lobby id, accepted and ignored)
 // master -> game server (first byte MS_API_SUCCESS=45, then opcode):
 //   0 alias\0
-//   1 pos username\0 xp checkpoint petals..0 failed_crafts..0
-//     mob_kills..0 loadout..0 nickname\0 is_dev:u8
-//   2 pos uuid\0         (kick that slot: denied join or session taken over)
-// counts are (id:u8, rarity:u8, count:varuint) terminated by id 0; loadout is
-// (slot:u8 1-based, id:u8, rarity:u8) terminated by slot 0.
+//   1 pos nonce:varuint uuid\0 token\0 username\0 id\0 cg_id\0 is_dev:u8 xp:f64
+//     pvp_points:varuint checkpoint:u8 x3 petals..0 failed_crafts..0
+//     mob_gallery..0 loadout..0 nickname\0
+//   2 pos nonce:varuint  (kick that slot: denied join or session taken over)
+//   3 pos nonce ok kind message\0 uuid\0 token\0 code\0  (answer to op 5)
+// counts are (id:u8, rarity:u8, count:varuint) terminated by id 0; mob gallery
+// ids are the mob id + 1; loadout is (slot:u8 1-based, id:u8, rarity:u8)
+// terminated by slot 0.
 
 void ms_games_set_context(struct lws_context *);
 void ms_games_init();

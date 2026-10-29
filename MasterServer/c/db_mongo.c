@@ -450,6 +450,7 @@ static int mg_rysteria_get(struct ms_db *db, char const *uuid,
         ms_db_rysteria_free(out);
         out->xp = double_field(doc, "xp");
         out->checkpoint = (int)int_field(doc, "checkpoint");
+        out->pvp_points = (int64_t)int_field(doc, "pvp_points");
         out->petals = json_of_field(doc, "petals", 0);
         out->failed_crafts = json_of_field(doc, "failed_crafts", 0);
         out->mob_kills = json_of_field(doc, "mob_kills", 0);
@@ -472,6 +473,7 @@ static int mg_rysteria_put(struct ms_db *db, char const *uuid,
     bson_init(&set);
     BSON_APPEND_DOUBLE(&set, "xp", v->xp);
     BSON_APPEND_INT32(&set, "checkpoint", v->checkpoint);
+    BSON_APPEND_INT64(&set, "pvp_points", v->pvp_points);
     int ok = append_json_doc(&set, "petals", v->petals) &&
              append_json_doc(&set, "failed_crafts", v->failed_crafts) &&
              append_json_doc(&set, "mob_kills", v->mob_kills) &&

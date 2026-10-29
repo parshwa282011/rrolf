@@ -64,7 +64,10 @@ struct player
     char username[65];
     int is_dev;
     double xp;
-    int checkpoint;
+    int checkpoint; // see struct ms_db_rysteria
+    int64_t pvp_points;
+    uint64_t nonce; // picked by the game server, echoed so it can match replies
+    char token[MS_PL_P_SIZE];
     cJSON *petals;
     cJSON *failed_crafts;
     cJSON *mob_kills;
@@ -81,6 +84,7 @@ struct join
     struct join *next;
     uint64_t conn_id;
     uint8_t pos;
+    uint64_t nonce;
     char uuid[MS_UUID_SIZE];
     char pl_p[MS_PL_P_SIZE];
     // filled by the worker
@@ -183,14 +187,15 @@ static void queue_message(struct ms_gconn *c, struct ms_writer *w)
     lws_callback_on_writable(c->wsi);
 }
 
-// [45][2][pos][uuid\0]: tells the game server to drop that slot
-static void send_kick(struct ms_gconn *c, uint8_t pos, char const *uuid)
+// [45][2][pos][nonce]: tells the game server to drop that slot (the nonce is
+// the one the game server sent with the join, so it only hits that connection)
+static void send_kick(struct ms_gconn *c, uint8_t pos, uint64_t nonce)
 {
     struct ms_writer w;
     ms_writer_init(&w, 64, 1);
     ms_writer_u8(&w, 2);
     ms_writer_u8(&w, pos);
-    ms_writer_string(&w, uuid);
+    ms_writer_varuint(&w, nonce);
     queue_message(c, &w);
 }
 
@@ -238,15 +243,23 @@ static void send_join_ok(struct ms_gconn *c, struct player *p)
     ms_writer_init(&w, 64 * 1024, 1);
     ms_writer_u8(&w, 1);
     ms_writer_u8(&w, p->pos);
+    ms_writer_varuint(&w, p->nonce);
+    ms_writer_string(&w, p->uuid);
+    ms_writer_string(&w, p->token); // the game server hands it back to the client
     ms_writer_string(&w, p->username);
+    ms_writer_string(&w, ""); // id: discord oauth2 id, not used
+    ms_writer_string(&w, ""); // cg_id: CrazyGames id, not used
+    ms_writer_u8(&w, (uint8_t)p->is_dev);
     ms_writer_f64(&w, p->xp);
-    ms_writer_u8(&w, (uint8_t)p->checkpoint);
+    ms_writer_varuint(&w, p->pvp_points > 0 ? (uint64_t)p->pvp_points : 0);
+    ms_writer_u8(&w, (uint8_t)(p->checkpoint & 0xff));
+    ms_writer_u8(&w, (uint8_t)((p->checkpoint >> 8) & 0xff));
+    ms_writer_u8(&w, (uint8_t)((p->checkpoint >> 16) & 0xff));
     write_counts(&w, p->petals);
     write_counts(&w, p->failed_crafts);
     write_counts(&w, p->mob_kills);
     write_loadout(&w, p->loadout);
     ms_writer_string(&w, p->nickname);
-    ms_writer_u8(&w, (uint8_t)p->is_dev);
     queue_message(c, &w);
 }
 
@@ -285,6 +298,7 @@ static void snapshot(struct player const *p, struct ms_db_rysteria *r)
     memset(r, 0, sizeof *r);
     r->xp = p->xp;
     r->checkpoint = p->checkpoint;
+    r->pvp_points = p->pvp_points;
     r->petals = cJSON_PrintUnformatted(p->petals);
     r->failed_crafts = cJSON_PrintUnformatted(p->failed_crafts);
     r->mob_kills = cJSON_PrintUnformatted(p->mob_kills);
@@ -316,6 +330,7 @@ static void adopt(struct join *j, struct ms_gconn *c)
         ms_strlcpy(p->uuid, j->uuid, sizeof p->uuid);
         p->xp = j->rys.xp;
         p->checkpoint = j->rys.checkpoint;
+        p->pvp_points = j->rys.pvp_points;
         p->petals = parse_object(j->rys.petals);
         p->failed_crafts = parse_object(j->rys.failed_crafts);
         p->mob_kills = parse_object(j->rys.mob_kills);
@@ -334,6 +349,8 @@ static void adopt(struct join *j, struct ms_gconn *c)
         p->conn = NULL;
     }
     ms_strlcpy(p->username, j->account.username, sizeof p->username);
+    ms_strlcpy(p->token, j->pl_p, sizeof p->token);
+    p->nonce = j->nonce;
     p->is_dev = j->account.is_dev;
     p->conn = c;
     p->pos = j->pos;
@@ -379,7 +396,7 @@ static void join_done(void *arg)
     {
         ms_log("games", "join denied for %s (%s)", j->uuid,
                j->verdict == ms_auth_expired ? "expired" : "invalid");
-        send_kick(c, j->pos, j->uuid);
+        send_kick(c, j->pos, j->nonce);
         join_free(j);
         return;
     }
@@ -388,7 +405,7 @@ static void join_done(void *arg)
     {
         // same account somewhere else: kick the old session, then wait for its
         // final save + leave before taking over
-        send_kick(existing->conn, existing->pos, existing->uuid);
+        send_kick(existing->conn, existing->pos, existing->nonce);
         j->deadline = ms_now() + JOIN_WAIT_SECONDS;
         j->next = waiting;
         waiting = j;
@@ -471,19 +488,17 @@ static void on_join(struct ms_gconn *c, struct ms_reader *r)
 {
     struct join *j = calloc(1, sizeof *j);
     char uuid[128];
+    char code[256]; // the old discord oauth2 code, not used
     ms_reader_string(r, uuid, sizeof uuid);
-    j->pos = ms_reader_u8(r);
     ms_reader_string(r, j->pl_p, sizeof j->pl_p);
+    ms_reader_string(r, code, sizeof code);
+    j->nonce = ms_reader_varuint(r);
+    j->pos = ms_reader_u8(r);
     j->conn_id = c->id;
     if (r->error || j->pos >= SLOTS || !ms_uuid_valid(uuid))
     {
         // answer anyway so the game server frees the slot
-        struct ms_writer w;
-        ms_writer_init(&w, 64, 1);
-        ms_writer_u8(&w, 2);
-        ms_writer_u8(&w, j->pos < SLOTS ? j->pos : 0);
-        ms_writer_string(&w, ms_uuid_valid(uuid) ? uuid : "invalid");
-        queue_message(c, &w);
+        send_kick(c, j->pos < SLOTS ? j->pos : 0, j->nonce);
         free(j);
         return;
     }
@@ -510,20 +525,24 @@ static void on_save(struct ms_gconn *c, struct ms_reader *r)
     char uuid[128];
     ms_reader_string(r, uuid, sizeof uuid);
     double xp = ms_reader_f64(r);
-    uint8_t checkpoint = ms_reader_u8(r);
+    uint64_t pvp_points = ms_reader_varuint(r);
+    int checkpoint = ms_reader_u8(r);
+    checkpoint |= ms_reader_u8(r) << 8;
+    checkpoint |= ms_reader_u8(r) << 16;
     cJSON *petals = cJSON_CreateObject();
     cJSON *failed = cJSON_CreateObject();
-    cJSON *mobs = NULL, *loadout = NULL;
+    cJSON *mobs = cJSON_CreateObject();
+    cJSON *loadout = NULL;
     char nickname[64] = "";
     int has_tail = 0;
     read_counts(r, petals);
     read_counts(r, failed);
+    read_counts(r, mobs);
+    // loadout and nickname are a tail an older game server does not send
     if (!r->error && ms_reader_remaining(r) > 0)
     {
         has_tail = 1;
-        mobs = cJSON_CreateObject();
         loadout = cJSON_CreateObject();
-        read_counts(r, mobs);
         read_loadout(r, loadout);
         ms_reader_string(r, nickname, sizeof nickname);
     }
@@ -537,20 +556,46 @@ static void on_save(struct ms_gconn *c, struct ms_reader *r)
         return;
     }
     p->xp = xp;
+    p->pvp_points = pvp_points > (uint64_t)INT64_MAX ? INT64_MAX : (int64_t)pvp_points;
     p->checkpoint = checkpoint;
     cJSON_Delete(p->petals);
     p->petals = petals;
     cJSON_Delete(p->failed_crafts);
     p->failed_crafts = failed;
+    cJSON_Delete(p->mob_kills);
+    p->mob_kills = mobs;
     if (has_tail)
     {
-        cJSON_Delete(p->mob_kills);
-        p->mob_kills = mobs;
         cJSON_Delete(p->loadout);
         p->loadout = loadout;
         ms_strlcpy(p->nickname, nickname, sizeof p->nickname);
     }
     ++p->version;
+}
+
+// op 5: the game's own account requests (linking Discord / CrazyGames, transfer
+// codes). The master has a login screen for that instead, so say so and let
+// the game server show the message. [45][3][pos][nonce][ok][kind] message\0
+// uuid\0 token\0 code\0
+static void on_account_request(struct ms_gconn *c, struct ms_reader *r)
+{
+    uint8_t pos = ms_reader_u8(r);
+    uint64_t nonce = ms_reader_varuint(r);
+    uint8_t kind = ms_reader_u8(r);
+    if (r->error)
+        return;
+    struct ms_writer w;
+    ms_writer_init(&w, 256, 1);
+    ms_writer_u8(&w, 3);
+    ms_writer_u8(&w, pos);
+    ms_writer_varuint(&w, nonce);
+    ms_writer_u8(&w, 0);
+    ms_writer_u8(&w, kind);
+    ms_writer_string(&w, "Not available: use the login screen.");
+    ms_writer_string(&w, "");
+    ms_writer_string(&w, "");
+    ms_writer_string(&w, "");
+    queue_message(c, &w);
 }
 
 static void handle_message(struct ms_gconn *c, uint8_t const *data, size_t len)
@@ -568,8 +613,12 @@ static void handle_message(struct ms_gconn *c, uint8_t const *data, size_t len)
     case 2:
         on_save(c, &r);
         break;
-    case 3:
-    case 101:
+    case 5:
+        on_account_request(c, &r);
+        break;
+    case 3: // build log
+    case 4: // CrazyGames leaderboard score
+    case 101: // server id
         break;
     default:
         break;
@@ -737,7 +786,7 @@ void ms_games_tick()
             break;
         struct player *p = find_player(k->uuid);
         if (p != NULL && p->conn != NULL)
-            send_kick(p->conn, p->pos, p->uuid);
+            send_kick(p->conn, p->pos, p->nonce);
         free(k);
     }
 

@@ -116,9 +116,17 @@ function connectGame(useHeader)
     });
 }
 
-function join(g, uuid, pos, plp)
+// what the game server sends: uuid, token (the PL-P), code, nonce, slot
+function join(g, uuid, pos, plp, nonce)
 {
-    g.ws.send(new W().u8(0).str(uuid).u8(pos).str(plp).buf());
+    g.ws.send(new W().u8(0).str(uuid).str(plp).str("").varuint(nonce).u8(pos).buf());
+}
+
+// the join reply up to and including the dev flag
+function readJoinHead(m, pos, nonce, uuid, token, name)
+{
+    return m.u8() === 45 && m.u8() === 1 && m.u8() === pos && m.varuint() === nonce &&
+        m.str() === uuid && m.str() === token && m.str() === name && m.str() === "" && m.str() === "";
 }
 
 (async () => {
@@ -253,23 +261,23 @@ function join(g, uuid, pos, plp)
     try { await new Promise((res, rej) => { const w = new WebSocket(BASE.replace("http", "ws") + "/", "g"); w.on("open", () => res()); w.on("error", rej); w.on("unexpected-response", (q, s) => rej(new Error("rejected"))); }); } catch (e) { rejected = true; }
     check(rejected, "ws without secret rejected");
 
-    join(g, acct.uuid, 3, "garbage");
+    join(g, acct.uuid, 3, "garbage", 777);
     let m = new R(await g.next());
-    check(m.u8() === 45 && m.u8() === 2 && m.u8() === 3 && m.str() === acct.uuid, "join with bad PL-P is kicked");
+    check(m.u8() === 45 && m.u8() === 2 && m.u8() === 3 && m.varuint() === 777, "join with bad PL-P is kicked (slot + nonce)");
 
-    join(g, acct.uuid, 3, login.pl_p);
+    join(g, acct.uuid, 3, login.pl_p, 1001);
     m = new R(await g.next());
-    check(m.u8() === 45 && m.u8() === 1 && m.u8() === 3, "join ok");
-    check(m.str() === name, "join username");
-    check(m.f64() === 0 && m.u8() === 0, "new account xp/checkpoint");
+    check(readJoinHead(m, 3, 1001, acct.uuid, login.pl_p, name), "join ok, nonce/uuid/token/username echoed");
+    check(m.u8() === 0, "not dev");
+    check(m.f64() === 0 && m.varuint() === 0 && m.u8() === 0 && m.u8() === 0 && m.u8() === 0, "new account xp/pvp points/checkpoints");
     const petals = m.counts();
     check(petals["1:0"] === 5, "new account starts with 5 basic petals", petals);
     m.counts();
-    check(Object.keys(m.counts()).length === 0 && Object.keys(m.loadout()).length === 0 && m.str() === "" && m.u8() === 0, "join tail empty, not dev");
+    check(Object.keys(m.counts()).length === 0 && Object.keys(m.loadout()).length === 0 && m.str() === "", "join tail empty");
 
     // save: xp beyond 2^31, a count beyond 2^31, tail data
     const big = 3000000000;
-    g.ws.send(new W().u8(2).str(acct.uuid).f64(1.5e22).u8(2)
+    g.ws.send(new W().u8(2).str(acct.uuid).f64(1.5e22).varuint(5000000000).u8(2).u8(1).u8(3)
         .u8(1).u8(0).varuint(7).u8(27).u8(6).varuint(big).u8(0)
         .u8(3).u8(1).varuint(4).u8(0)
         .u8(5).u8(2).varuint(11).u8(0)
@@ -279,14 +287,14 @@ function join(g, uuid, pos, plp)
 
     // second connection takes the account over: first must be kicked
     const g2 = await connectGame(true);
-    join(g2, acct.uuid, 9, login.pl_p);
+    join(g2, acct.uuid, 9, login.pl_p, 2002);
     m = new R(await g.next());
-    check(m.u8() === 45 && m.u8() === 2 && m.u8() === 3, "duplicate login kicks the old session");
+    check(m.u8() === 45 && m.u8() === 2 && m.u8() === 3 && m.varuint() === 1001, "duplicate login kicks the old session (its nonce)");
     g.ws.send(new W().u8(1).str(acct.uuid).u8(3).buf()); // old session leaves
     m = new R(await g2.next(6000));
-    check(m.u8() === 45 && m.u8() === 1 && m.u8() === 9, "new session accepted after old one left");
-    m.str();
-    check(m.f64() === 1.5e22 && m.u8() === 2, "takeover carries xp + checkpoint");
+    check(readJoinHead(m, 9, 2002, acct.uuid, login.pl_p, name), "new session accepted after old one left");
+    m.u8();
+    check(m.f64() === 1.5e22 && m.varuint() === 5000000000 && m.u8() === 2 && m.u8() === 1 && m.u8() === 3, "takeover carries xp + pvp points + 3 checkpoints");
     const p2 = m.counts();
     check(p2["1:0"] === 7 && p2["27:6"] === big, "petals incl. count > 2^31", p2);
     check(m.counts()["3:1"] === 4, "failed crafts");
@@ -300,10 +308,11 @@ function join(g, uuid, pos, plp)
     g2.ws.send(new W().u8(1).str(acct.uuid).u8(9).buf());
     await new Promise((res) => setTimeout(res, 2500));
     const g3 = await connectGame(true);
-    join(g3, acct.uuid, 0, login.pl_p);
+    join(g3, acct.uuid, 0, login.pl_p, 3003);
     m = new R(await g3.next());
-    m.u8(); m.u8(); m.u8(); m.str();
-    check(m.f64() === 1.5e22, "data persisted in the database after leave");
+    check(readJoinHead(m, 0, 3003, acct.uuid, login.pl_p, name), "rejoin after leave");
+    m.u8();
+    check(m.f64() === 1.5e22 && m.varuint() === 5000000000, "data persisted in the database after leave");
     g3.ws.send(new W().u8(1).str(acct.uuid).u8(0).buf());
 
     // logout everywhere kills both tokens
@@ -314,6 +323,14 @@ function join(g, uuid, pos, plp)
     r = await pub("POST", "/auth/login", { identifier: name, password: pw });
     check(r.status === 200 && r.json.pl_t !== login.pl_t, "login still works, new PL-T issued", r.json);
     g2.ws.close(); g3.ws.close();
+
+    // op 5: the old in-game account requests are answered "not available"
+    const g4 = await connectGame(true);
+    g4.ws.send(new W().u8(5).u8(2).varuint(4004).u8(1).u8(0).str("").buf());
+    m = new R(await g4.next());
+    check(m.u8() === 45 && m.u8() === 3 && m.u8() === 2 && m.varuint() === 4004 && m.u8() === 0 && m.u8() === 1,
+        "account request answered with ok = 0");
+    g4.ws.close();
 
     console.log(failures ? `\n${failures} FAILED` : "\nall e2e checks passed");
     process.exit(failures ? 1 : 0);

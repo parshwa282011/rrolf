@@ -126,13 +126,16 @@ static char const SCHEMA_SQL[] =
     "CREATE TABLE IF NOT EXISTS rysteria.players ("
     " uuid text PRIMARY KEY REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
     " xp double precision NOT NULL DEFAULT 0,"
-    " checkpoint smallint NOT NULL DEFAULT 0,"
+    " checkpoint integer NOT NULL DEFAULT 0,"
+    " pvp_points bigint NOT NULL DEFAULT 0,"
     " petals jsonb NOT NULL DEFAULT '{}',"
     " failed_crafts jsonb NOT NULL DEFAULT '{}',"
     " mob_kills jsonb NOT NULL DEFAULT '{}',"
     " loadout jsonb NOT NULL DEFAULT '{}',"
     " nickname text NOT NULL DEFAULT '',"
     " updated_at bigint NOT NULL DEFAULT 0);"
+    "ALTER TABLE rysteria.players ALTER COLUMN checkpoint TYPE integer;"
+    "ALTER TABLE rysteria.players ADD COLUMN IF NOT EXISTS pvp_points bigint NOT NULL DEFAULT 0;"
     "CREATE TABLE IF NOT EXISTS gardn.saves ("
     " uuid text NOT NULL REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
     " save_id text NOT NULL,"
@@ -391,7 +394,7 @@ static int pg_rysteria_get(struct ms_db *db, char const *uuid,
     PGconn *c = acquire(pg, &slot);
     char const *params[] = {uuid};
     PGresult *r = run(c,
-                      "SELECT xp, checkpoint, petals::text,"
+                      "SELECT xp, checkpoint, pvp_points, petals::text,"
                       " failed_crafts::text, mob_kills::text, loadout::text,"
                       " nickname FROM rysteria.players WHERE uuid = $1",
                       1, params);
@@ -405,11 +408,12 @@ static int pg_rysteria_get(struct ms_db *db, char const *uuid,
         ms_db_rysteria_free(out);
         out->xp = atof(PQgetvalue(r, 0, 0));
         out->checkpoint = atoi(PQgetvalue(r, 0, 1));
-        out->petals = strdup(PQgetvalue(r, 0, 2));
-        out->failed_crafts = strdup(PQgetvalue(r, 0, 3));
-        out->mob_kills = strdup(PQgetvalue(r, 0, 4));
-        out->loadout = strdup(PQgetvalue(r, 0, 5));
-        ms_strlcpy(out->nickname, PQgetvalue(r, 0, 6), sizeof out->nickname);
+        out->pvp_points = strtoll(PQgetvalue(r, 0, 2), NULL, 10);
+        out->petals = strdup(PQgetvalue(r, 0, 3));
+        out->failed_crafts = strdup(PQgetvalue(r, 0, 4));
+        out->mob_kills = strdup(PQgetvalue(r, 0, 5));
+        out->loadout = strdup(PQgetvalue(r, 0, 6));
+        ms_strlcpy(out->nickname, PQgetvalue(r, 0, 7), sizeof out->nickname);
         result = MS_DB_OK;
     }
     PQclear(r);
@@ -424,26 +428,29 @@ static int pg_rysteria_put(struct ms_db *db, char const *uuid,
     snprintf(xp, sizeof xp, "%.17g", v->xp);
     char checkpoint[16];
     snprintf(checkpoint, sizeof checkpoint, "%d", v->checkpoint);
+    char pvp_points[32];
+    snprintf(pvp_points, sizeof pvp_points, "%lld", (long long)v->pvp_points);
     char updated[32];
     fmt_i64(updated, sizeof updated, ms_now());
-    char const *params[] = {uuid,           xp,        checkpoint, v->petals,
-                            v->failed_crafts, v->mob_kills, v->loadout,
-                            v->nickname,    updated};
+    char const *params[] = {uuid,           xp,        checkpoint, pvp_points,
+                            v->petals,      v->failed_crafts, v->mob_kills,
+                            v->loadout,     v->nickname,      updated};
     return pg_simple(db, "rysteria_put",
                      "INSERT INTO rysteria.players (uuid, xp, checkpoint,"
-                     " petals, failed_crafts, mob_kills, loadout, nickname,"
-                     " updated_at) VALUES ($1,$2::double precision,"
-                     " $3::smallint,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,"
-                     " $8,$9::bigint)"
+                     " pvp_points, petals, failed_crafts, mob_kills, loadout,"
+                     " nickname, updated_at) VALUES ($1,$2::double precision,"
+                     " $3::integer,$4::bigint,$5::jsonb,$6::jsonb,$7::jsonb,"
+                     " $8::jsonb,$9,$10::bigint)"
                      " ON CONFLICT (uuid) DO UPDATE SET xp = EXCLUDED.xp,"
                      " checkpoint = EXCLUDED.checkpoint,"
+                     " pvp_points = EXCLUDED.pvp_points,"
                      " petals = EXCLUDED.petals,"
                      " failed_crafts = EXCLUDED.failed_crafts,"
                      " mob_kills = EXCLUDED.mob_kills,"
                      " loadout = EXCLUDED.loadout,"
                      " nickname = EXCLUDED.nickname,"
                      " updated_at = EXCLUDED.updated_at",
-                     9, params);
+                     10, params);
 }
 
 static int pg_gardn_list(struct ms_db *db, char const *uuid,

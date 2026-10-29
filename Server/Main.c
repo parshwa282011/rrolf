@@ -34,8 +34,43 @@
 #include <Shared/StaticData.h>
 #include <Shared/Utilities.h>
 
+// Reads KEY=VALUE lines of ./.env into the environment without overriding
+// variables that are already set (RR_BIOME, RR_PORT, RR_API_HOST,
+// SERVER_SECRET, ...). The deployment scripts put one next to the binary.
+#ifdef _WIN32
+#define setenv(k, v, o) _putenv_s(k, v)
+#endif
+
+static void load_dotenv(void)
+{
+    FILE *f = fopen(".env", "r");
+    if (f == NULL)
+        return;
+    char line[1024];
+    while (fgets(line, sizeof line, f))
+    {
+        char *eq = strchr(line, '=');
+        if (line[0] == '#' || eq == NULL)
+            continue;
+        *eq = 0;
+        char *value = eq + 1;
+        value[strcspn(value, "\r\n")] = 0;
+        size_t len = strlen(value);
+        if (len >= 2 && (value[0] == '"' || value[0] == '\'') &&
+            value[len - 1] == value[0])
+        {
+            value[len - 1] = 0;
+            ++value;
+        }
+        if (line[0])
+            setenv(line, value, 0);
+    }
+    fclose(f);
+}
+
 int main()
 {
+    load_dotenv();
     fprintf(stderr, "gameserver on version %llu\n", RR_SECRET8 ^ 255);
     srand(time(0));
     // signal(SIGINT, sigint_handle);

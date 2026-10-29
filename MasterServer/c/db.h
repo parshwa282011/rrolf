@@ -64,7 +64,10 @@ struct ms_db_link
 struct ms_db_rysteria
 {
     double xp;
+    // checkpoints of the three saved biomes (hell creek, pvp, garden), one byte
+    // each: cp0 | cp1 << 8 | cp2 << 16
     int checkpoint;
+    int64_t pvp_points;
     char *petals;
     char *failed_crafts;
     char *mob_kills;

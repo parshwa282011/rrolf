@@ -149,7 +149,8 @@ int main()
     ms_db_rysteria_init(&r);
     CHECK(db->rysteria_get(db, a.uuid, &r) == MS_DB_NOT_FOUND);
     r.xp = 1.5e22;
-    r.checkpoint = 3;
+    r.checkpoint = 0x020103;
+    r.pvp_points = 5000000000LL;
     free(r.petals);
     r.petals = strdup("{\"1:0\":5,\"27:6\":123456}");
     free(r.failed_crafts);
@@ -166,7 +167,8 @@ int main()
     ms_db_rysteria_init(&r);
     CHECK(db->rysteria_get(db, a.uuid, &r) == MS_DB_OK);
     CHECK(r.xp == 2.5e22);
-    CHECK(r.checkpoint == 3);
+    CHECK(r.checkpoint == 0x020103);
+    CHECK(r.pvp_points == 5000000000LL);
     CHECK(strstr(r.petals, "123456") != NULL);
     CHECK(strstr(r.failed_crafts, "\"3:1\"") != NULL);
     CHECK(strstr(r.mob_kills, "\"1:0\"") != NULL);

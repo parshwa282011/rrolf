@@ -18,6 +18,7 @@
 
 #include <Client/Particle.h>
 #include <Client/Renderer/Renderer.h>
+#include <Client/Auth.h>
 #include <Client/Socket.h>
 #include <Client/Ui/Ui.h>
 #include <Shared/Ctf.h>
@@ -357,6 +358,7 @@ struct rr_game
     uint8_t account_ready : 1;
     uint8_t is_dev : 1;
     uint8_t text_input_focused : 1;
+    uint8_t account_synced : 1; // loadout / nickname taken from the master once
     uint8_t socket_error;
     uint8_t menu_open;
     uint8_t ticks_until_text_cache;
@@ -366,6 +368,7 @@ struct rr_game
     uint8_t significant_rarity;
     int8_t kick_vote_pos;
 
+    struct rr_auth_state auth;
     char rivet_player_token[400];
     char connect_code[16];
     // the logged in CrazyGames user, filled in by rr_platform_tick

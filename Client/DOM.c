@@ -275,11 +275,13 @@ void rr_dom_get_socket_url(uint16_t port, char const *suffix, char *out)
         HEAPU8[$0] = 0;
         if (!window["rrolfScript"])
             return;
+        const suffix = UTF8ToString($2);
+        const host = new URL(window["rrolfScript"].src).hostname;
         let url_tmp;
-        if (host === "crazygames.com" ||
+        if (host === "game.parshwa.blog" || host === "crazygames.com" ||
             host.endsWith(".crazygames.com"))
         {
-            url_tmp = "wss://rysteria.pro/" + suffix;
+            url_tmp = "wss://" + suffix + "-game.parshwa.blog";
         }
         else
         {

@@ -19,6 +19,7 @@
 #include <stdint.h>
 
 #include <Shared/Bitset.h>
+#include <Shared/Entity.h>
 #include <Shared/Rivet.h>
 #include <Shared/StaticData.h>
 
@@ -77,6 +78,10 @@ struct rr_server_client
     uint64_t inventory[rr_petal_id_max][rr_rarity_id_max];
     uint32_t craft_fails[rr_petal_id_max][rr_rarity_id_max];
     uint64_t mob_gallery[rr_mob_id_max][rr_rarity_id_max];
+    // persisted by the master next to the inventory (account server side copy
+    // of what used to live only in the browser)
+    struct rr_id_rarity_pair saved_loadout[20];
+    char saved_nickname[32];
     uint32_t ticks_to_next_squad_action;
     uint32_t ticks_to_next_kick_vote;
     uint32_t ticks_to_next_dev_pin;

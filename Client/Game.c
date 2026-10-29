@@ -99,6 +99,42 @@ static void rr_game_read_account(struct rr_game *this, struct proto_bug *decoder
         uint64_t count = proto_bug_read_varuint(decoder, "count");
         this->cache.mob_kills[id - 1][rarity] = count;
     }
+    // the account also remembers the loadout and nickname
+    struct rr_id_rarity_pair saved[20];
+    memset(saved, 0, sizeof saved);
+    uint8_t slot;
+    uint8_t any_saved = 0;
+    while ((slot = proto_bug_read_uint8(decoder, "slot")))
+    {
+        uint8_t pid = proto_bug_read_uint8(decoder, "id");
+        uint8_t rarity = proto_bug_read_uint8(decoder, "rarity");
+        if (slot <= 20)
+        {
+            saved[slot - 1].id = pid;
+            saved[slot - 1].rarity = rarity;
+            any_saved = 1;
+        }
+    }
+    char nickname[32];
+    proto_bug_read_string(decoder, nickname, sizeof nickname, "nickname");
+    // account_result is also sent after every craft and drop; only the first
+    // one after connecting may replace what is equipped locally
+    if (!this->account_synced)
+    {
+        this->account_synced = 1;
+        if (any_saved)
+            memcpy(this->cache.loadout, saved,
+                   sizeof saved < sizeof this->cache.loadout
+                       ? sizeof saved
+                       : sizeof this->cache.loadout);
+        if (nickname[0])
+        {
+            strncpy(this->cache.nickname, nickname,
+                    sizeof this->cache.nickname - 1);
+            this->cache.nickname[sizeof this->cache.nickname - 1] = 0;
+            rr_dom_set_text("_0x4346", this->cache.nickname);
+        }
+    }
 }
 
 uint64_t rr_game_get_adjusted_inventory_count(struct rr_game *this, uint8_t id,
@@ -704,6 +740,7 @@ void rr_game_init(struct rr_game *this)
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_give_petals_container_init(this), close_menu_button_init(25))->container);
 #endif
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_ctf_host_container_init(this), close_menu_button_init(25))->container);
+    rr_ui_container_add_element(this->window, rr_ui_auth_container_init(this));
 
     this->link_account_tooltip = rr_ui_container_add_element(
         this->window,
@@ -869,7 +906,8 @@ void rr_game_init(struct rr_game *this)
     this->slots_unlocked =
         RR_SLOT_COUNT_FROM_LEVEL(level_from_xp(this->cache.experience));
     rr_tutorial_init(this);
-    rr_discord_oauth2_init(this);
+    // last: shows the login screen unless a stored session is still valid
+    rr_auth_start(this);
 }
 
 void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
@@ -937,7 +975,8 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                    "useless bytes");
             proto_bug_write_uint64(&verify_encoder, verification,
                                    "verification");
-            proto_bug_write_string(&verify_encoder, this->rivet_account.token,
+            // the PL-P of the logged in account, the master checks it
+            proto_bug_write_string(&verify_encoder, this->rivet_player_token,
                                    300, "rivet token");
             proto_bug_write_string(&verify_encoder, this->rivet_account.uuid,
                                    100, "rivet uuid");
@@ -1940,7 +1979,7 @@ void rr_game_tick(struct rr_game *this, float delta)
             rr_websocket_send(&this->socket, encoder.current - encoder.start);
         }
     }
-    else if (!this->socket_pending)
+    else if (!this->socket_pending && this->logged_in)
     {
         // A connection that keeps getting dropped right away (the same
         // account open in two tabs takes the session from each other) waits

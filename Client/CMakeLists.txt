@@ -60,6 +60,7 @@ set(SRCS
     Assets/RenderPetals.c
     Assets/RenderRarityBackground.c
     Assets/RenderText.c
+    Auth.c
     DOM.c
     Filter.c
     Particle.c
@@ -93,6 +94,7 @@ set(SRCS
     Ui/InGame/Tutorial.c
     Ui/ScrollContainer.c
     Ui/TitleScreen/Account.c
+    Ui/TitleScreen/Auth.c
     Ui/TitleScreen/BiomeButton.c
     Ui/TitleScreen/Crafting.c
     Ui/TitleScreen/CrazyGames.c
@@ -173,7 +175,7 @@ endif()
 if (WASM_BUILD)
     set(CMAKE_C_COMPILER "emcc")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DWASM_BUILD")
-    add_link_options(--closure=1 -sINITIAL_MEMORY=33554432 -sNO_EXIT_RUNTIME=1 -sEXPORTED_FUNCTIONS=_malloc,_free,_rr_discord_oauth2_on_log_in,_rr_crazygames_on_link,_rr_rivet_lobby_on_find,_rr_renderer_main_loop,_main,_rr_key_event,_rr_mouse_event,_rr_touch_event,_rr_wheel_event,_rr_paste_event,_rr_context_event,_rr_focus_event,_rr_on_socket_event_emscripten)
+    add_link_options(--closure=1 -sINITIAL_MEMORY=33554432 -sNO_EXIT_RUNTIME=1 -sEXPORTED_FUNCTIONS=_malloc,_free,_rr_discord_oauth2_on_log_in,_rr_crazygames_on_link,_rr_rivet_lobby_on_find,_rr_renderer_main_loop,_main,_rr_key_event,_rr_mouse_event,_rr_touch_event,_rr_wheel_event,_rr_paste_event,_rr_context_event,_rr_focus_event,_rr_on_socket_event_emscripten,_rr_auth_on_response)
     set(SRCS ${SRCS} Renderer/Wasm.c)
 else()
     set(SRCS ${SRCS} Renderer/Native.cc)
@@ -185,6 +187,11 @@ endif()
 
 if(PDEV)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPDEV")
+endif()
+
+# where the master server lives (see Shared/Api.h), e.g. https://api-game.example.com/
+if(RR_API_URL)
+    add_compile_definitions(RR_BASE_API_URL="${RR_API_URL}")
 endif()
 
 add_executable(rrolf-client ${SRCS})

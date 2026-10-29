@@ -172,6 +172,20 @@ void rr_server_client_write_account(struct rr_server_client *client)
                                     "count");
         }
     proto_bug_write_uint8(&encoder, 0, "id");
+    // what the master remembers besides the inventory: loadout slots (1-based)
+    // and nickname
+    for (uint8_t slot = 0; slot < 20; ++slot)
+    {
+        if (client->saved_loadout[slot].id == 0)
+            continue;
+        proto_bug_write_uint8(&encoder, slot + 1, "slot");
+        proto_bug_write_uint8(&encoder, client->saved_loadout[slot].id, "id");
+        proto_bug_write_uint8(&encoder, client->saved_loadout[slot].rarity,
+                              "rarity");
+    }
+    proto_bug_write_uint8(&encoder, 0, "slot");
+    proto_bug_write_string(&encoder, client->saved_nickname,
+                           sizeof client->saved_nickname, "nickname");
     rr_server_client_write_message(client, encoder.start,
                                    encoder.current - encoder.start);
 }
@@ -306,6 +320,8 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     memset(this->inventory, 0, sizeof this->inventory);
     memset(this->craft_fails, 0, sizeof this->craft_fails);
     memset(this->mob_gallery, 0, sizeof this->mob_gallery);
+    memset(this->saved_loadout, 0, sizeof this->saved_loadout);
+    memset(this->saved_nickname, 0, sizeof this->saved_nickname);
     if (rr_binary_encoder_read_varuint(encoder) != this->nonce)
         return 0;
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.uuid);
@@ -313,6 +329,8 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.name);
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.id);
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.cg_id);
+    // dev status is the is_dev flag of the account on the master
+    this->dev = rr_binary_encoder_read_uint8(encoder) != 0;
 #ifdef CTF
     // saveless: the account only says who the player is, a match always starts
     // from the same level and petals, see Server/Ctf.c
@@ -365,6 +383,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
             this->craft_fails[id][rarity] = count;
         id = rr_binary_encoder_read_uint8(encoder);
     }
+    // tail added by the C master: loadout and nickname
     id = rr_binary_encoder_read_uint8(encoder);
     while (id)
     {
@@ -374,6 +393,21 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
             this->mob_gallery[id - 1][rarity] = count;
         id = rr_binary_encoder_read_uint8(encoder);
     }
+    uint8_t slot = rr_binary_encoder_read_uint8(encoder);
+    while (slot)
+    {
+        uint8_t pid = rr_binary_encoder_read_uint8(encoder);
+        uint8_t rarity = rr_binary_encoder_read_uint8(encoder);
+        if (slot <= 20 && pid < rr_petal_id_max && rarity < rr_rarity_id_max)
+        {
+            this->saved_loadout[slot - 1].id = pid;
+            this->saved_loadout[slot - 1].rarity = rarity;
+        }
+        slot = rr_binary_encoder_read_uint8(encoder);
+    }
+    char nickname[256];
+    rr_binary_encoder_read_nt_string(encoder, nickname);
+    strncpy(this->saved_nickname, nickname, sizeof this->saved_nickname - 1);
     return 1;
 }
 
@@ -426,6 +460,17 @@ void rr_server_client_write_to_api(struct rr_server_client *this)
                                             this->mob_gallery[id][rarity]);
         }
     rr_binary_encoder_write_uint8(&encoder, 0);
+    for (uint8_t slot = 0; slot < 20; ++slot)
+    {
+        if (this->saved_loadout[slot].id == 0)
+            continue;
+        rr_binary_encoder_write_uint8(&encoder, slot + 1);
+        rr_binary_encoder_write_uint8(&encoder, this->saved_loadout[slot].id);
+        rr_binary_encoder_write_uint8(&encoder,
+                                      this->saved_loadout[slot].rarity);
+    }
+    rr_binary_encoder_write_uint8(&encoder, 0);
+    rr_binary_encoder_write_nt_string(&encoder, this->saved_nickname);
     lws_write(this->server->api_client, encoder.start,
               encoder.at - encoder.start, LWS_WRITE_BINARY);
 }

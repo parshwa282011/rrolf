@@ -19,16 +19,16 @@
 #include <Shared/StaticData.h>
 #include <Shared/Utilities.h>
 
+// Where the master server (accounts, tokens) lives. Pass
+// -DRR_BASE_API_URL='"https://api-game.example.com/"' when configuring the
+// client. The shared secret between game servers and the master is never
+// compiled in: servers read SERVER_SECRET from their .env.
+#ifndef RR_BASE_API_URL
 #ifdef RIVET_BUILD
-#define RR_BASE_API_URL "https://rrolf.io/api/"
+#define RR_BASE_API_URL "https://api-game.parshwa.blog/"
 #else
 #define RR_BASE_API_URL "http://localhost:55554/"
 #endif
-#ifdef RR_SERVER
-#define RR_API_SECRET                                                          \
-    "ad904nf3adrgnariwpanyf3qap8unri4t9b384wna3g34ytgdr4bwtvd4y"
-#else
-#define RR_API_SECRET "function a(b) { return k[b], aa[n.v], r.eG[g.b]; };"
 #endif
 
 void rr_api_get_password(char const *, void *);

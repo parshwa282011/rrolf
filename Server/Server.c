@@ -566,12 +566,10 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                                   "rivet uuid");
             proto_bug_read_string(&encoder, client->rivet_account.code, 100,
                                   "oauth2 code");
-
-#ifndef SANDBOX
-            if (rr_get_hash(rr_get_hash(proto_bug_read_varuint(&encoder, "dev_flag"))) == 15010855733518987480u &&
-                strcmp(client->rivet_account.uuid, "742450b4-e376-4548-9944-cc1e19a071ae") == 0)
-#endif
-                client->dev = 1;
+            // dev status comes from the account on the master (is_dev), not
+            // from the client, and a second login of the same account is
+            // handled there too: the older session is ended, this one kept
+            proto_bug_read_varuint(&encoder, "dev_flag"); // legacy, ignored
 
 #ifdef RIVET_BUILD
             struct connected_captures *captures = malloc(sizeof *captures);
@@ -900,6 +898,12 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                     break;
                 }
             }
+            // remember what the player equipped and their name on the account
+            for (uint8_t slot = 0; slot < 20; ++slot)
+                client->saved_loadout[slot] = member->loadout[slot];
+            memcpy(client->saved_nickname, member->nickname, 16);
+            client->saved_nickname[16] = 0;
+            rr_server_client_write_to_api(client);
             if (client->pending_quick_join)
             {
                 client->pending_quick_join = 0;
@@ -1505,6 +1509,22 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
         (struct rr_server *)lws_context_user(lws_get_context(ws));
     switch (reason)
     {
+    case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
+    {
+        char const *secret = getenv("SERVER_SECRET");
+        if (secret == NULL || *secret == 0)
+        {
+            fputs("SERVER_SECRET is not set\n", stderr);
+            return -1;
+        }
+        unsigned char **p = (unsigned char **)packet;
+        unsigned char *end = (*p) + size;
+        if (lws_add_http_header_by_name(ws, (unsigned char const *)"x-server-secret:",
+                                        (unsigned char const *)secret,
+                                        (int)strlen(secret), p, end))
+            return -1;
+        break;
+    }
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
     {
         puts("connected to api server");
@@ -2088,6 +2108,7 @@ void rr_server_run(struct rr_server *this)
             {NULL, NULL, 0, 0} // terminator
         };
         info.port = CONTEXT_PORT_NO_LISTEN;
+        info.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
         info.protocols = protocols;
         info.gid = -1;
         info.uid = -1;
@@ -2100,14 +2121,16 @@ void rr_server_run(struct rr_server *this)
             exit(1);
         }
         client_info.context = this->api_client_context;
-        client_info.address =
-#ifndef RIVET_BUILD
-            "localhost";
-#else
-            "45.79.197.197";
-#endif
-        client_info.port = 55554;
-        client_info.path = "/api/" RR_API_SECRET;
+        // where the master lives comes from the environment (.env in the
+        // working folder is loaded at startup by Main.c)
+        char const *api_host = getenv("RR_API_HOST");
+        char const *api_port = getenv("RR_API_PORT");
+        char const *api_tls = getenv("RR_API_TLS");
+        client_info.address = api_host && *api_host ? api_host : "localhost";
+        client_info.port = api_port && *api_port ? atoi(api_port) : 55554;
+        if (api_tls && atoi(api_tls))
+            client_info.ssl_connection = LCCSCF_USE_SSL;
+        client_info.path = "/ws";
         client_info.host = client_info.address;
         client_info.origin = client_info.address;
         client_info.protocol = protocols[0].name;
