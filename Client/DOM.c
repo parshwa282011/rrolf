@@ -40,6 +40,18 @@ void rr_dom_create_text_element(char const *name, uint32_t text_limit)
         name, text_limit);
 }
 
+// hides what is typed (the text input is created as type=text)
+void rr_dom_set_password(char const *name)
+{
+    EM_ASM(
+        {
+            const elem = document.getElementById(UTF8ToString($0));
+            elem.type = "password";
+            elem.autocomplete = "off";
+        },
+        name);
+}
+
 void rr_dom_element_show(char const *name)
 {
     EM_ASM(

@@ -1,0 +1,685 @@
+// Copyright (C) 2024  Paul Johnson
+
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#ifdef MS_WITH_POSTGRES
+
+#include <libpq-fe.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "config.h"
+#include "db.h"
+
+// One PostgreSQL schema per section: accounts, rysteria, gardn, leaderboards.
+
+struct pg
+{
+    PGconn **conns;
+    int *busy;
+    int count;
+    pthread_mutex_t lock;
+    pthread_cond_t freed;
+};
+
+static PGconn *acquire(struct pg *pg, int *slot)
+{
+    pthread_mutex_lock(&pg->lock);
+    while (1)
+    {
+        for (int i = 0; i < pg->count; ++i)
+        {
+            if (pg->busy[i])
+                continue;
+            pg->busy[i] = 1;
+            pthread_mutex_unlock(&pg->lock);
+            if (PQstatus(pg->conns[i]) != CONNECTION_OK)
+                PQreset(pg->conns[i]);
+            *slot = i;
+            return pg->conns[i];
+        }
+        pthread_cond_wait(&pg->freed, &pg->lock);
+    }
+}
+
+static void release(struct pg *pg, int slot)
+{
+    pthread_mutex_lock(&pg->lock);
+    pg->busy[slot] = 0;
+    pthread_cond_signal(&pg->freed);
+    pthread_mutex_unlock(&pg->lock);
+}
+
+static PGresult *run(PGconn *c, char const *sql, int n,
+                     char const *const *params)
+{
+    return PQexecParams(c, sql, n, NULL, params, NULL, NULL, 0);
+}
+
+static int is_command_ok(PGresult *r)
+{
+    ExecStatusType s = PQresultStatus(r);
+    return s == PGRES_COMMAND_OK || s == PGRES_TUPLES_OK;
+}
+
+static int sqlstate_is(PGresult *r, char const *code)
+{
+    char const *s = PQresultErrorField(r, PG_DIAG_SQLSTATE);
+    return s != NULL && strcmp(s, code) == 0;
+}
+
+static int log_failure(char const *what, PGresult *r)
+{
+    ms_log("db", "postgres %s failed: %s", what,
+           PQresultErrorMessage(r) ? PQresultErrorMessage(r) : "?");
+    return MS_DB_ERROR;
+}
+
+static void fmt_i64(char *out, size_t size, int64_t v)
+{
+    snprintf(out, size, "%lld", (long long)v);
+}
+
+static char const SCHEMA_SQL[] =
+    "CREATE SCHEMA IF NOT EXISTS accounts;"
+    "CREATE SCHEMA IF NOT EXISTS rysteria;"
+    "CREATE SCHEMA IF NOT EXISTS gardn;"
+    "CREATE SCHEMA IF NOT EXISTS leaderboards;"
+    "CREATE TABLE IF NOT EXISTS accounts.accounts ("
+    " uuid text PRIMARY KEY,"
+    " username text NOT NULL,"
+    " username_lower text NOT NULL,"
+    " email text NOT NULL DEFAULT '',"
+    " email_lower text NOT NULL DEFAULT '',"
+    " email_verified boolean NOT NULL DEFAULT false,"
+    " pw_hash text NOT NULL,"
+    " token_key text NOT NULL,"
+    " is_dev boolean NOT NULL DEFAULT false,"
+    " created_at bigint NOT NULL,"
+    " last_login_at bigint NOT NULL DEFAULT 0);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower_idx"
+    " ON accounts.accounts (username_lower);"
+    "CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx"
+    " ON accounts.accounts (email_lower) WHERE email_lower <> '';"
+    "CREATE TABLE IF NOT EXISTS accounts.links ("
+    " uuid text NOT NULL REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
+    " provider text NOT NULL,"
+    " provider_user_id text NOT NULL,"
+    " provider_email text NOT NULL DEFAULT '',"
+    " display_name text NOT NULL DEFAULT '',"
+    " linked_at bigint NOT NULL,"
+    " PRIMARY KEY (uuid, provider),"
+    " CONSTRAINT links_provider_user_unique UNIQUE (provider, provider_user_id));"
+    "CREATE TABLE IF NOT EXISTS rysteria.players ("
+    " uuid text PRIMARY KEY REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
+    " xp double precision NOT NULL DEFAULT 0,"
+    " checkpoint smallint NOT NULL DEFAULT 0,"
+    " petals jsonb NOT NULL DEFAULT '{}',"
+    " failed_crafts jsonb NOT NULL DEFAULT '{}',"
+    " mob_kills jsonb NOT NULL DEFAULT '{}',"
+    " loadout jsonb NOT NULL DEFAULT '{}',"
+    " nickname text NOT NULL DEFAULT '',"
+    " updated_at bigint NOT NULL DEFAULT 0);"
+    "CREATE TABLE IF NOT EXISTS gardn.saves ("
+    " uuid text NOT NULL REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
+    " save_id text NOT NULL,"
+    " score bigint NOT NULL,"
+    " loadout jsonb NOT NULL,"
+    " created_at bigint NOT NULL,"
+    " PRIMARY KEY (uuid, save_id));"
+    "CREATE TABLE IF NOT EXISTS leaderboards.entries ("
+    " board text NOT NULL,"
+    " uuid text NOT NULL REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
+    " score double precision NOT NULL,"
+    " extra jsonb NOT NULL DEFAULT '{}',"
+    " updated_at bigint NOT NULL,"
+    " PRIMARY KEY (board, uuid));"
+    "CREATE INDEX IF NOT EXISTS leaderboards_entries_score_idx"
+    " ON leaderboards.entries (board, score DESC);";
+
+static void read_account(PGresult *r, struct ms_db_account *out)
+{
+    memset(out, 0, sizeof *out);
+    ms_strlcpy(out->uuid, PQgetvalue(r, 0, 0), sizeof out->uuid);
+    ms_strlcpy(out->username, PQgetvalue(r, 0, 1), sizeof out->username);
+    ms_strlcpy(out->email, PQgetvalue(r, 0, 2), sizeof out->email);
+    out->email_verified = PQgetvalue(r, 0, 3)[0] == 't';
+    ms_strlcpy(out->pw_hash, PQgetvalue(r, 0, 4), sizeof out->pw_hash);
+    ms_hex_decode(out->token_key, sizeof out->token_key, PQgetvalue(r, 0, 5));
+    out->is_dev = PQgetvalue(r, 0, 6)[0] == 't';
+    out->created_at = atoll(PQgetvalue(r, 0, 7));
+    out->last_login_at = atoll(PQgetvalue(r, 0, 8));
+}
+
+static int pg_account_create(struct ms_db *db, struct ms_db_account const *a)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char lower_name[sizeof a->username];
+    char lower_email[sizeof a->email];
+    ms_str_lower(lower_name, a->username, sizeof lower_name);
+    ms_str_lower(lower_email, a->email, sizeof lower_email);
+    char key[65];
+    ms_hex_encode(key, a->token_key, 32);
+    char created[32];
+    fmt_i64(created, sizeof created, a->created_at);
+    char const *params[] = {a->uuid,
+                            a->username,
+                            lower_name,
+                            a->email,
+                            lower_email,
+                            a->email_verified ? "true" : "false",
+                            a->pw_hash,
+                            key,
+                            a->is_dev ? "true" : "false",
+                            created};
+    PGresult *r = run(c,
+                      "INSERT INTO accounts.accounts (uuid, username,"
+                      " username_lower, email, email_lower, email_verified,"
+                      " pw_hash, token_key, is_dev, created_at)"
+                      " VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
+                      10, params);
+    int result;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK)
+        result = MS_DB_OK;
+    else if (sqlstate_is(r, "23505"))
+    {
+        char const *constraint = PQresultErrorField(r, PG_DIAG_CONSTRAINT_NAME);
+        result = constraint != NULL && strstr(constraint, "email")
+                     ? MS_DB_CONFLICT_EMAIL
+                     : MS_DB_CONFLICT_USERNAME;
+    }
+    else
+        result = log_failure("account_create", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_account_get(struct ms_db *db, enum ms_db_account_key key,
+                          char const *a, char const *b,
+                          struct ms_db_account *out)
+{
+    struct pg *pg = db->ctx;
+    static char const columns[] =
+        "SELECT a.uuid, a.username, a.email, a.email_verified, a.pw_hash,"
+        " a.token_key, a.is_dev, a.created_at, a.last_login_at"
+        " FROM accounts.accounts a";
+    char sql[512];
+    char const *params[2] = {a, b};
+    int n = 1;
+    switch (key)
+    {
+    case ms_db_by_uuid:
+        snprintf(sql, sizeof sql, "%s WHERE a.uuid = $1", columns);
+        break;
+    case ms_db_by_username:
+        snprintf(sql, sizeof sql, "%s WHERE a.username_lower = $1", columns);
+        break;
+    case ms_db_by_email:
+        snprintf(sql, sizeof sql,
+                 "%s WHERE a.email_lower = $1 AND a.email_lower <> ''",
+                 columns);
+        break;
+    case ms_db_by_link:
+        snprintf(sql, sizeof sql,
+                 "%s JOIN accounts.links l ON l.uuid = a.uuid"
+                 " WHERE l.provider = $1 AND l.provider_user_id = $2",
+                 columns);
+        n = 2;
+        break;
+    default:
+        return MS_DB_ERROR;
+    }
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    PGresult *r = run(c, sql, n, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("account_get", r);
+    else if (PQntuples(r) == 0)
+        result = MS_DB_NOT_FOUND;
+    else
+    {
+        read_account(r, out);
+        result = MS_DB_OK;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_simple(struct ms_db *db, char const *what, char const *sql,
+                     int n, char const *const *params)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    PGresult *r = run(c, sql, n, params);
+    int result = is_command_ok(r) ? MS_DB_OK : log_failure(what, r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_account_set_credentials(struct ms_db *db, char const *uuid,
+                                      char const *pw_hash,
+                                      uint8_t const token_key[32])
+{
+    char key[65];
+    ms_hex_encode(key, token_key, 32);
+    char const *params[] = {uuid, pw_hash, key};
+    return pg_simple(db, "set_credentials",
+                     "UPDATE accounts.accounts SET pw_hash = $2,"
+                     " token_key = $3 WHERE uuid = $1",
+                     3, params);
+}
+
+static int pg_account_set_last_login(struct ms_db *db, char const *uuid,
+                                     int64_t when)
+{
+    char ts[32];
+    fmt_i64(ts, sizeof ts, when);
+    char const *params[] = {uuid, ts};
+    return pg_simple(db, "set_last_login",
+                     "UPDATE accounts.accounts SET last_login_at = $2"
+                     " WHERE uuid = $1",
+                     2, params);
+}
+
+static int pg_link_put(struct ms_db *db, char const *uuid,
+                       struct ms_db_link const *l)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char linked[32];
+    fmt_i64(linked, sizeof linked, l->linked_at);
+    char const *params[] = {uuid,           l->provider,     l->provider_user_id,
+                            l->provider_email, l->display_name, linked};
+    PGresult *r = run(c,
+                      "INSERT INTO accounts.links (uuid, provider,"
+                      " provider_user_id, provider_email, display_name,"
+                      " linked_at) VALUES ($1,$2,$3,$4,$5,$6)"
+                      " ON CONFLICT (uuid, provider) DO UPDATE SET"
+                      " provider_user_id = EXCLUDED.provider_user_id,"
+                      " provider_email = EXCLUDED.provider_email,"
+                      " display_name = EXCLUDED.display_name,"
+                      " linked_at = EXCLUDED.linked_at",
+                      6, params);
+    int result;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK)
+        result = MS_DB_OK;
+    else if (sqlstate_is(r, "23505"))
+        result = MS_DB_CONFLICT_LINK;
+    else
+        result = log_failure("link_put", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_link_delete(struct ms_db *db, char const *uuid,
+                          char const *provider)
+{
+    char const *params[] = {uuid, provider};
+    return pg_simple(db, "link_delete",
+                     "DELETE FROM accounts.links WHERE uuid = $1"
+                     " AND provider = $2",
+                     2, params);
+}
+
+static int pg_links_get(struct ms_db *db, char const *uuid,
+                        struct ms_db_link *out, int max)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char const *params[] = {uuid};
+    PGresult *r = run(c,
+                      "SELECT provider, provider_user_id, provider_email,"
+                      " display_name, linked_at FROM accounts.links"
+                      " WHERE uuid = $1 ORDER BY provider",
+                      1, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("links_get", r);
+    else
+    {
+        int n = PQntuples(r);
+        if (n > max)
+            n = max;
+        for (int i = 0; i < n; ++i)
+        {
+            memset(&out[i], 0, sizeof out[i]);
+            ms_strlcpy(out[i].provider, PQgetvalue(r, i, 0),
+                       sizeof out[i].provider);
+            ms_strlcpy(out[i].provider_user_id, PQgetvalue(r, i, 1),
+                       sizeof out[i].provider_user_id);
+            ms_strlcpy(out[i].provider_email, PQgetvalue(r, i, 2),
+                       sizeof out[i].provider_email);
+            ms_strlcpy(out[i].display_name, PQgetvalue(r, i, 3),
+                       sizeof out[i].display_name);
+            out[i].linked_at = atoll(PQgetvalue(r, i, 4));
+        }
+        result = n;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_rysteria_get(struct ms_db *db, char const *uuid,
+                           struct ms_db_rysteria *out)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char const *params[] = {uuid};
+    PGresult *r = run(c,
+                      "SELECT xp, checkpoint, petals::text,"
+                      " failed_crafts::text, mob_kills::text, loadout::text,"
+                      " nickname FROM rysteria.players WHERE uuid = $1",
+                      1, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("rysteria_get", r);
+    else if (PQntuples(r) == 0)
+        result = MS_DB_NOT_FOUND;
+    else
+    {
+        ms_db_rysteria_free(out);
+        out->xp = atof(PQgetvalue(r, 0, 0));
+        out->checkpoint = atoi(PQgetvalue(r, 0, 1));
+        out->petals = strdup(PQgetvalue(r, 0, 2));
+        out->failed_crafts = strdup(PQgetvalue(r, 0, 3));
+        out->mob_kills = strdup(PQgetvalue(r, 0, 4));
+        out->loadout = strdup(PQgetvalue(r, 0, 5));
+        ms_strlcpy(out->nickname, PQgetvalue(r, 0, 6), sizeof out->nickname);
+        result = MS_DB_OK;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_rysteria_put(struct ms_db *db, char const *uuid,
+                           struct ms_db_rysteria const *v)
+{
+    char xp[64];
+    snprintf(xp, sizeof xp, "%.17g", v->xp);
+    char checkpoint[16];
+    snprintf(checkpoint, sizeof checkpoint, "%d", v->checkpoint);
+    char updated[32];
+    fmt_i64(updated, sizeof updated, ms_now());
+    char const *params[] = {uuid,           xp,        checkpoint, v->petals,
+                            v->failed_crafts, v->mob_kills, v->loadout,
+                            v->nickname,    updated};
+    return pg_simple(db, "rysteria_put",
+                     "INSERT INTO rysteria.players (uuid, xp, checkpoint,"
+                     " petals, failed_crafts, mob_kills, loadout, nickname,"
+                     " updated_at) VALUES ($1,$2::double precision,"
+                     " $3::smallint,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,"
+                     " $8,$9::bigint)"
+                     " ON CONFLICT (uuid) DO UPDATE SET xp = EXCLUDED.xp,"
+                     " checkpoint = EXCLUDED.checkpoint,"
+                     " petals = EXCLUDED.petals,"
+                     " failed_crafts = EXCLUDED.failed_crafts,"
+                     " mob_kills = EXCLUDED.mob_kills,"
+                     " loadout = EXCLUDED.loadout,"
+                     " nickname = EXCLUDED.nickname,"
+                     " updated_at = EXCLUDED.updated_at",
+                     9, params);
+}
+
+static int pg_gardn_list(struct ms_db *db, char const *uuid,
+                         struct ms_db_gsave *out, int max)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char const *params[] = {uuid};
+    PGresult *r = run(c,
+                      "SELECT save_id, score, loadout::text, created_at"
+                      " FROM gardn.saves WHERE uuid = $1"
+                      " ORDER BY created_at DESC, save_id",
+                      1, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("gardn_list", r);
+    else
+    {
+        int n = PQntuples(r);
+        if (n > max)
+            n = max;
+        for (int i = 0; i < n; ++i)
+        {
+            memset(&out[i], 0, sizeof out[i]);
+            ms_strlcpy(out[i].save_id, PQgetvalue(r, i, 0),
+                       sizeof out[i].save_id);
+            out[i].score = (uint32_t)atoll(PQgetvalue(r, i, 1));
+            out[i].loadout = strdup(PQgetvalue(r, i, 2));
+            out[i].created_at = atoll(PQgetvalue(r, i, 3));
+        }
+        result = n;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_gardn_apply(struct ms_db *db, char const *uuid,
+                          struct ms_db_gsave const *add, int add_count,
+                          char const (*remove)[40], int remove_count)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    int result = MS_DB_OK;
+    PGresult *r = PQexec(c, "BEGIN");
+    if (!is_command_ok(r))
+        result = log_failure("gardn_apply begin", r);
+    PQclear(r);
+    for (int i = 0; result == MS_DB_OK && i < add_count; ++i)
+    {
+        char score[32];
+        fmt_i64(score, sizeof score, add[i].score);
+        char created[32];
+        fmt_i64(created, sizeof created,
+                add[i].created_at ? add[i].created_at : ms_now());
+        char const *params[] = {uuid, add[i].save_id, score, add[i].loadout,
+                                created};
+        r = run(c,
+                "INSERT INTO gardn.saves (uuid, save_id, score, loadout,"
+                " created_at) VALUES ($1,$2,$3::bigint,$4::jsonb,$5::bigint)"
+                " ON CONFLICT (uuid, save_id) DO UPDATE SET"
+                " score = EXCLUDED.score, loadout = EXCLUDED.loadout",
+                5, params);
+        if (!is_command_ok(r))
+            result = log_failure("gardn_apply insert", r);
+        PQclear(r);
+    }
+    for (int i = 0; result == MS_DB_OK && i < remove_count; ++i)
+    {
+        char const *params[] = {uuid, remove[i]};
+        r = run(c, "DELETE FROM gardn.saves WHERE uuid = $1 AND save_id = $2",
+                2, params);
+        if (!is_command_ok(r))
+            result = log_failure("gardn_apply delete", r);
+        PQclear(r);
+    }
+    if (result == MS_DB_OK)
+    {
+        char limit[16];
+        snprintf(limit, sizeof limit, "%d", MS_GARDN_MAX_SAVES);
+        char const *params[] = {uuid, limit};
+        r = run(c,
+                "DELETE FROM gardn.saves WHERE uuid = $1 AND save_id NOT IN"
+                " (SELECT save_id FROM gardn.saves WHERE uuid = $1"
+                "  ORDER BY created_at DESC, save_id LIMIT $2::int)",
+                2, params);
+        if (!is_command_ok(r))
+            result = log_failure("gardn_apply trim", r);
+        PQclear(r);
+    }
+    r = PQexec(c, result == MS_DB_OK ? "COMMIT" : "ROLLBACK");
+    if (!is_command_ok(r) && result == MS_DB_OK)
+        result = log_failure("gardn_apply commit", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_lb_submit(struct ms_db *db, char const *board, char const *uuid,
+                        double score, char const *extra_json)
+{
+    char s[64];
+    snprintf(s, sizeof s, "%.17g", score);
+    char updated[32];
+    fmt_i64(updated, sizeof updated, ms_now());
+    char const *params[] = {board, uuid, s, extra_json ? extra_json : "{}",
+                            updated};
+    return pg_simple(db, "lb_submit",
+                     "INSERT INTO leaderboards.entries (board, uuid, score,"
+                     " extra, updated_at) VALUES ($1,$2,$3::double precision,"
+                     " $4::jsonb,$5::bigint)"
+                     " ON CONFLICT (board, uuid) DO UPDATE SET"
+                     " score = GREATEST(leaderboards.entries.score,"
+                     " EXCLUDED.score), extra = EXCLUDED.extra,"
+                     " updated_at = EXCLUDED.updated_at",
+                     5, params);
+}
+
+static int pg_lb_top(struct ms_db *db, char const *board, int limit,
+                     struct ms_db_lb_entry *out)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char lim[16];
+    snprintf(lim, sizeof lim, "%d", limit);
+    char const *params[] = {board, lim};
+    PGresult *r = run(c,
+                      "SELECT uuid, score, extra::text FROM"
+                      " leaderboards.entries WHERE board = $1"
+                      " ORDER BY score DESC LIMIT $2::int",
+                      2, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("lb_top", r);
+    else
+    {
+        int n = PQntuples(r);
+        if (n > limit)
+            n = limit;
+        for (int i = 0; i < n; ++i)
+        {
+            memset(&out[i], 0, sizeof out[i]);
+            ms_strlcpy(out[i].uuid, PQgetvalue(r, i, 0), sizeof out[i].uuid);
+            out[i].score = atof(PQgetvalue(r, i, 1));
+            out[i].extra = strdup(PQgetvalue(r, i, 2));
+        }
+        result = n;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_ping(struct ms_db *db) { return pg_simple(db, "ping", "SELECT 1", 0, NULL); }
+
+static void pg_close(struct ms_db *db)
+{
+    struct pg *pg = db->ctx;
+    for (int i = 0; i < pg->count; ++i)
+        PQfinish(pg->conns[i]);
+    free(pg->conns);
+    free(pg->busy);
+    free(pg);
+    free(db);
+}
+
+struct ms_db *ms_db_postgres_open()
+{
+    struct pg *pg = calloc(1, sizeof *pg);
+    int count = (int)MS_CONFIG.db_pool_size;
+    pg->conns = calloc((size_t)count, sizeof *pg->conns);
+    pg->busy = calloc((size_t)count, sizeof *pg->busy);
+    pthread_mutex_init(&pg->lock, NULL);
+    pthread_cond_init(&pg->freed, NULL);
+    for (int i = 0; i < count; ++i)
+    {
+        PGconn *c = PQconnectdb(MS_CONFIG.postgres_uri);
+        if (PQstatus(c) != CONNECTION_OK)
+        {
+            ms_log("db", "postgres connect failed: %s", PQerrorMessage(c));
+            PQfinish(c);
+            for (int j = 0; j < i; ++j)
+                PQfinish(pg->conns[j]);
+            free(pg->conns);
+            free(pg->busy);
+            free(pg);
+            return NULL;
+        }
+        pg->conns[i] = c;
+        pg->count = i + 1;
+    }
+
+    // serialise concurrent bootstraps of several processes
+    PGresult *r = PQexec(pg->conns[0], "SELECT pg_advisory_lock(7203947)");
+    PQclear(r);
+    r = PQexec(pg->conns[0], SCHEMA_SQL);
+    int ok = PQresultStatus(r) == PGRES_COMMAND_OK;
+    if (!ok)
+        ms_log("db", "postgres schema bootstrap failed: %s",
+               PQresultErrorMessage(r));
+    PQclear(r);
+    r = PQexec(pg->conns[0], "SELECT pg_advisory_unlock(7203947)");
+    PQclear(r);
+    if (!ok)
+    {
+        for (int i = 0; i < pg->count; ++i)
+            PQfinish(pg->conns[i]);
+        free(pg->conns);
+        free(pg->busy);
+        free(pg);
+        return NULL;
+    }
+
+    struct ms_db *db = calloc(1, sizeof *db);
+    db->name = "postgres";
+    db->ctx = pg;
+    db->account_create = pg_account_create;
+    db->account_get = pg_account_get;
+    db->account_set_credentials = pg_account_set_credentials;
+    db->account_set_last_login = pg_account_set_last_login;
+    db->link_put = pg_link_put;
+    db->link_delete = pg_link_delete;
+    db->links_get = pg_links_get;
+    db->rysteria_get = pg_rysteria_get;
+    db->rysteria_put = pg_rysteria_put;
+    db->gardn_list = pg_gardn_list;
+    db->gardn_apply = pg_gardn_apply;
+    db->lb_submit = pg_lb_submit;
+    db->lb_top = pg_lb_top;
+    db->ping = pg_ping;
+    db->close = pg_close;
+    ms_log("db", "postgres ready (%d connections)", count);
+    return db;
+}
+
+#endif // MS_WITH_POSTGRES
