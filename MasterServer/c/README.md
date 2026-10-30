@@ -44,6 +44,11 @@ Public (browser, CORS allow-list, rate limited): `POST /auth/signup`, `/auth/log
 `/oauth/exchange`, `GET /health`. Google, Apple and email answer
 `503 provider_unavailable` (the email service is not working yet).
 
+`GET /health` answers `{"ok","db","node","backup"}` (503 when the database is down).
+Backup servers only (`X-Clone-Secret` = `CLONE_SECRET`): `GET /backup?since=&source=&node=`,
+the change feed described in `db_postgres.c` (PostgreSQL only). Used by
+`dual-server-syncing/`.
+
 Server only (`X-Server-Secret`): `POST /srv/verify`, `/srv/gardn/{load,flush}`,
 `/srv/leaderboard/submit`, `GET /srv/leaderboard/top`.
 

@@ -29,7 +29,8 @@ struct ms_db *MS_DB;
 enum route_kind
 {
     route_public,  // browser facing, JSON, CORS allow-list
-    route_server   // game/gardn servers only, X-Server-Secret, no CORS
+    route_server,  // game/gardn servers only, X-Server-Secret, no CORS
+    route_clone    // backup servers only, X-Clone-Secret, no CORS
 };
 
 struct route
@@ -46,6 +47,7 @@ struct route
 
 static struct route const ROUTES[] = {
     {"GET", "/health", 0, ms_h_health, route_public, "health", 120, 60},
+    {"GET", "/backup", 0, ms_h_backup, route_clone, NULL, 0, 0},
 
     {"POST", "/auth/signup", 0, ms_h_signup, route_public, "signup", 5, 3600},
     {"POST", "/auth/login", 0, ms_h_login, route_public, "login", 10, 600},
@@ -230,6 +232,12 @@ void ms_h_health(struct ms_req *req, struct ms_res *res)
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", ok);
     cJSON_AddStringToObject(o, "db", MS_DB ? MS_DB->name : "none");
+    // which machine answered, and whether it can feed backup servers
+    if (MS_CONFIG.node_name[0])
+        cJSON_AddStringToObject(o, "node", MS_CONFIG.node_name);
+    cJSON_AddBoolToObject(o, "backup",
+                          MS_DB != NULL && MS_DB->backup_pull != NULL &&
+                              strlen(MS_CONFIG.clone_secret) >= 16);
     ms_res_json(res, ok ? 200 : 503, o);
 }
 
@@ -274,12 +282,20 @@ void ms_route(struct ms_req *req, struct ms_res *res)
     }
 
     char key[128];
-    if (route->kind == route_server)
+    if (route->kind == route_server || route->kind == route_clone)
     {
+        int clone = route->kind == route_clone;
+        char const *secret =
+            clone ? MS_CONFIG.clone_secret : MS_CONFIG.server_secret;
         // never reachable from a browser
         if (req->origin[0])
         {
             ms_res_error(res, 403, "forbidden", NULL);
+            return;
+        }
+        if (clone && strlen(secret) < 16)
+        {
+            ms_res_error(res, 503, "backup_disabled", "CLONE_SECRET is not set");
             return;
         }
         snprintf(key, sizeof key, "badsecret:%s", req->ip);
@@ -288,7 +304,8 @@ void ms_route(struct ms_req *req, struct ms_res *res)
             ms_res_error(res, 429, "rate_limited", NULL);
             return;
         }
-        if (!ms_ct_str_equal(req->server_secret, MS_CONFIG.server_secret))
+        if (!ms_ct_str_equal(clone ? req->clone_secret : req->server_secret,
+                             secret))
         {
             ms_rl_add(key, 60);
             ms_res_error(res, 403, "forbidden", NULL);

@@ -15,6 +15,8 @@
 
 #ifdef MS_WITH_POSTGRES
 
+#include <cJSON.h>
+#include <ctype.h>
 #include <libpq-fe.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -151,7 +153,43 @@ static char const SCHEMA_SQL[] =
     " updated_at bigint NOT NULL,"
     " PRIMARY KEY (board, uuid));"
     "CREATE INDEX IF NOT EXISTS leaderboards_entries_score_idx"
-    " ON leaderboards.entries (board, score DESC);";
+    " ON leaderboards.entries (board, score DESC);"
+    // ---- change log for the backup servers (see pg_backup) ----
+    "CREATE SCHEMA IF NOT EXISTS sync;"
+    "CREATE TABLE IF NOT EXISTS sync.meta ("
+    " key text PRIMARY KEY, value text NOT NULL);"
+    "INSERT INTO sync.meta (key, value) VALUES"
+    " ('source_id', gen_random_uuid()::text), ('pruned_before', '0')"
+    " ON CONFLICT DO NOTHING;"
+    "CREATE TABLE IF NOT EXISTS sync.changes ("
+    " id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,"
+    " xid bigint NOT NULL DEFAULT (pg_current_xact_id()::text::bigint),"
+    " at timestamptz NOT NULL DEFAULT now(),"
+    " tbl text NOT NULL, op char(1) NOT NULL, data jsonb NOT NULL);"
+    "CREATE INDEX IF NOT EXISTS changes_xid_idx ON sync.changes (xid);"
+    // A backup server applying a feed sets sync.applying so its own copy does
+    // not log what it is receiving.
+    "CREATE OR REPLACE FUNCTION sync.capture() RETURNS trigger"
+    " LANGUAGE plpgsql AS $f$ BEGIN"
+    " IF current_setting('sync.applying', true) = '1' THEN RETURN NULL; END IF;"
+    " IF TG_OP = 'DELETE' THEN"
+    "  INSERT INTO sync.changes (tbl, op, data) VALUES"
+    "   (TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'D', to_jsonb(OLD));"
+    " ELSE"
+    "  INSERT INTO sync.changes (tbl, op, data) VALUES"
+    "   (TG_TABLE_SCHEMA || '.' || TG_TABLE_NAME, 'U', to_jsonb(NEW));"
+    " END IF;"
+    " RETURN NULL; END $f$;"
+    "DO $f$ DECLARE t text; BEGIN"
+    " FOR t IN SELECT format('%I.%I', schemaname, tablename) FROM pg_tables"
+    "  WHERE schemaname IN ('accounts', 'rysteria', 'gardn', 'leaderboards')"
+    " LOOP"
+    "  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = t::regclass"
+    "   AND tgname = 'sync_capture') THEN"
+    "   EXECUTE format('CREATE TRIGGER sync_capture AFTER INSERT OR UPDATE OR"
+    "    DELETE ON %s FOR EACH ROW EXECUTE FUNCTION sync.capture()', t);"
+    "  END IF;"
+    " END LOOP; END $f$;";
 
 static void read_account(PGresult *r, struct ms_db_account *out)
 {
@@ -607,6 +645,293 @@ static int pg_lb_top(struct ms_db *db, char const *board, int limit,
     return result;
 }
 
+// ---------------------------------------------------------------- backup feed
+//
+// Every write to the data tables is logged by a trigger into sync.changes
+// together with the id of its transaction (xid). A backup server pulls
+//   * everything (mode "snapshot"): the first time, after a failover (another
+//     source id), or when its cursor is older than the history we keep;
+//   * the changes since its cursor (mode "incremental").
+// The cursor is "the oldest transaction id not read yet". A pull only returns
+// transactions older than the oldest one still running (the snapshot's xmin),
+// so a slow transaction is never skipped, and returns that xmin as the next
+// cursor. Rows are replayed in log order, which is the commit order per row.
+// A snapshot is read in the same REPEATABLE READ transaction as its cursor;
+// changes that were already inside it are simply applied again (idempotent).
+//
+// Document (newline delimited json):
+//   {"type":"head","source":..,"node":..,"mode":..,"next":"<cursor>","tables":[..]}
+//   {"t":"schema.table","op":"U"|"D","row":{..}}      repeated
+//   {"type":"end","count":<rows>}
+// "tables" (snapshot only) are in foreign key order, parents first.
+
+#define BACKUP_KEEP "3 days"
+
+struct sbuf
+{
+    char *p;
+    size_t len, cap;
+};
+
+static int sb_add(struct sbuf *b, char const *s, size_t n)
+{
+    if (b->len + n + 1 > b->cap)
+    {
+        size_t cap = b->cap ? b->cap : 65536;
+        while (cap < b->len + n + 1)
+            cap *= 2;
+        char *p = realloc(b->p, cap);
+        if (p == NULL)
+            return -1;
+        b->p = p;
+        b->cap = cap;
+    }
+    memcpy(b->p + b->len, s, n);
+    b->len += n;
+    b->p[b->len] = 0;
+    return 0;
+}
+
+static int sb_line(struct sbuf *b, char const *s)
+{
+    return sb_add(b, s, strlen(s)) || sb_add(b, "\n", 1);
+}
+
+static int digits_only(char const *s)
+{
+    size_t n = s ? strlen(s) : 0;
+    if (n == 0 || n > 18)
+        return 0;
+    for (; *s; ++s)
+        if (*s < '0' || *s > '9')
+            return 0;
+    return 1;
+}
+
+static int ident_ok(char const *s)
+{
+    if (*s == 0)
+        return 0;
+    for (; *s; ++s)
+        if (!isalnum((unsigned char)*s) && *s != '_')
+            return 0;
+    return 1;
+}
+
+// Hourly: drops log rows older than BACKUP_KEEP. pruned_before then names the
+// first transaction a cursor may still start from.
+static void prune_changes(PGconn *c)
+{
+    static int64_t last;
+    int64_t now = ms_now();
+    if (now - last < 3600)
+        return;
+    last = now;
+    PGresult *r = PQexec(
+        c,
+        "WITH keep AS (SELECT min(xid) AS x FROM sync.changes"
+        "  WHERE at >= now() - interval '" BACKUP_KEEP "'),"
+        " del AS (DELETE FROM sync.changes"
+        "  WHERE at < now() - interval '" BACKUP_KEEP "'"
+        "  AND (xid < (SELECT x FROM keep) OR (SELECT x FROM keep) IS NULL)"
+        "  RETURNING xid)"
+        " UPDATE sync.meta SET value = GREATEST(value::bigint,"
+        "  (SELECT max(xid) FROM del) + 1)::text"
+        " WHERE key = 'pruned_before' AND EXISTS (SELECT 1 FROM del)");
+    if (PQresultStatus(r) != PGRES_COMMAND_OK)
+        log_failure("backup prune", r);
+    PQclear(r);
+}
+
+static PGresult *query(PGconn *c, char const *what, char const *sql, int n,
+                       char const *const *params)
+{
+    PGresult *r = run(c, sql, n, params);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+    {
+        log_failure(what, r);
+        PQclear(r);
+        return NULL;
+    }
+    return r;
+}
+
+// appends every row of a one column result as a line; returns rows or -1
+static long append_rows(struct sbuf *b, PGresult *r)
+{
+    int n = PQntuples(r);
+    for (int i = 0; i < n; ++i)
+        if (sb_line(b, PQgetvalue(r, i, 0)))
+            return -1;
+    return n;
+}
+
+static int pg_backup(struct ms_db *db, char const *since, char const *source,
+                     char **out, size_t *out_len)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    struct sbuf b = {0};
+    int rc = MS_DB_ERROR;
+    int in_tx = 0;
+    long count = 0;
+    char src[64] = "", pruned[32] = "0", next[32] = "0";
+    PGresult *r;
+    cJSON *head = NULL;
+
+    prune_changes(c);
+    r = PQexec(c, "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    if (!is_command_ok(r))
+    {
+        log_failure("backup begin", r);
+        PQclear(r);
+        goto done;
+    }
+    PQclear(r);
+    in_tx = 1;
+
+    r = query(c, "backup meta",
+              "SELECT (SELECT value FROM sync.meta WHERE key = 'source_id'),"
+              " (SELECT value FROM sync.meta WHERE key = 'pruned_before'),"
+              " pg_snapshot_xmin(pg_current_snapshot())::text",
+              0, NULL);
+    if (r == NULL)
+        goto done;
+    if (PQntuples(r) != 1 || PQgetisnull(r, 0, 0) || PQgetisnull(r, 0, 1))
+        ms_log("db", "backup: sync.meta is incomplete");
+    else
+    {
+        ms_strlcpy(src, PQgetvalue(r, 0, 0), sizeof src);
+        ms_strlcpy(pruned, PQgetvalue(r, 0, 1), sizeof pruned);
+        ms_strlcpy(next, PQgetvalue(r, 0, 2), sizeof next);
+    }
+    PQclear(r);
+    if (src[0] == 0 || !digits_only(next) || !digits_only(pruned))
+        goto done;
+
+    int incremental = 0;
+    if (digits_only(since) && source != NULL && strcmp(source, src) == 0)
+    {
+        char const *p[] = {since, pruned, next};
+        r = query(c, "backup cursor",
+                  "SELECT $1::bigint >= $2::bigint AND $1::bigint <= $3::bigint",
+                  3, p);
+        if (r == NULL)
+            goto done;
+        incremental = PQgetvalue(r, 0, 0)[0] == 't';
+        PQclear(r);
+    }
+
+    head = cJSON_CreateObject();
+    cJSON_AddStringToObject(head, "type", "head");
+    cJSON_AddStringToObject(head, "source", src);
+    cJSON_AddStringToObject(head, "node", MS_CONFIG.node_name);
+    cJSON_AddStringToObject(head, "mode", incremental ? "incremental" : "snapshot");
+    cJSON_AddStringToObject(head, "next", next);
+    cJSON *list = cJSON_AddArrayToObject(head, "tables");
+
+    if (incremental)
+    {
+        char const *p[] = {since, next};
+        r = query(c, "backup changes",
+                  "SELECT jsonb_build_object('t', tbl, 'op', op, 'row', data)::text"
+                  " FROM sync.changes WHERE xid >= $1::bigint AND xid < $2::bigint"
+                  " ORDER BY id",
+                  2, p);
+        if (r == NULL)
+            goto done;
+        // the head goes first, so collect the rows after it below
+        char *head_text = cJSON_PrintUnformatted(head);
+        int bad = head_text == NULL || sb_line(&b, head_text);
+        free(head_text);
+        count = bad ? -1 : append_rows(&b, r);
+        PQclear(r);
+        if (count < 0)
+            goto done;
+    }
+    else
+    {
+        // tables with a capture trigger, parents before the tables that
+        // reference them
+        r = query(c, "backup tables",
+                  "WITH RECURSIVE t AS (SELECT c.oid FROM pg_trigger g"
+                  "  JOIN pg_class c ON c.oid = g.tgrelid"
+                  "  WHERE g.tgname = 'sync_capture'),"
+                  " d (rel, depth) AS (SELECT oid, 0 FROM t UNION ALL"
+                  "  SELECT f.conrelid, d.depth + 1 FROM d"
+                  "  JOIN pg_constraint f ON f.contype = 'f'"
+                  "  AND f.confrelid = d.rel AND f.conrelid <> f.confrelid"
+                  "  WHERE d.depth < 8 AND f.conrelid IN (SELECT oid FROM t))"
+                  " SELECT n.nspname, c.relname FROM d"
+                  " JOIN pg_class c ON c.oid = d.rel"
+                  " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                  " GROUP BY n.nspname, c.relname ORDER BY max(d.depth), 1, 2",
+                  0, NULL);
+        if (r == NULL)
+            goto done;
+        int ntables = PQntuples(r);
+        char (*names)[2][64] = calloc((size_t)ntables + 1, sizeof *names);
+        int usable = 0;
+        for (int i = 0; i < ntables; ++i)
+        {
+            if (!ident_ok(PQgetvalue(r, i, 0)) || !ident_ok(PQgetvalue(r, i, 1)))
+            {
+                ms_log("db", "backup: skipping table with an odd name");
+                continue;
+            }
+            ms_strlcpy(names[usable][0], PQgetvalue(r, i, 0), 64);
+            ms_strlcpy(names[usable][1], PQgetvalue(r, i, 1), 64);
+            char full[130];
+            snprintf(full, sizeof full, "%s.%s", names[usable][0], names[usable][1]);
+            cJSON_AddItemToArray(list, cJSON_CreateString(full));
+            ++usable;
+        }
+        PQclear(r);
+        char *head_text = cJSON_PrintUnformatted(head);
+        int bad = usable == 0 || head_text == NULL || sb_line(&b, head_text);
+        free(head_text);
+        for (int i = 0; i < usable && !bad; ++i)
+        {
+            char sql[400];
+            snprintf(sql, sizeof sql,
+                     "SELECT jsonb_build_object('t', '%s.%s', 'op', 'U',"
+                     " 'row', to_jsonb(x))::text FROM \"%s\".\"%s\" x",
+                     names[i][0], names[i][1], names[i][0], names[i][1]);
+            r = query(c, "backup snapshot", sql, 0, NULL);
+            long n = r ? append_rows(&b, r) : -1;
+            PQclear(r);
+            if (n < 0)
+                bad = 1;
+            else
+                count += n;
+        }
+        free(names);
+        if (bad)
+            goto done;
+    }
+
+    char end[64];
+    snprintf(end, sizeof end, "{\"type\":\"end\",\"count\":%ld}", count);
+    if (sb_line(&b, end))
+        goto done;
+    *out = b.p;
+    *out_len = b.len;
+    b.p = NULL;
+    rc = MS_DB_OK;
+
+done:
+    if (in_tx)
+    {
+        r = PQexec(c, "ROLLBACK");
+        PQclear(r);
+    }
+    cJSON_Delete(head);
+    free(b.p);
+    release(pg, slot);
+    return rc;
+}
+
 static int pg_ping(struct ms_db *db) { return pg_simple(db, "ping", "SELECT 1", 0, NULL); }
 
 static void pg_close(struct ms_db *db)
@@ -683,6 +1008,7 @@ struct ms_db *ms_db_postgres_open()
     db->gardn_apply = pg_gardn_apply;
     db->lb_submit = pg_lb_submit;
     db->lb_top = pg_lb_top;
+    db->backup_pull = pg_backup;
     db->ping = pg_ping;
     db->close = pg_close;
     ms_log("db", "postgres ready (%d connections)", count);

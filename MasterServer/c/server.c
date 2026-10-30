@@ -112,6 +112,8 @@ static void fill_request(struct lws *wsi, struct http_job *job,
     lws_hdr_copy(wsi, req->origin, sizeof req->origin, WSI_TOKEN_ORIGIN);
     lws_hdr_custom_copy(wsi, req->server_secret, sizeof req->server_secret,
                         "x-server-secret:", 16);
+    lws_hdr_custom_copy(wsi, req->clone_secret, sizeof req->clone_secret,
+                        "x-clone-secret:", 15);
 
     char peer[64] = "";
     lws_get_peer_simple(wsi, peer, sizeof peer);

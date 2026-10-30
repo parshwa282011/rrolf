@@ -34,6 +34,8 @@ struct ms_config
     char bind_address[64]; // "" = all interfaces
     char allowed_origins[512]; // comma separated, exact match
     char server_secret[128];
+    char clone_secret[128]; // X-Clone-Secret for /backup (backup servers)
+    char node_name[48];     // this machine's name, shown by /health
     char token_secret_1[128];
     char token_secret_2[128];
     char otp_pepper[128];

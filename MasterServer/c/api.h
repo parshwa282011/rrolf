@@ -33,6 +33,7 @@ struct ms_req
     char origin[160];
     char ip[64];
     char server_secret[160];
+    char clone_secret[160];
     char *body; // NUL terminated, may be NULL
     size_t body_len;
 };
@@ -98,6 +99,8 @@ void ms_h_srv_lb_submit(struct ms_req *, struct ms_res *);
 void ms_h_srv_lb_top(struct ms_req *, struct ms_res *);
 
 void ms_h_health(struct ms_req *, struct ms_res *);
+// GET /backup: change feed for the backup servers (X-Clone-Secret)
+void ms_h_backup(struct ms_req *, struct ms_res *);
 
 // ---- shared auth helpers (auth.c) ----
 enum ms_auth_result

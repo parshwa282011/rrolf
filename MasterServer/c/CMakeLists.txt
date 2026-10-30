@@ -44,6 +44,7 @@ pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 set(MS_SOURCES
     api.c
     auth.c
+    backup.c
     config.c
     db.c
     discord.c

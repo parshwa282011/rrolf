@@ -140,6 +140,14 @@ struct ms_db
     int (*lb_top)(struct ms_db *, char const *board, int limit,
                   struct ms_db_lb_entry *out);
 
+    // Change feed for backup servers (GET /backup). `since` / `source` are the
+    // cursor and source id from the previous answer (NULL for the first pull).
+    // Fills *out with a malloc'd newline-delimited json document: a head line,
+    // one line per row change (or per row of a full snapshot) and an end line.
+    // NULL when the backend has no feed (MongoDB).
+    int (*backup_pull)(struct ms_db *, char const *since, char const *source,
+                       char **out, size_t *out_len);
+
     int (*ping)(struct ms_db *);
     void (*close)(struct ms_db *);
 };

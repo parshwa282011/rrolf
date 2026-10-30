@@ -119,6 +119,8 @@ int ms_config_from_env()
     get_str(c->allowed_origins, sizeof c->allowed_origins, "ALLOWED_ORIGINS",
             "");
     get_str(c->server_secret, sizeof c->server_secret, "SERVER_SECRET", "");
+    get_str(c->clone_secret, sizeof c->clone_secret, "CLONE_SECRET", "");
+    get_str(c->node_name, sizeof c->node_name, "NODE_NAME", "");
     get_str(c->token_secret_1, sizeof c->token_secret_1, "TOKEN_SECRET_1", "");
     get_str(c->token_secret_2, sizeof c->token_secret_2, "TOKEN_SECRET_2", "");
     get_str(c->otp_pepper, sizeof c->otp_pepper, "OTP_PEPPER", "");
