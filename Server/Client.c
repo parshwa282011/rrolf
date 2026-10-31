@@ -257,6 +257,10 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
     double base = RR_CRAFT_CHANCES[rarity];
     if (id == rr_petal_id_basic)
         base = rarity > 0 ? RR_CRAFT_CHANCES[rarity - 1] : 1;
+#ifdef CTF
+    // a match is not about craft luck: every craft succeeds
+    base = 1;
+#endif
     double xp_gain = 0;
     while (now >= 5)
     {
