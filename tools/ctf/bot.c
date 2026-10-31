@@ -66,6 +66,11 @@ struct bot
     // the inventory the server last sent
     uint64_t inv[rr_petal_id_max][rr_rarity_id_max];
     int have_account;
+    // the squads of the other game servers, and chat from them
+    int dir_count;
+    char dir_server[16], dir_code[16], dir_leader[17];
+    int chats;
+    char chat_name[65], chat_text[65];
     // the last capture the flag state
     int have_state;
     uint8_t phase, team_count, my_team, flags, winner, message, message_arg;
@@ -329,6 +334,63 @@ static void on_packet(struct bot *b, uint8_t *data, size_t size)
         proto_bug_read_string(&d, b->token, sizeof b->token, "token");
         proto_bug_read_string(&d, name, sizeof name, "name");
     }
+    else if (header == rr_clientbound_squad_directory)
+    {
+        b->dir_count = proto_bug_read_uint8(&d, "count");
+        for (int i = 0; i < b->dir_count; ++i)
+        {
+            char server[16], code[16], leader[17];
+            proto_bug_read_string(&d, server, 16, "server");
+            proto_bug_read_string(&d, code, 16, "code");
+            proto_bug_read_uint8(&d, "members");
+            proto_bug_read_uint8(&d, "private");
+            proto_bug_read_string(&d, leader, 17, "leader");
+            if (i == 0)
+            {
+                memcpy(b->dir_server, server, sizeof server);
+                memcpy(b->dir_code, code, sizeof code);
+                memcpy(b->dir_leader, leader, sizeof leader);
+            }
+        }
+    }
+    else if (header == rr_clientbound_animation_update)
+    {
+        while (proto_bug_read_uint8(&d, "continue"))
+        {
+            uint8_t type = proto_bug_read_uint8(&d, "ani type");
+            if (type == rr_animation_type_lightningbolt)
+            {
+                uint8_t length = proto_bug_read_uint8(&d, "ani length");
+                for (int i = 0; i < length; ++i)
+                {
+                    proto_bug_read_float32(&d, "ani x");
+                    proto_bug_read_float32(&d, "ani y");
+                }
+            }
+            else if (type == rr_animation_type_damagenumber)
+            {
+                proto_bug_read_float32(&d, "ani x");
+                proto_bug_read_float32(&d, "ani y");
+                proto_bug_read_varuint(&d, "damage");
+                proto_bug_read_uint8(&d, "color type");
+            }
+            else if (type == rr_animation_type_chat)
+            {
+                proto_bug_read_string(&d, b->chat_name, 64, "name");
+                proto_bug_read_string(&d, b->chat_text, 64, "chat");
+                ++b->chats;
+            }
+            else if (type == rr_animation_type_area_damage)
+            {
+                proto_bug_read_float32(&d, "ani x");
+                proto_bug_read_float32(&d, "ani y");
+                proto_bug_read_float32(&d, "size");
+                proto_bug_read_uint8(&d, "color type");
+            }
+            else
+                break;
+        }
+    }
     else if (header == rr_clientbound_account_result)
     {
         proto_bug_read_float64(&d, "xp");
@@ -426,6 +488,31 @@ static int connect_bot(struct bot *b, int port)
 
 // ---- the test
 
+// sends the loadout the way the client does: a nickname, then the primary and
+// secondary petal of each slot
+static void send_loadout(struct bot *b, uint8_t const (*pairs)[2], int slots)
+{
+    struct proto_bug e = begin(b, rr_serverbound_squad_update);
+    proto_bug_write_string(&e, b->name, 16, "nickname");
+    proto_bug_write_uint8(&e, RR_CTF_START_PETALS + RR_CTF_START_AZALEAS,
+                          "loadout count");
+    for (int i = 0; i < RR_CTF_START_PETALS + RR_CTF_START_AZALEAS; ++i)
+    {
+        proto_bug_write_uint8(&e, i < slots ? pairs[i][0] : 0, "id");
+        proto_bug_write_uint8(&e, i < slots ? pairs[i][1] : 0, "rarity");
+        proto_bug_write_uint8(&e, 0, "id");
+        proto_bug_write_uint8(&e, 0, "rarity");
+    }
+    finish(b, &e);
+}
+
+static void send_chat(struct bot *b, char const *text)
+{
+    struct proto_bug e = begin(b, rr_serverbound_chat);
+    proto_bug_write_string(&e, text, 64, "chat");
+    finish(b, &e);
+}
+
 static void pump(double seconds)
 {
     double end = now() + seconds;
@@ -460,6 +547,15 @@ int main(int argc, char **argv)
         struct bot *b = &bots[i];
         snprintf(b->name, sizeof b->name, "%c", 'A' + i);
         snprintf(b->xff, sizeof b->xff, "127.0.0.%d", 10 + i);
+        // a master server that needs real accounts (the C one) is given each
+        // bot's uuid and PL-P in BOT_UUID_A / BOT_TOKEN_A, BOT_UUID_B ...
+        char key[32];
+        snprintf(key, sizeof key, "BOT_UUID_%c", 'A' + i);
+        if (getenv(key))
+            snprintf(b->uuid, sizeof b->uuid, "%s", getenv(key));
+        snprintf(key, sizeof key, "BOT_TOKEN_%c", 'A' + i);
+        if (getenv(key))
+            snprintf(b->token, sizeof b->token, "%s", getenv(key));
         b->my_team = 255;
         if (!connect_bot(b, port))
         {
@@ -477,6 +573,18 @@ int main(int argc, char **argv)
     create_squad(B);
     WAIT(A->code[0] && B->code[0], 6, "both squads have a code");
     printf("  squad codes: A %s, B %s\n", A->code, B->code);
+
+    if (getenv("BOT_EXPECT_OTHER_SERVER"))
+    {
+        printf("another game server: its squads and its chat\n");
+        WAIT(A->dir_count == 1, 8, "the squads of the other server arrive");
+        CHECK(strcmp(A->dir_server, "hc") == 0 && strcmp(A->dir_code, "HC-zzzzzz") == 0 &&
+                  strcmp(A->dir_leader, "Zed") == 0,
+              "%s %s %s", A->dir_server, A->dir_code, A->dir_leader);
+        WAIT(A->chats >= 1, 8, "chat from the other server arrives");
+        CHECK(strcmp(A->chat_name, "[hc] Zed") == 0 && strcmp(A->chat_text, "hi from hc") == 0,
+              "'%s': '%s'", A->chat_name, A->chat_text);
+    }
 
     printf("lobby\n");
     WAIT(A->have_state, 3, "a capture the flag state");
@@ -516,6 +624,7 @@ int main(int argc, char **argv)
     CHECK(!(A->flags >> 5 & 1), "no flags yet");
     WAIT(A->last_in_game != 0 && B->last_in_game != 0, 3, "both are in the game");
     pump(0.5); // some more updates
+    send_chat(A, "hello world"); // the other game server shows it
     CHECK(A->resets == 1 && B->resets == 1,
           "the update that puts a player in the game tells the client to start from nothing, exactly once (%d, %d)",
           A->resets, B->resets);
@@ -608,6 +717,21 @@ int main(int argc, char **argv)
     CHECK(B->resets == 1, "the first update after a reconnect starts the client from nothing (%d)", B->resets);
     pump(1.5);
 
+    printf("a loadout change is on the flower with no respawn\n");
+    {
+        int before = B->packets;
+        uint8_t loadout[3][2] = {{rr_petal_id_basic, rr_rarity_id_epic},
+                                 {rr_petal_id_azalea, rr_rarity_id_epic},
+                                 {rr_petal_id_basic, rr_rarity_id_epic}};
+        send_loadout(B, loadout, 3);
+        pump(1.0);
+        uint8_t other[2][2] = {{rr_petal_id_azalea, rr_rarity_id_epic}, {0, 0}};
+        send_loadout(B, other, 2);
+        pump(1.0);
+        CHECK(B->packets > before + 10 && B->last_in_game == 1,
+              "B stays in the game, with no new world, while its petals change");
+    }
+
     printf("the give petals PIN works in a match\n");
     {
         uint64_t before = B->inv[rr_petal_id_stinger][rr_rarity_id_epic];
@@ -669,6 +793,13 @@ int main(int argc, char **argv)
     WAIT(A->phase == rr_ctf_phase_lobby && B->phase == rr_ctf_phase_lobby, 6, "the lobby");
     CHECK(A->team_count == 0, "the squads are free again");
     CHECK(!(A->flags & 1), "the walls are back up");
+    // B crafted, was given Stingers and farmed: none of it is kept
+    WAIT(B->inv[rr_petal_id_stinger][rr_rarity_id_epic] == 0 &&
+             B->inv[rr_petal_id_basic][rr_rarity_id_epic] == RR_CTF_START_PETALS,
+         3, "the end of the match gives B the starting petals back");
+    CHECK(B->inv[rr_petal_id_basic][rr_rarity_id_legendary] == 0 &&
+              B->inv[rr_petal_id_azalea][rr_rarity_id_epic] == RR_CTF_START_AZALEAS,
+          "no crafted petal is left, and the Azalea is there");
 
     printf("a second match on the same server, the host ends it\n");
     pump(0.8);
@@ -686,8 +817,19 @@ int main(int argc, char **argv)
     CHECK(A->flag[0].state == rr_ctf_flag_standing && A->flag[3].state == rr_ctf_flag_standing,
           "every flag stands on its point");
     pump(0.8);
+    {
+        struct proto_bug e = begin(A, rr_serverbound_petals_craft);
+        proto_bug_write_uint8(&e, rr_petal_id_basic, "craft id");
+        proto_bug_write_uint8(&e, rr_rarity_id_epic, "craft rarity");
+        proto_bug_write_varuint(&e, 5, "craft count");
+        finish(A, &e);
+    }
+    WAIT(A->inv[rr_petal_id_basic][rr_rarity_id_legendary] == 1, 3, "A crafted a Legendary Basic");
     send_simple(A, rr_serverbound_ctf_cancel);
     WAIT(A->phase == rr_ctf_phase_lobby && A->team_count == 0, 3, "cancelling goes back to the lobby");
+    WAIT(A->inv[rr_petal_id_basic][rr_rarity_id_legendary] == 0 &&
+             A->inv[rr_petal_id_basic][rr_rarity_id_epic] == RR_CTF_START_PETALS,
+         3, "cancelling the match also gives the starting petals back");
     WAIT(A->last_in_game == 0 && B->last_in_game == 0, 3, "everyone is back at the menu");
 
     printf("\n%d checks, %d failed\n", checks, failures);
