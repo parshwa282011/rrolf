@@ -44,6 +44,7 @@
 #include <Shared/cJSON.h>
 #include <Shared/pb.h>
 
+volatile int RR_SERVER_STOP_REQUESTED = 0;
 uint8_t lws_message_data[MESSAGE_BUFFER_SIZE];
 uint8_t *outgoing_message = lws_message_data + LWS_PRE;
 
@@ -174,7 +175,9 @@ static void write_animation_function(struct rr_simulation *simulation,
         animation->color_type != rr_animation_color_type_heal &&
         animation->squad != client->squad)
         return;
-    if (animation->type == rr_animation_type_chat)
+    // chat from a player on another game server has no owner here
+    if (animation->type == rr_animation_type_chat &&
+        animation->owner != RR_NULL_ENTITY)
     {
         struct rr_server_client *sender =
             rr_simulation_get_player_info(simulation, p_info_id)->client;
@@ -904,6 +907,10 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             memcpy(client->saved_nickname, member->nickname, 16);
             client->saved_nickname[16] = 0;
             rr_server_client_write_to_api(client);
+#ifdef CTF
+            // a match has no respawn button: the new petals are on the flower
+            rr_ctf_apply_loadout(this, client);
+#endif
             if (client->pending_quick_join)
             {
                 client->pending_quick_join = 0;
@@ -1121,6 +1128,21 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
             printf("[chat] %s: %s\n", animation->name, animation->message);
             animation->type = rr_animation_type_chat;
             animation->owner = client->player_info->parent_id;
+            // every other game server shows it too
+            if (this->api_ws_ready)
+            {
+                char name[16];
+                snprintf(name, sizeof name, "%s", animation->name);
+                struct rr_binary_encoder chat_encoder;
+                rr_binary_encoder_init(&chat_encoder, outgoing_message);
+                rr_binary_encoder_write_uint8(&chat_encoder, 6);
+                rr_binary_encoder_write_nt_string(&chat_encoder, name);
+                rr_binary_encoder_write_nt_string(&chat_encoder,
+                                                  animation->message);
+                lws_write(this->api_client, chat_encoder.start,
+                          chat_encoder.at - chat_encoder.start,
+                          LWS_WRITE_BINARY);
+            }
             break;
         }
         case rr_serverbound_chat_block:
@@ -1529,16 +1551,21 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
     {
         puts("connected to api server");
         this->api_ws_ready = 1;
-        char *lobby_id =
+        // the master restarts a server that drops by this name, the deployment
+        // scripts set RR_SERVER_NAME (servers.conf name)
+        char const *lobby_id =
 #ifdef RIVET_BUILD
             getenv("RIVET_LOBBY_ID");
 #else
             "localhost";
 #endif
+        char const *server_name = getenv("RR_SERVER_NAME");
+        if (server_name != NULL && *server_name)
+            lobby_id = server_name;
         struct rr_binary_encoder encoder;
         rr_binary_encoder_init(&encoder, outgoing_message);
         rr_binary_encoder_write_uint8(&encoder, 101);
-        rr_binary_encoder_write_nt_string(&encoder, lobby_id);
+        rr_binary_encoder_write_nt_string(&encoder, (char *)lobby_id);
         lws_write(this->api_client, encoder.start, encoder.at - encoder.start,
                   LWS_WRITE_BINARY);
     }
@@ -1759,6 +1786,50 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                                                  uuid, token, code);
             break;
         }
+        case 4:
+        {
+            // chat from a player on another game server: server name message
+            char label[64] = {0};
+            char name[64] = {0};
+            char message[128] = {0};
+            rr_binary_encoder_read_nt_string(&decoder, label);
+            rr_binary_encoder_read_nt_string(&decoder, name);
+            rr_binary_encoder_read_nt_string(&decoder, message);
+            if (message[0] == 0 || this->simulation.animation_length >= 16384)
+                break;
+            struct rr_simulation_animation *animation =
+                &this->simulation
+                     .animations[this->simulation.animation_length++];
+            memset(animation, 0, sizeof *animation);
+            snprintf(animation->name, 64, "[%.12s] %.16s", label, name);
+            snprintf(animation->message, 64, "%s", message);
+            animation->type = rr_animation_type_chat;
+            animation->owner = RR_NULL_ENTITY;
+            break;
+        }
+        case 5:
+        {
+            // the squads of the other game servers
+            uint8_t count = rr_binary_encoder_read_uint8(&decoder);
+            if (count > RR_REMOTE_SQUAD_MAX)
+                count = RR_REMOTE_SQUAD_MAX;
+            for (uint8_t i = 0; i < count; ++i)
+            {
+                struct rr_remote_squad *entry = &this->remote_squads[i];
+                memset(entry, 0, sizeof *entry);
+                char server[64] = {0}, code[64] = {0}, leader[64] = {0};
+                rr_binary_encoder_read_nt_string(&decoder, server);
+                rr_binary_encoder_read_nt_string(&decoder, code);
+                entry->members = rr_binary_encoder_read_uint8(&decoder);
+                entry->is_private = rr_binary_encoder_read_uint8(&decoder);
+                rr_binary_encoder_read_nt_string(&decoder, leader);
+                snprintf(entry->server, sizeof entry->server, "%s", server);
+                snprintf(entry->code, sizeof entry->code, "%s", code);
+                snprintf(entry->leader, sizeof entry->leader, "%s", leader);
+            }
+            this->remote_squad_count = count;
+            break;
+        }
         default:
             break;
         }
@@ -1823,10 +1894,83 @@ struct rr_leaderboard_sort_entry
 };
 #endif
 
+// every couple of seconds: tell the master which squads this server has, and
+// give the players the squads of all the other servers
+#define DIRECTORY_INTERVAL_TICKS 50
+
+static void send_squad_directory(struct rr_server *this)
+{
+    // to the master (op 7)
+    struct rr_binary_encoder report;
+    rr_binary_encoder_init(&report, outgoing_message);
+    rr_binary_encoder_write_uint8(&report, 7);
+    uint8_t *count_at = report.at;
+    rr_binary_encoder_write_uint8(&report, 0);
+    uint8_t count = 0;
+    for (uint32_t s = 0; s < RR_SQUAD_COUNT && count < 64; ++s)
+    {
+        struct rr_squad *squad = &this->squads[s];
+        if (squad->member_count == 0)
+            continue;
+        // the same rule as the squad list: a squad that hides its code stays
+        // hidden
+        char code[16];
+        if (squad->expose_code)
+            snprintf(code, sizeof code, "%s-%s",
+                     RR_BIOME_SERVERS[RR_GLOBAL_BIOME].squad_prefix,
+                     squad->squad_code);
+        else
+            snprintf(code, sizeof code, "(private)");
+        char leader[17] = "";
+        if (squad->owner < RR_SQUAD_MEMBER_COUNT &&
+            squad->members[squad->owner].in_use)
+            snprintf(leader, sizeof leader, "%s",
+                     squad->members[squad->owner].nickname);
+        rr_binary_encoder_write_nt_string(&report, code);
+        rr_binary_encoder_write_uint8(&report, squad->member_count);
+        rr_binary_encoder_write_uint8(&report, squad->private);
+        rr_binary_encoder_write_nt_string(&report, leader);
+        ++count;
+    }
+    *count_at = count;
+    lws_write(this->api_client, report.start, report.at - report.start,
+              LWS_WRITE_BINARY);
+    // to the players
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+    {
+        if (!rr_bitset_get(this->clients_in_use, i))
+            continue;
+        struct rr_server_client *client = &this->clients[i];
+        if (!client->verified || client->disconnected)
+            continue;
+        struct proto_bug encoder;
+        proto_bug_init(&encoder, outgoing_message);
+        proto_bug_write_uint8(&encoder, rr_clientbound_squad_directory,
+                              "header");
+        proto_bug_write_uint8(&encoder, this->remote_squad_count, "count");
+        for (uint8_t r = 0; r < this->remote_squad_count; ++r)
+        {
+            struct rr_remote_squad *entry = &this->remote_squads[r];
+            proto_bug_write_string(&encoder, entry->server, 16, "server");
+            proto_bug_write_string(&encoder, entry->code, 16, "code");
+            proto_bug_write_uint8(&encoder, entry->members, "members");
+            proto_bug_write_uint8(&encoder, entry->is_private, "private");
+            proto_bug_write_string(&encoder, entry->leader, 17, "leader");
+        }
+        rr_server_client_write_message(client, encoder.start,
+                                       encoder.current - encoder.start);
+    }
+}
+
 static void server_tick(struct rr_server *this)
 {
     if (!this->api_ws_ready)
         return;
+    if (++this->directory_ticks >= DIRECTORY_INTERVAL_TICKS)
+    {
+        this->directory_ticks = 0;
+        send_squad_directory(this);
+    }
     rr_simulation_tick(&this->simulation);
 #ifdef CTF
     rr_ctf_tick(this);
@@ -1889,7 +2033,13 @@ static void server_tick(struct rr_server *this)
             }
             if (client->disconnected)
             {
+                // in a match the player keeps their place, squad and what they
+                // farmed for a while, so they can come back
+#ifdef CTF
+                if (++client->disconnected_ticks > RR_CTF_RECONNECT_TICKS)
+#else
                 if (++client->disconnected_ticks > 60 * 25)
+#endif
                 {
                     rr_bitset_unset(this->clients_in_use, i);
                     client->in_use = 0;
@@ -2145,6 +2295,21 @@ void rr_server_run(struct rr_server *this)
     struct timeval end;
     while (1)
     {
+        if (RR_SERVER_STOP_REQUESTED)
+        {
+            // on purpose: the master must not start this server again
+            if (this->api_ws_ready)
+            {
+                struct rr_binary_encoder bye;
+                rr_binary_encoder_init(&bye, outgoing_message);
+                rr_binary_encoder_write_uint8(&bye, 8);
+                lws_write(this->api_client, bye.start, bye.at - bye.start,
+                          LWS_WRITE_BINARY);
+                lws_service(this->api_client_context, 50);
+            }
+            puts("<rr_server::stopping>");
+            exit(0);
+        }
         gettimeofday(&start, NULL);
         lws_service(this->server, -1);
         lws_service(this->api_client_context, -1);

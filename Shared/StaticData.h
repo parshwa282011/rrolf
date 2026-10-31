@@ -75,7 +75,9 @@ enum rr_clientbound_packet_header
     rr_clientbound_leaderboard_update,
     rr_clientbound_account_reply,
     rr_clientbound_ctf_state,
-    rr_clientbound_snail_state
+    rr_clientbound_snail_state,
+    // the squads of the other game servers, see Server/Server.c
+    rr_clientbound_squad_directory
 };
 
 // what a rr_serverbound_account_request asks the master server (through the

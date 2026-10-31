@@ -68,6 +68,12 @@ static void load_dotenv(void)
     fclose(f);
 }
 
+static void on_stop_signal(int sig)
+{
+    (void)sig;
+    RR_SERVER_STOP_REQUESTED = 1;
+}
+
 int main()
 {
     // logs go to a file: without this the output only appears at exit
@@ -75,7 +81,10 @@ int main()
     load_dotenv();
     fprintf(stderr, "gameserver on version %llu\n", RR_SECRET8 ^ 255);
     srand(time(0));
-    // signal(SIGINT, sigint_handle);
+    // stopping on purpose is told to the master, which restarts a server that
+    // just disappears
+    signal(SIGTERM, on_stop_signal);
+    signal(SIGINT, on_stop_signal);
 #ifdef RIVET_BUILD
     curl_global_init(CURL_GLOBAL_ALL);
 #endif

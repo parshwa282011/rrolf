@@ -36,6 +36,22 @@ struct lws;
 struct rr_server;
 struct rr_squad_member;
 
+// a squad of another game server, as the master reports it. The players of this
+// server see them all in one list
+#define RR_REMOTE_SQUAD_MAX 120
+struct rr_remote_squad
+{
+    char server[16];
+    char code[16];
+    char leader[17];
+    uint8_t members;
+    uint8_t is_private;
+};
+
+// set by SIGTERM / SIGINT: the server tells the master it is stopping on
+// purpose (so it is not restarted) and exits
+extern volatile int RR_SERVER_STOP_REQUESTED;
+
 struct rr_server
 {
     struct rr_simulation simulation;
@@ -51,6 +67,10 @@ struct rr_server
     struct rr_snail snail;
     uint8_t api_ws_ready;
     char server_alias[16];
+    // squads of the other game servers (master op 5), sent to the players
+    struct rr_remote_squad remote_squads[RR_REMOTE_SQUAD_MAX];
+    uint8_t remote_squad_count;
+    uint32_t directory_ticks;
 };
 
 void rr_server_init(struct rr_server *);
