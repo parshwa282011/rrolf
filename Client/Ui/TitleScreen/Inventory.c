@@ -45,12 +45,25 @@ static void inventory_button_on_event(struct rr_ui_element *this,
     if (data->count == 0)
         return;
     if (!game->simulation_ready || rr_ctf_client_in_game(game))
+    {
+        // pressing a petal and dragging it onto a slot of the loadout puts it
+        // there, see rr_ui_inventory_drag_tick. Clicking it fills the first
+        // empty slot
+        if (game->input_data->mouse_buttons_down_this_tick & 1)
+        {
+            game->drag.pending = 1;
+            game->drag.active = 0;
+            game->drag.id = data->id;
+            game->drag.rarity = data->rarity;
+            game->drag.start_x = game->input_data->mouse_x;
+            game->drag.start_y = game->input_data->mouse_y;
+        }
         for (uint8_t i = 0; i < RR_MAX_SLOT_COUNT * 2; ++i)
             if (i % RR_MAX_SLOT_COUNT < game->slots_unlocked &&
                 game->cache.loadout[i].id == 0)
             {
                 if (game->input_data->mouse_buttons_up_this_tick & 1 &&
-                    game->pressed == this)
+                    game->pressed == this && !game->drag.active)
                 {
                     game->cache.loadout[i].id = data->id;
                     game->cache.loadout[i].rarity = data->rarity;
@@ -58,6 +71,7 @@ static void inventory_button_on_event(struct rr_ui_element *this,
                 game->cursor = rr_game_cursor_pointer;
                 break;
             }
+    }
     rr_ui_set_tooltip_metadata(game->petal_tooltips[data->id][data->rarity],
                                data->count, 255);
     rr_ui_render_tooltip_above(
@@ -146,6 +160,62 @@ static struct rr_ui_element *inventory_button_init(uint8_t id, uint8_t rarity)
     this->on_event = inventory_button_on_event;
     this->animate = rr_ui_scale_animate;
     return this;
+}
+
+// how far the mouse has to move before a press on a petal is a drag
+#define DRAG_START_PIXELS 8
+
+void rr_ui_inventory_drag_tick(struct rr_game *game)
+{
+    struct rr_game_drag *drag = &game->drag;
+    if (!drag->pending && !drag->active)
+        return;
+    uint8_t editable = !game->simulation_ready || rr_ctf_client_in_game(game);
+    uint8_t released = (game->input_data->mouse_buttons_up_this_tick & 1) != 0;
+    if (!editable || (!released && !(game->input_data->mouse_buttons & 1)))
+    {
+        drag->pending = drag->active = 0;
+        return;
+    }
+    if (!drag->active)
+    {
+        float dx = game->input_data->mouse_x - drag->start_x;
+        float dy = game->input_data->mouse_y - drag->start_y;
+        if (dx * dx + dy * dy >
+            DRAG_START_PIXELS * DRAG_START_PIXELS * game->renderer->scale)
+            drag->active = 1;
+    }
+    if (!released)
+        return;
+    if (drag->active)
+    {
+        uint8_t slot = rr_ui_loadout_button_slot(game->focused);
+        if (slot < RR_MAX_SLOT_COUNT * 2 &&
+            slot % RR_MAX_SLOT_COUNT < game->slots_unlocked)
+        {
+            game->cache.loadout[slot].id = drag->id;
+            game->cache.loadout[slot].rarity = drag->rarity;
+        }
+    }
+    drag->pending = drag->active = 0;
+}
+
+void rr_ui_inventory_drag_render(struct rr_game *game)
+{
+    struct rr_game_drag *drag = &game->drag;
+    if (!drag->active)
+        return;
+    struct rr_renderer *renderer = game->renderer;
+    struct rr_renderer_context_state state;
+    rr_renderer_context_state_init(renderer, &state);
+    rr_renderer_translate(renderer, game->input_data->mouse_x,
+                          game->input_data->mouse_y);
+    rr_renderer_scale(renderer, renderer->scale * 50 / 60);
+    rr_renderer_set_global_alpha(renderer, 0.85f);
+    rr_renderer_draw_background(renderer, drag->rarity, 1);
+    rr_renderer_draw_petal_with_name(renderer, drag->id, drag->rarity);
+    rr_renderer_context_state_free(renderer, &state);
+    game->cursor = rr_game_cursor_pointer;
 }
 
 struct rr_ui_element *rr_ui_inventory_container_init()

@@ -228,7 +228,8 @@ struct rr_ui_element *rr_ui_ctf_hud_init(struct rr_game *game)
 // ---- the loadout in the game
 
 // the loadout and the inventory can be changed during a match, with the
-// inventory or crafting menu open
+// inventory or crafting menu open. A change is on the flower right away, drag a
+// petal from the inventory onto a slot or click it
 static uint8_t loadout_should_show(struct rr_ui_element *this,
                                    struct rr_game *game)
 {
@@ -237,24 +238,8 @@ static uint8_t loadout_should_show(struct rr_ui_element *this,
             game->menu_open == rr_game_menu_crafting);
 }
 
-static void respawn_on_event(struct rr_ui_element *this, struct rr_game *game)
-{
-    struct rr_ui_labeled_button_metadata *data = this->data;
-    data->clickable = game->socket_ready;
-    if (!game->socket_ready)
-        return;
-    if (game->input_data->mouse_buttons_up_this_tick & 1 &&
-        game->pressed == this)
-        rr_ctf_client_send_respawn(game);
-    game->cursor = rr_game_cursor_pointer;
-}
-
 struct rr_ui_element *rr_ui_ctf_loadout_init(struct rr_game *game)
 {
-    struct rr_ui_element *respawn =
-        rr_ui_labeled_button_init("Respawn with this loadout", 24, NULL);
-    respawn->on_event = respawn_on_event;
-    rr_ui_set_background(respawn, 0x80d4b30c);
     return rr_ui_link_toggle(
         rr_ui_set_justify(
             rr_ui_v_container_init(
@@ -287,7 +272,7 @@ struct rr_ui_element *rr_ui_ctf_loadout_init(struct rr_game *game)
                     rr_ui_title_screen_loadout_button_init(21),
                     rr_ui_title_screen_loadout_button_init(22),
                     rr_ui_title_screen_loadout_button_init(23), NULL),
-                respawn, NULL),
+                NULL),
             0, 1),
         loadout_should_show);
 }

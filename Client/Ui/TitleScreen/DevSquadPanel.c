@@ -43,7 +43,7 @@ static uint8_t dev_squad_panel_container_should_show(struct rr_ui_element *this,
     if (game->menu_open == rr_game_menu_dev_squad_panel && game->socket_ready &&
         (!game->cache.hide_ui || !game->simulation_ready))
     {
-        if (game->is_dev)
+        if (game->is_dev || game->squad_directory.count > 0)
             return 1;
         for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
             for (uint32_t j = 0; j < RR_SQUAD_MEMBER_COUNT; ++j)
@@ -60,7 +60,7 @@ static uint8_t dev_squad_panel_button_should_show(struct rr_ui_element *this,
 {
     if (game->socket_ready && (!game->cache.hide_ui || !game->simulation_ready))
     {
-        if (game->is_dev)
+        if (game->is_dev || game->squad_directory.count > 0)
             return 1;
         for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
             for (uint32_t j = 0; j < RR_SQUAD_MEMBER_COUNT; ++j)
@@ -68,6 +68,49 @@ static uint8_t dev_squad_panel_button_should_show(struct rr_ui_element *this,
                     return 1;
     }
     return 0;
+}
+
+// ---- the squads of the other game servers, one line each
+
+static uint8_t directory_should_show(struct rr_ui_element *this,
+                                     struct rr_game *game)
+{
+    return game->squad_directory.count > 0;
+}
+
+static uint8_t directory_line_should_show(struct rr_ui_element *this,
+                                          struct rr_game *game)
+{
+    struct rr_ui_text_metadata *data = this->data;
+    return data->text[0] != 0;
+}
+
+static uint8_t directory_more_should_show(struct rr_ui_element *this,
+                                          struct rr_game *game)
+{
+    return game->squad_directory.count > RR_SQUAD_DIRECTORY_LINES;
+}
+
+static struct rr_ui_element *directory_init(struct rr_game *game)
+{
+    struct rr_ui_element *this = rr_ui_v_container_init(
+        rr_ui_container_init(), 0, 4,
+        rr_ui_set_justify(rr_ui_text_init("Other servers", 18, 0xffffffff), -1,
+                          -1),
+        NULL);
+    for (uint32_t i = 0; i < RR_SQUAD_DIRECTORY_LINES; ++i)
+    {
+        struct rr_ui_element *line =
+            rr_ui_text_init(game->squad_directory.lines[i], 14, 0xffffffff);
+        line->should_show = directory_line_should_show;
+        rr_ui_container_add_element(this, rr_ui_set_justify(line, -1, -1));
+    }
+    struct rr_ui_element *more =
+        rr_ui_text_init("and more, hidden", 14, 0xffbbbbbb);
+    more->should_show = directory_more_should_show;
+    rr_ui_container_add_element(this, rr_ui_set_justify(more, -1, -1));
+    this->should_show = directory_should_show;
+    return this;
 }
 
 #ifndef PDEV
@@ -517,6 +560,7 @@ struct rr_ui_element *rr_ui_dev_panel_container_init(struct rr_game *game)
 #endif
     struct rr_ui_element *inner = rr_ui_v_container_init(
         rr_ui_container_init(), 10, 10, NULL);
+    rr_ui_container_add_element(inner, directory_init(game));
     for (uint32_t i = 0; i < RR_SQUAD_COUNT; ++i)
     {
         struct rr_ui_element *squad_toggle_buttons =

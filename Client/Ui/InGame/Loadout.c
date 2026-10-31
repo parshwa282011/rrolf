@@ -64,6 +64,13 @@ static void loadout_button_on_event(struct rr_ui_element *this,
     }
 }
 
+uint8_t rr_ui_loadout_button_slot(struct rr_ui_element *element)
+{
+    if (element == NULL || element->on_event != loadout_button_on_event)
+        return 255;
+    return ((struct loadout_button_metadata *)element->data)->pos;
+}
+
 static void petal_switch_button_event(struct rr_ui_element *this,
                                       struct rr_game *game)
 {
@@ -123,6 +130,15 @@ static void title_screen_loadout_button_animate(struct rr_ui_element *this,
     rr_renderer_scale(game->renderer, (1 - this->animation));
     rr_renderer_scale(renderer, renderer->scale * this->width / 60);
     rr_renderer_draw_background(renderer, rr_rarity_id_max + 1, 1);
+    // the slot a dragged petal would land in
+    if (game->drag.active && game->focused == this)
+    {
+        rr_renderer_set_stroke(renderer, 0xffffffff);
+        rr_renderer_set_line_width(renderer, 5);
+        rr_renderer_begin_path(renderer);
+        rr_renderer_round_rect(renderer, -30, -30, 60, 60, 8);
+        rr_renderer_stroke(renderer);
+    }
     uint8_t id = game->cache.loadout[data->pos].id;
     uint8_t rarity = game->cache.loadout[data->pos].rarity;
     data->secondary_animation =

@@ -393,11 +393,28 @@ void rr_ctf_client_tick(struct rr_game *this, float delta)
         flag->lerp_x += (flag->x - flag->lerp_x) * follow;
         flag->lerp_y += (flag->y - flag->lerp_y) * follow;
     }
+    if (!rr_ctf_client_in_game(this))
+        c->entered = 0;
+    else if (!c->entered)
+    {
+        // joining or coming back to a match: the loadout is the one the server
+        // has (the starting petals at the start of a match, what the player
+        // had when they come back), not what the editor held before. The
+        // server puts a loadout on the flower as soon as it is sent
+        c->entered = 1;
+        struct rr_squad_member *own =
+            &this->squad.squad_members[this->squad.squad_pos %
+                                       RR_SQUAD_MEMBER_COUNT];
+        for (uint32_t i = 0; i < RR_MAX_SLOT_COUNT * 2; ++i)
+            this->cache.loadout[i] = own->loadout[i];
+        c->loadout_sent = loadout_hash(this);
+        c->loadout_wait = 0;
+    }
     if (!rr_ctf_client_in_game(this) || this->text_input_focused ||
         this->chat.chat_active)
         return;
     // the loadout can be changed during a match, tell the server a moment after
-    // the last change. It takes effect when the player respawns
+    // the last change. It is on the flower right away
     uint32_t hash = loadout_hash(this);
     if (hash != c->loadout_sent)
     {

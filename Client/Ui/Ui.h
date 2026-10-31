@@ -208,6 +208,12 @@ extern struct rr_ui_element *rr_ui_inventory_container_init();
 extern struct rr_ui_element *rr_ui_title_screen_loadout_button_init(uint8_t);
 extern struct rr_ui_element *rr_ui_loadout_button_init(uint8_t);
 extern struct rr_ui_element *rr_ui_secondary_loadout_button_init(uint8_t);
+// the slot of the loadout editor an element is, 255 for any other element
+extern uint8_t rr_ui_loadout_button_slot(struct rr_ui_element *);
+// dragging a petal from the inventory onto a slot of the loadout editor, once a
+// frame: after the ui took its events, and after the ui was drawn
+extern void rr_ui_inventory_drag_tick(struct rr_game *);
+extern void rr_ui_inventory_drag_render(struct rr_game *);
 
 extern struct rr_ui_element *rr_ui_rivet_container_init(struct rr_game *);
 extern struct rr_ui_element *rr_ui_account_container_init(struct rr_game *);

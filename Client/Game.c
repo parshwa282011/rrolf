@@ -910,6 +910,29 @@ void rr_game_init(struct rr_game *this)
     rr_auth_start(this);
 }
 
+// the squads of the other game servers: "[ctf] CTF-abcdef  Alice  2/5"
+static void read_squad_directory(struct rr_game *this, struct proto_bug *encoder)
+{
+    uint8_t count = proto_bug_read_uint8(encoder, "count");
+    memset(&this->squad_directory, 0, sizeof this->squad_directory);
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        char server[17] = {0}, code[17] = {0}, leader[18] = {0};
+        proto_bug_read_string(encoder, server, 16, "server");
+        proto_bug_read_string(encoder, code, 16, "code");
+        uint8_t members = proto_bug_read_uint8(encoder, "members");
+        proto_bug_read_uint8(encoder, "private");
+        proto_bug_read_string(encoder, leader, 17, "leader");
+        if (i >= RR_SQUAD_DIRECTORY_LINES)
+            continue;
+        rr_filter_censor(leader);
+        snprintf(this->squad_directory.lines[i],
+                 sizeof this->squad_directory.lines[i], "[%s] %s  %s  %u/%u",
+                 server, code, leader, members, RR_SQUAD_MEMBER_COUNT);
+    }
+    this->squad_directory.count = count;
+}
+
 void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
                                          void *data, void *captures,
                                          uint64_t size)
@@ -939,6 +962,8 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
         this->socket_ready = 0;
         this->socket_pending = 0;
         this->socket_error = 1;
+        memset(&this->squad_directory, 0, sizeof this->squad_directory);
+        this->drag.pending = this->drag.active = 0;
         if (this->simulation_ready)
         {
             rr_simulation_init(this->simulation);
@@ -1376,6 +1401,9 @@ void rr_game_websocket_on_event_function(enum rr_websocket_event_type type,
             break;
         case rr_clientbound_snail_state:
             rr_snail_client_read_state(this, &encoder);
+            break;
+        case rr_clientbound_squad_directory:
+            read_squad_directory(this, &encoder);
             break;
         case rr_clientbound_leaderboard_update:
         {
@@ -1927,10 +1955,12 @@ void rr_game_tick(struct rr_game *this, float delta)
         if (this->prev_focused != this->focused && this->prev_focused != NULL)
             this->prev_focused->on_event(this->prev_focused, this);
     }
+    rr_ui_inventory_drag_tick(this);
     this->block_ui_input = 0;
     this->block_fov_adjustment = 0;
     rr_ui_container_refactor(this->window, this);
     rr_ui_render_element(this->window, this);
+    rr_ui_inventory_drag_render(this);
     rr_dom_set_cursor(this->cursor);
     rr_platform_tick(this, delta);
     rr_auth_tick(this, delta);
@@ -1994,6 +2024,9 @@ void rr_game_tick(struct rr_game *this, float delta)
             this->cache.displaying_debug_information ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'M'))
             this->cache.use_mouse ^= 1;
+        // the minimap shows the whole map instead of the part around you
+        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'N'))
+            this->full_map ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'H'))
             this->cache.show_hitboxes ^= 1;
         // crazygames' reviewers need to see the interface

@@ -194,6 +194,7 @@ struct rr_game_ctf
     char codes[RR_CTF_MAX_TEAMS - 1][16];
     float start_confirm; // seconds left of "press start again"
     uint8_t place_cycle; // which flag point F moves once all are placed
+    uint8_t entered; // the loadout was taken from the server on joining the game
     uint32_t loadout_sent; // hash of the loadout the server was last sent
     float loadout_wait;
     float anim; // seconds, for things that pulse
@@ -214,6 +215,26 @@ struct rr_game_chat
     uint32_t at;
     struct rr_game_chat_message messages[10];
     char sending[64];
+};
+
+// the squads of the other game servers, one line of text each, for the squad
+// panel (rr_clientbound_squad_directory)
+#define RR_SQUAD_DIRECTORY_LINES 16
+struct rr_game_squad_directory
+{
+    uint8_t count; // squads on the other servers, more than the lines shown
+    char lines[RR_SQUAD_DIRECTORY_LINES][96];
+};
+
+// a petal being dragged from the inventory to a slot of the loadout editor
+struct rr_game_drag
+{
+    uint8_t pending; // the mouse went down on a petal
+    uint8_t active;  // and moved far enough to be a drag
+    uint8_t id;
+    uint8_t rarity;
+    float start_x;
+    float start_y;
 };
 
 // anything cross reload
@@ -282,6 +303,10 @@ struct rr_game
     struct rr_game_crafting_data crafting_data;
     struct rr_game_debug_info debug_info;
     struct rr_game_chat chat;
+    struct rr_game_squad_directory squad_directory;
+    struct rr_game_drag drag;
+    // show the whole map in the minimap, toggled with N
+    uint8_t full_map;
     struct rr_game_ctf ctf;
     struct rr_game_snail snail;
     struct rr_game_cache cache;

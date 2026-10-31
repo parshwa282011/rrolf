@@ -39,7 +39,7 @@ static float cell_px = 1;
 
 // A map wider than this many template cells (the size of a normal map) is shown
 // as a window of this size around the player. While the mouse is over the
-// minimap it shows the whole map.
+// minimap, or after N was pressed, it shows the whole map.
 #define MINIMAP_WINDOW_CELLS 40
 
 // where a world position is in the box, from its center, given the center of
@@ -148,7 +148,8 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
     float world = grid_size * maze_dim;
     float view_x = world / 2, view_y = world / 2, span = world;
     uint8_t zoomed = 0;
-    if (maze_dim / 2 > MINIMAP_WINDOW_CELLS && !rr_ui_mouse_over(this, game))
+    if (maze_dim / 2 > MINIMAP_WINDOW_CELLS && !game->full_map &&
+        !rr_ui_mouse_over(this, game))
     {
         zoomed = 1;
         span = MINIMAP_WINDOW_CELLS * 2 * grid_size;
@@ -251,9 +252,9 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
         rr_renderer_set_text_align(renderer, 1);
         rr_renderer_set_text_size(renderer, 11);
         rr_renderer_set_line_width(renderer, 11 * 0.12f);
-        rr_renderer_stroke_text(renderer, "hover for the whole map", 0,
+        rr_renderer_stroke_text(renderer, "[N] or hover: whole map", 0,
                                 this->abs_height / 2 - 9);
-        rr_renderer_fill_text(renderer, "hover for the whole map", 0,
+        rr_renderer_fill_text(renderer, "[N] or hover: whole map", 0,
                               this->abs_height / 2 - 9);
     }
 }
