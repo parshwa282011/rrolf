@@ -111,7 +111,9 @@ static void gardn_toggle_button_on_event(struct rr_ui_element *this,
     {
         if (game->pressed != this)
             return;
-        rr_page_open("https://rysteria.pro/gardn/", 0);
+        // on this site, not another: gardn reads the login the rrolf page saved in
+        // this origin's localStorage
+        rr_page_open("/gardn/", 0);
     }
     rr_ui_render_tooltip_below(this, game->gardn_tooltip, game);
     game->cursor = rr_game_cursor_pointer;
