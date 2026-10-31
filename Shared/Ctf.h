@@ -36,6 +36,10 @@
 #define RR_CTF_PLACEMENT_SECONDS 60
 #define RR_CTF_FARM_SECONDS 600
 #define RR_CTF_ENDED_SECONDS 20
+// a player who loses their connection keeps their place in the squad, the match
+// and what they farmed for this long, and gets it all back when they return
+#define RR_CTF_RECONNECT_SECONDS 600
+#define RR_CTF_RECONNECT_TICKS (RR_CTF_RECONNECT_SECONDS * RR_CTF_TPS)
 // a dead player is put back at their base after this many ticks
 #define RR_CTF_RESPAWN_TICKS 25
 // a team holding fewer flags than this is out, so it stays in the game while it

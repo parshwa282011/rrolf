@@ -318,6 +318,23 @@ void rr_server_client_craft_petal(struct rr_server_client *this,
                                    encoder.current - encoder.start);
 }
 
+#ifdef CTF
+void rr_server_client_reset_ctf_data(struct rr_server_client *this)
+{
+    memset(this->checkpoint, 0, sizeof this->checkpoint);
+    this->pvp_points = 0;
+    this->experience = 0;
+    for (uint32_t lvl = 2; lvl <= RR_CTF_START_LEVEL; ++lvl)
+        this->experience += xp_to_reach_level(lvl);
+    memset(this->inventory, 0, sizeof this->inventory);
+    memset(this->craft_fails, 0, sizeof this->craft_fails);
+    memset(this->mob_gallery, 0, sizeof this->mob_gallery);
+    memset(this->saved_loadout, 0, sizeof this->saved_loadout);
+    this->inventory[rr_petal_id_basic][rr_rarity_id_epic] = RR_CTF_START_PETALS;
+    this->inventory[rr_petal_id_azalea][rr_rarity_id_epic] = RR_CTF_START_AZALEAS;
+}
+#endif
+
 int rr_server_client_read_from_api(struct rr_server_client *this,
                                    struct rr_binary_encoder *encoder)
 {
@@ -338,13 +355,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
 #ifdef CTF
     // saveless: the account only says who the player is, a match always starts
     // from the same level and petals, see Server/Ctf.c
-    memset(this->checkpoint, 0, sizeof this->checkpoint);
-    this->pvp_points = 0;
-    this->experience = 0;
-    for (uint32_t lvl = 2; lvl <= RR_CTF_START_LEVEL; ++lvl)
-        this->experience += xp_to_reach_level(lvl);
-    this->inventory[rr_petal_id_basic][rr_rarity_id_epic] = RR_CTF_START_PETALS;
-    this->inventory[rr_petal_id_azalea][rr_rarity_id_epic] = RR_CTF_START_AZALEAS;
+    rr_server_client_reset_ctf_data(this);
     return 1;
 #endif
     if (this->dev)

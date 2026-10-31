@@ -122,6 +122,44 @@ void rr_component_player_info_set_update_loot(
     this->protocol_state |= state_flags_petals_collected;
 }
 
+void rr_component_player_info_set_slot(struct rr_component_player_info *this,
+                                       struct rr_simulation *simulation,
+                                       uint8_t pos, uint8_t id, uint8_t rarity,
+                                       uint8_t secondary_id,
+                                       uint8_t secondary_rarity)
+{
+    if (pos >= RR_MAX_SLOT_COUNT)
+        return;
+    struct rr_component_player_info_petal_slot *slot = &this->slots[pos];
+    struct rr_component_player_info_petal_slot *s_slot =
+        &this->secondary_slots[pos];
+    if (slot->id == id && slot->rarity == rarity &&
+        s_slot->id == secondary_id && s_slot->rarity == secondary_rarity)
+        return;
+    if (slot->id != id || slot->rarity != rarity)
+    {
+        for (uint32_t i = 0; i < slot->count; ++i)
+        {
+            EntityHash hash = slot->petals[i].entity_hash;
+            if (hash != RR_NULL_ENTITY && rr_simulation_has_entity(simulation, hash))
+            {
+                if (!rr_simulation_has_player_info(simulation, hash) &&
+                    !rr_simulation_has_flower(simulation, hash))
+                    rr_simulation_request_entity_deletion(simulation, hash);
+            }
+            slot->petals[i].entity_hash = RR_NULL_ENTITY;
+        }
+        slot->id = id;
+        slot->rarity = rarity;
+        slot->count = RR_PETAL_DATA[id].count[rarity];
+        for (uint32_t i = 0; i < slot->count; ++i)
+            slot->petals[i].cooldown_ticks = RR_PETAL_DATA[id].cooldown;
+    }
+    s_slot->id = secondary_id;
+    s_slot->rarity = secondary_rarity;
+    this->protocol_state |= state_flags_petals;
+}
+
 void rr_component_player_info_petal_swap(struct rr_component_player_info *this,
                                          struct rr_simulation *simulation,
                                          uint8_t pos)

@@ -163,5 +163,8 @@ void rr_ctf_on_cancel(struct rr_server *, struct rr_server_client *);
 void rr_ctf_on_place_flag(struct rr_server *, struct rr_server_client *,
                           struct proto_bug *);
 void rr_ctf_on_respawn(struct rr_server *, struct rr_server_client *);
+// the player changed their loadout: a flower that is alive has the new petals
+// at once, no respawn is needed
+void rr_ctf_apply_loadout(struct rr_server *, struct rr_server_client *);
 // the Enter Game / Leave Game button. Always handled in this mode
 void rr_ctf_on_ready(struct rr_server *, struct rr_server_client *);

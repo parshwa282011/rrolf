@@ -130,6 +130,11 @@ void rr_server_client_report_pvp_score(struct rr_server_client *);
 
 void rr_server_client_craft_petal(struct rr_server_client *, struct rr_server *,
                                   uint8_t, uint8_t, uint64_t);
+#ifdef CTF
+// the level, petals and everything else a player starts a match with. Also how
+// a record is wiped when a match ends, see Server/Ctf.c
+void rr_server_client_reset_ctf_data(struct rr_server_client *);
+#endif
 int rr_server_client_read_from_api(struct rr_server_client *,
                                    struct rr_binary_encoder *);
 void rr_server_client_write_to_api(struct rr_server_client *);

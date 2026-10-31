@@ -277,6 +277,29 @@ static void delete_uncollectable_drop(EntityIdx entity, void *captures)
     rr_simulation_request_entity_deletion(&server->simulation, entity);
 }
 
+// Nothing of a match is kept. The second it ends, for any reason, every player
+// is back to the starting level and petals: the ones playing, and the ones who
+// lost their connection, whose record is kept for them to come back to. A
+// player who comes back after the end gets a fresh account read anyway.
+static void reset_players(struct rr_server *this)
+{
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+    {
+        if (!rr_bitset_get(this->clients_in_use, i))
+            continue;
+        struct rr_server_client *client = &this->clients[i];
+        rr_server_client_reset_ctf_data(client);
+        struct rr_squad_member *member = rr_squad_get_client_slot(this, client);
+        if (member != NULL)
+        {
+            memset(member->loadout, 0, sizeof member->loadout);
+            member->level = level_from_xp(client->experience);
+        }
+        if (client->verified && !client->disconnected)
+            rr_server_client_write_account(client);
+    }
+}
+
 static void end_match(struct rr_server *this)
 {
     for (uint8_t t = 0; t < RR_CTF_MAX_TEAMS; ++t)
@@ -288,6 +311,7 @@ static void end_match(struct rr_server *this)
     clear_arena(this);
     rr_ctf_reset_walls();
     unlink_all(this);
+    reset_players(this);
 }
 
 void rr_ctf_on_create(struct rr_server *this, struct rr_server_client *client,
@@ -503,6 +527,23 @@ static void place_missing_points(struct rr_ctf_match *m)
 }
 
 // ---- the other buttons
+
+void rr_ctf_apply_loadout(struct rr_server *this,
+                          struct rr_server_client *client)
+{
+    struct rr_squad_member *member = rr_squad_get_client_slot(this, client);
+    // a dead player or one in the menu gets it when they next spawn
+    if (member == NULL || client->disconnected || client->player_info == NULL ||
+        !flower_alive(this, client))
+        return;
+    validate_loadout(client, member);
+    struct rr_component_player_info *info = client->player_info;
+    for (uint8_t i = 0; i < info->slot_count && i < RR_MAX_SLOT_COUNT; ++i)
+        rr_component_player_info_set_slot(
+            info, &this->simulation, i, member->loadout[i].id,
+            member->loadout[i].rarity, member->loadout[i + RR_MAX_SLOT_COUNT].id,
+            member->loadout[i + RR_MAX_SLOT_COUNT].rarity);
+}
 
 void rr_ctf_on_respawn(struct rr_server *this, struct rr_server_client *client)
 {

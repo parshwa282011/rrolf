@@ -111,6 +111,13 @@ RR_SERVER_ONLY(void rr_component_player_info_set_slot_hp(
                    struct rr_component_player_info *, uint8_t, uint8_t);)
 RR_SERVER_ONLY(void rr_component_player_info_set_update_loot(
                    struct rr_component_player_info *);)
+// puts a petal in a slot of a flower that is alive, now: the petals the slot had
+// are removed and the new ones come out after their cooldown. pos is 0 to
+// RR_MAX_SLOT_COUNT - 1. The secondary slot is the one a switch brings out.
+RR_SERVER_ONLY(void rr_component_player_info_set_slot(
+                   struct rr_component_player_info *, struct rr_simulation *,
+                   uint8_t pos, uint8_t id, uint8_t rarity,
+                   uint8_t secondary_id, uint8_t secondary_rarity);)
 RR_SERVER_ONLY(
     void rr_component_player_info_petal_swap(struct rr_component_player_info *,
                                              struct rr_simulation *, uint8_t);)
