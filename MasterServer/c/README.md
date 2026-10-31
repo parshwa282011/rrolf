@@ -58,6 +58,16 @@ Same binary protocol as the old master, opcodes documented at the top of
 `games.h`. The secret goes in the `X-Server-Secret` upgrade header (the old
 `/api/<secret>` path still works).
 
+Besides players, game servers send the master their **chat** (op 6) and their **squads** (op 7, every two
+seconds) and it hands both to every other game server, so chat is global and a squad list covers all servers.
+A game server names itself in op 101 (`RR_SERVER_NAME`, the name in `servers.conf`).
+
+**Restarting a dropped game server.** When a game server drops without sending op 8 ("I am stopping", sent
+on SIGTERM/SIGINT) the master runs `RESTART_COMMAND` once, with `{name}` replaced by the server's name
+(`scripts/common/restart-one.sh`, written into the master's `.env` by `build.sh`). If the command fails, or
+the server is not connected again after `RESTART_WAIT_SECONDS` (default 90), it gives up; the next drop tries
+again. Empty `RESTART_COMMAND` = never. The log lines start with `[restart]`.
+
 ## Tests
 
 ```sh

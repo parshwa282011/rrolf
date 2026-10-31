@@ -144,6 +144,11 @@ int ms_config_from_env()
     if (c->db_pool_size > 32)
         c->db_pool_size = 32;
     c->pl_p_lifetime_seconds = get_uint("PL_P_LIFETIME_SECONDS", 7 * 24 * 3600);
+    get_str(c->restart_command, sizeof c->restart_command, "RESTART_COMMAND",
+            "");
+    c->restart_wait_seconds = get_uint("RESTART_WAIT_SECONDS", 90);
+    if (c->restart_wait_seconds < 5)
+        c->restart_wait_seconds = 5;
 
     // secrets must exist and be long enough to be worth anything
     struct

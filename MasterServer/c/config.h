@@ -48,6 +48,11 @@ struct ms_config
     uint32_t db_pool_size;
     char trust_proxy_header[64]; // e.g. CF-Connecting-IP, "" = use peer ip
     uint32_t pl_p_lifetime_seconds;
+    // run (once) when a game server drops its connection without saying it is
+    // shutting down; {name} is replaced by the server's name. "" = never
+    char restart_command[512];
+    // how long to wait for it to come back before giving up
+    uint32_t restart_wait_seconds;
 };
 
 extern struct ms_config MS_CONFIG;

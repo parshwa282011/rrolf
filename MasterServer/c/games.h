@@ -31,7 +31,12 @@
 //   4   CrazyGames score (ignored)
 //   5   account request pos:u8 nonce:varuint kind:u8 crazygames:u8 payload\0
 //       (answered with "not available", accounts live on the login screen)
-//   101 server id (rivet lobby id, accepted and ignored)
+//   6   chat    name\0 message\0 (shown to the players of every other server)
+//   7   squads  count:u8 then per squad code\0 members:u8 private:u8 leader\0
+//               (sent every couple of seconds; code is "(private)" if hidden)
+//   8   shutting down on purpose (the master does not restart it)
+//   101 server id: the name the server was started with (RR_SERVER_NAME), or
+//       the rivet lobby id. The master restarts a server by this name
 // master -> game server (first byte MS_API_SUCCESS=45, then opcode):
 //   0 alias\0
 //   1 pos nonce:varuint uuid\0 token\0 username\0 id\0 cg_id\0 is_dev:u8 xp:f64
@@ -39,6 +44,9 @@
 //     mob_gallery..0 loadout..0 nickname\0
 //   2 pos nonce:varuint  (kick that slot: denied join or session taken over)
 //   3 pos nonce ok kind message\0 uuid\0 token\0 code\0  (answer to op 5)
+//   4 server\0 name\0 message\0  (chat from a player on another server)
+//   5 count:u8 then per squad server\0 code\0 members:u8 private:u8 leader\0
+//     (the squads of all the other game servers)
 // counts are (id:u8, rarity:u8, count:varuint) terminated by id 0; mob gallery
 // ids are the mob id + 1; loadout is (slot:u8 1-based, id:u8, rarity:u8)
 // terminated by slot 0.
