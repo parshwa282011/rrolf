@@ -381,7 +381,7 @@ struct rr_ui_element *rr_ui_petal_tooltip_init(uint8_t id, uint8_t rarity)
             this, rr_ui_set_justify(
                       rr_ui_h_container_init(
                           rr_ui_container_init(), 0, 0,
-                          rr_ui_text_init("Recharge: ", 12, 0xffafafaf),
+                          rr_ui_text_init("Recharge each save: ", 12, 0xffafafaf),
                           rr_ui_text_init(extra, 12, 0xffffffff), NULL),
                       -1, 0));
         rr_ui_container_add_element(

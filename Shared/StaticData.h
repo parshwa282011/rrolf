@@ -309,11 +309,12 @@ extern struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max
 #define RR_ANT_HOLE_FROM_BUSH_CHANCE 0.05
 #define RR_ANT_HOLE_FROM_FERN_CHANCE 0.02
 
-// The nazar petal saves you from the next RR_NAZAR_CHARGES hits that would have
-// killed you (98% of such a hit is blocked, and what is left can't kill you), then
-// needs RR_NAZAR_RELOAD_TICKS[rarity] ticks to recharge all of them. Hits that
-// would not have killed you are not touched and use nothing. Every extra nazar in
-// the loadout adds a charge
+// The nazar petal saves you from RR_NAZAR_CHARGES hits that would have killed you
+// (98% of such a hit is blocked, and what is left can't kill you); it starts full.
+// A used save comes back after RR_NAZAR_RELOAD_TICKS[rarity] ticks, one at a time:
+// with none left, all of them are back after that time times the number of saves.
+// Hits that would not have killed you are not touched and use nothing. Every extra
+// nazar in the loadout adds a charge
 #define RR_NAZAR_CHARGES 3
 #define RR_NAZAR_BLOCK 0.98f
 extern uint16_t RR_NAZAR_RELOAD_TICKS[rr_rarity_id_max];

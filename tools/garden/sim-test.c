@@ -507,6 +507,39 @@ int main()
         CHECK(health->nazar_charges == 0 && health->health > 0, "armor ignoring killing hits are saved from too");
     }
 
+    printf("a nazar's saves come back one at a time\n");
+    {
+        EntityIdx victim = rr_simulation_alloc_mob(sim(), 1, 9000, 9300, rr_mob_id_ant, rr_rarity_id_ancient, rr_simulation_team_id_players);
+        struct rr_component_health *health = rr_simulation_get_health(sim(), victim);
+        uint16_t reload = RR_NAZAR_RELOAD_TICKS[rr_rarity_id_exotic]; // 4.5 s
+        health->nazar_max = RR_NAZAR_CHARGES;
+        health->nazar_charges = 0;
+        health->nazar_reload_ticks = 0;
+        uint32_t back_at[RR_NAZAR_CHARGES] = {0}, t = 0;
+        for (uint8_t seen = 0; seen < RR_NAZAR_CHARGES && t < 10 * reload; ++t)
+        {
+            uint8_t before = health->nazar_charges;
+            rr_component_health_recharge_nazar(health, reload);
+            if (health->nazar_charges > before)
+                back_at[seen++] = t + 1;
+        }
+        CHECK(back_at[0] == reload && back_at[1] == 2 * reload && back_at[2] == 3 * reload,
+              "from none, one save is back after %u, %u and %u ticks (got %u %u %u)", reload, 2 * reload, 3 * reload, back_at[0], back_at[1], back_at[2]);
+        CHECK(health->nazar_charges == RR_NAZAR_CHARGES, "all three after three reloads (13.5 s for an exotic nazar)");
+        // full: the timer rests, and a used save starts it from the beginning
+        for (uint16_t i = 0; i < 1000; ++i)
+            rr_component_health_recharge_nazar(health, reload);
+        CHECK(health->nazar_charges == RR_NAZAR_CHARGES && health->nazar_reload_ticks == 0, "a full nazar stays full with the timer at 0");
+        health->nazar_charges = RR_NAZAR_CHARGES - 1;
+        for (uint16_t i = 0; i < reload - 1; ++i)
+            rr_component_health_recharge_nazar(health, reload);
+        CHECK(health->nazar_charges == RR_NAZAR_CHARGES - 1, "one tick before the reload nothing is back");
+        // another save used while one is on its way does not restart the timer
+        health->nazar_charges = RR_NAZAR_CHARGES - 2;
+        rr_component_health_recharge_nazar(health, reload);
+        CHECK(health->nazar_charges == RR_NAZAR_CHARGES - 1, "the running timer is kept when another save is used");
+    }
+
     printf("better nazars use their charges up less often\n");
     {
         for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)

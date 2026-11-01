@@ -718,7 +718,7 @@ static void petal_modifiers(struct rr_simulation *simulation,
         }
     }
     // charges: a nazar equipped (or one more of them) starts charged, one taken
-    // out takes its charge with it. Once they ran out they come back together
+    // out takes its charge with it. Used ones come back one at a time
     uint8_t charges_max = nazar_max ? RR_NAZAR_CHARGES + nazar_max - 1 : 0;
     if (health->nazar_max != charges_max)
     {
@@ -729,11 +729,7 @@ static void petal_modifiers(struct rr_simulation *simulation,
     health->nazar_rarity = nazar_rarity;
     if (health->nazar_charges > health->nazar_max)
         health->nazar_charges = health->nazar_max;
-    if (health->nazar_max > 0 && health->nazar_charges == 0)
-    {
-        if (++health->nazar_reload_ticks >= nazar_reload)
-            health->nazar_charges = health->nazar_max;
-    }
+    rr_component_health_recharge_nazar(health, nazar_reload);
     rr_component_flower_set_crest_count(flower, crest_count);
     rr_component_flower_set_third_eye_count(flower, third_eye_count);
     rr_component_flower_set_nazar_charges(flower, health->nazar_charges);

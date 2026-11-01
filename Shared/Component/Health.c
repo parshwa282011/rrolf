@@ -76,6 +76,24 @@ void rr_component_health_write(struct rr_component_health *this,
     this->max_health = tmp_max;
 }
 
+// one tick of the nazar's recharge: while saves are missing, one comes back every
+// `reload` ticks (the time of the best nazar equipped), so nothing waits for the
+// last one to be used up. A full nazar has no timer running
+void rr_component_health_recharge_nazar(struct rr_component_health *this,
+                                        uint16_t reload)
+{
+    if (this->nazar_charges >= this->nazar_max)
+    {
+        this->nazar_reload_ticks = 0;
+        return;
+    }
+    if (++this->nazar_reload_ticks >= reload)
+    {
+        ++this->nazar_charges;
+        this->nazar_reload_ticks = 0;
+    }
+}
+
 void rr_component_health_do_damage(struct rr_simulation *simulation,
                                    struct rr_component_health *this,
                                    EntityIdx from, float v, uint8_t color_type)
@@ -117,9 +135,8 @@ void rr_component_health_do_damage(struct rr_simulation *simulation,
         if (v >= this->health)
             v = this->health > 1 ? this->health - 1 : 0;
         // better nazars sometimes save you without using a charge up
-        if (rr_frand() * 100 < RR_NAZAR_CONSUME_PERCENT[this->nazar_rarity] &&
-            --this->nazar_charges == 0)
-            this->nazar_reload_ticks = 0;
+        if (rr_frand() * 100 < RR_NAZAR_CONSUME_PERCENT[this->nazar_rarity])
+            --this->nazar_charges; // the recharge timer keeps counting
     }
     v = this->health - v;
     if (v < 0)

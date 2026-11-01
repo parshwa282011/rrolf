@@ -39,7 +39,7 @@ struct rr_component_health
     RR_SERVER_ONLY(float damage_reduction;)
     RR_SERVER_ONLY(float damage_reduction_ratio;)
     // the nazar petal: hits it still blocks, how many it holds, and the ticks
-    // spent recharging once they ran out (see petal_modifiers)
+    // spent on the next one coming back (see rr_component_health_recharge_nazar)
     // takes no damage at all, a snail waiting for someone to find it
     RR_SERVER_ONLY(uint8_t invulnerable;)
     RR_SERVER_ONLY(uint8_t nazar_charges;)
@@ -75,6 +75,8 @@ RR_CLIENT_ONLY(void rr_component_health_read(struct rr_component_health *,
 RR_DECLARE_PUBLIC_FIELD(health, float, health)
 RR_DECLARE_PUBLIC_FIELD(health, float, max_health)
 RR_DECLARE_PUBLIC_FIELD(health, uint8_t, flags)
+RR_SERVER_ONLY(void rr_component_health_recharge_nazar(
+                   struct rr_component_health *, uint16_t reload);)
 RR_SERVER_ONLY(void rr_component_health_do_damage(struct rr_simulation *,
                                                   struct rr_component_health *,
                                                   EntityIdx, float, uint8_t);)
