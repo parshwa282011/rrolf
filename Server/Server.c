@@ -1685,6 +1685,8 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                 }
 #ifdef PVP
                 client->pvp_points = this->clients[j].pvp_points;
+                if (this->clients[j].pvp_best > client->pvp_best)
+                    client->pvp_best = this->clients[j].pvp_best;
 #endif
 #ifdef CTF
                 // nothing is saved, so what the player farmed in this match
