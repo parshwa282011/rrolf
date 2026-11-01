@@ -644,8 +644,10 @@ static int mg_lb_top(struct ms_db *db, char const *board, int limit,
     struct mg *mg = db->ctx;
     mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
     mongoc_collection_t *c = coll(mg, client, "leaderboards");
-    bson_t *filter = BCON_NEW("board", BCON_UTF8(board));
-    bson_t *opts = BCON_NEW("sort", "{", "score", BCON_INT32(-1), "}", "limit",
+    bson_t *filter = BCON_NEW("board", BCON_UTF8(board), "score", "{", "$gt",
+                              BCON_DOUBLE(0), "}");
+    bson_t *opts = BCON_NEW("sort", "{", "score", BCON_INT32(-1), "updated_at",
+                            BCON_INT32(1), "uuid", BCON_INT32(1), "}", "limit",
                             BCON_INT32(limit));
     mongoc_cursor_t *cursor =
         mongoc_collection_find_with_opts(c, filter, opts, NULL);
@@ -662,6 +664,146 @@ static int mg_lb_top(struct ms_db *db, char const *board, int limit,
     bson_error_t error;
     int result = mongoc_cursor_error(cursor, &error)
                      ? log_error("lb_top", &error)
+                     : n;
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(opts);
+    bson_destroy(filter);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
+static int mg_lb_apply(struct ms_db *db, char const *board, char const *uuid,
+                       double value, enum ms_lb_mode mode,
+                       char const *extra_json)
+{
+    char id[160];
+    snprintf(id, sizeof id, "%s:%s", board, uuid);
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(id));
+    if (mode == ms_lb_set && value <= 0)
+    {
+        struct mg *mg = db->ctx;
+        mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+        mongoc_collection_t *c = coll(mg, client, "leaderboards");
+        bson_error_t error;
+        int result = mongoc_collection_delete_one(c, filter, NULL, NULL, &error)
+                         ? MS_DB_OK
+                         : log_error("lb_apply delete", &error);
+        mongoc_collection_destroy(c);
+        mongoc_client_pool_push(mg->pool, client);
+        bson_destroy(filter);
+        return result;
+    }
+    if (mode != ms_lb_set && value <= 0)
+    {
+        bson_destroy(filter);
+        return MS_DB_OK;
+    }
+    bson_t set;
+    bson_init(&set);
+    BSON_APPEND_UTF8(&set, "board", board);
+    BSON_APPEND_UTF8(&set, "uuid", uuid);
+    if (mode == ms_lb_set)
+        BSON_APPEND_DOUBLE(&set, "score", value);
+    int ok = append_json_doc(&set, "extra", extra_json ? extra_json : "{}");
+    int result = MS_DB_ERROR;
+    if (ok)
+    {
+        bson_t *update = bson_new();
+        BSON_APPEND_DOCUMENT(update, "$set", &set);
+        // who got to a score first decides equal scores
+        bson_t *first = BCON_NEW("updated_at", BCON_INT64(ms_now()));
+        BSON_APPEND_DOCUMENT(update, "$setOnInsert", first);
+        bson_t *op = NULL;
+        if (mode == ms_lb_max)
+        {
+            op = BCON_NEW("score", BCON_DOUBLE(value));
+            BSON_APPEND_DOCUMENT(update, "$max", op);
+        }
+        else if (mode == ms_lb_add)
+        {
+            op = BCON_NEW("score", BCON_DOUBLE(value));
+            BSON_APPEND_DOCUMENT(update, "$inc", op);
+        }
+        result = mg_update_one(db, "leaderboards", filter, update, "lb_apply", 1);
+        if (op != NULL)
+            bson_destroy(op);
+        bson_destroy(first);
+        bson_destroy(update);
+    }
+    bson_destroy(&set);
+    bson_destroy(filter);
+    return result;
+}
+
+static int mg_lb_rank(struct ms_db *db, char const *board, char const *uuid,
+                      double *score, int64_t *rank)
+{
+    struct mg *mg = db->ctx;
+    char id[160];
+    snprintf(id, sizeof id, "%s:%s", board, uuid);
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "leaderboards");
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(id));
+    bson_t *mine = NULL;
+    int result = find_one(c, filter, &mine);
+    bson_destroy(filter);
+    if (result == MS_DB_OK)
+    {
+        double s = double_field(mine, "score");
+        int64_t updated = int_field(mine, "updated_at");
+        bson_destroy(mine);
+        if (!(s > 0))
+            result = MS_DB_NOT_FOUND;
+        else
+        {
+            *score = s;
+            bson_t *count = BCON_NEW(
+                "board", BCON_UTF8(board), "$or", "[", "{", "score", "{",
+                "$gt", BCON_DOUBLE(s), "}", "}", "{", "score", BCON_DOUBLE(s),
+                "updated_at", "{", "$lt", BCON_INT64(updated), "}", "}", "{",
+                "score", BCON_DOUBLE(s), "updated_at", BCON_INT64(updated),
+                "uuid", "{", "$lt", BCON_UTF8(uuid), "}", "}", "]");
+            bson_error_t error;
+            int64_t ahead = mongoc_collection_count_documents(c, count, NULL,
+                                                              NULL, NULL, &error);
+            bson_destroy(count);
+            if (ahead < 0)
+                result = log_error("lb_rank", &error);
+            else
+                *rank = ahead + 1;
+        }
+    }
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
+static int mg_account_page(struct ms_db *db, int offset, int limit,
+                           struct ms_db_account_ref *out)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "accounts");
+    bson_t *filter = bson_new();
+    bson_t *opts = BCON_NEW("sort", "{", "_id", BCON_INT32(1), "}", "skip",
+                            BCON_INT32(offset), "limit", BCON_INT32(limit));
+    mongoc_cursor_t *cursor =
+        mongoc_collection_find_with_opts(c, filter, opts, NULL);
+    bson_t const *doc;
+    int n = 0;
+    while (n < limit && mongoc_cursor_next(cursor, &doc))
+    {
+        memset(&out[n], 0, sizeof out[n]);
+        ms_strlcpy(out[n].uuid, str_field(doc, "_id", ""), sizeof out[n].uuid);
+        ms_strlcpy(out[n].username, str_field(doc, "username", ""),
+                   sizeof out[n].username);
+        out[n].is_dev = bool_field(doc, "is_dev");
+        ++n;
+    }
+    bson_error_t error;
+    int result = mongoc_cursor_error(cursor, &error)
+                     ? log_error("account_page", &error)
                      : n;
     mongoc_cursor_destroy(cursor);
     bson_destroy(opts);
@@ -794,6 +936,9 @@ struct ms_db *ms_db_mongo_open()
     db->gardn_apply = mg_gardn_apply;
     db->lb_submit = mg_lb_submit;
     db->lb_top = mg_lb_top;
+    db->lb_apply = mg_lb_apply;
+    db->lb_rank = mg_lb_rank;
+    db->account_page = mg_account_page;
     db->ping = mg_ping;
     db->close = mg_close;
     ms_log("db", "mongo ready (database %s)", mg->name);

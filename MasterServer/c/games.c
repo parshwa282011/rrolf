@@ -30,6 +30,7 @@
 #include "api.h"
 #include "config.h"
 #include "jobs.h"
+#include "leaderboard.h"
 #include "proto.h"
 #include "util.h"
 
@@ -104,6 +105,12 @@ struct player
     uint64_t flushed_version;
     int flushing;
     int64_t last_flush_ms;
+    // leaderboards (leaderboard.c): what is on the boards for this player (-1 =
+    // not known yet), the highest PvP score the game server saw, and the Ancient
+    // craft attempts it has told us about that no board has yet
+    double lb_last[MS_LB_RYSTERIA_BOARDS];
+    int64_t pvp_best;
+    uint64_t lb_attempts;
 };
 
 struct join
@@ -124,9 +131,17 @@ struct join
 struct flush
 {
     char uuid[MS_UUID_SIZE];
+    char username[65];
     uint64_t version;
     struct ms_db_rysteria rys;
     int rc;
+    int is_dev;
+    // leaderboards
+    double lb_prev[MS_LB_RYSTERIA_BOARDS];
+    double lb_now[MS_LB_RYSTERIA_BOARDS];
+    int64_t pvp_best;
+    uint64_t attempts;
+    int lb_rc;
 };
 
 static struct lws_context *context;
@@ -309,6 +324,13 @@ static void flush_run(void *arg)
 {
     struct flush *f = arg;
     f->rc = MS_DB->rysteria_put(MS_DB, f->uuid, &f->rys);
+    // the leaderboards follow what was just saved
+    memcpy(f->lb_now, f->lb_prev, sizeof f->lb_now);
+    f->lb_rc = 0;
+    if (f->rc == MS_DB_OK && !f->is_dev)
+        f->lb_rc = ms_lb_push_rysteria(f->uuid, f->username, &f->rys,
+                                       f->pvp_best, f->attempts, f->lb_prev,
+                                       f->lb_now);
 }
 
 static void flush_done(void *arg)
@@ -318,6 +340,10 @@ static void flush_done(void *arg)
     if (p != NULL)
     {
         p->flushing = 0;
+        memcpy(p->lb_last, f->lb_now, sizeof p->lb_last);
+        // attempts no board got (the save or the board failed) are told again
+        if (f->rc != MS_DB_OK || f->lb_rc != 0)
+            p->lb_attempts += f->attempts;
         if (f->rc == MS_DB_OK)
         {
             if (f->version > p->flushed_version)
@@ -352,7 +378,13 @@ static void start_flush(struct player *p)
         return;
     struct flush *f = calloc(1, sizeof *f);
     ms_strlcpy(f->uuid, p->uuid, sizeof f->uuid);
+    ms_strlcpy(f->username, p->username, sizeof f->username);
     f->version = p->version;
+    f->is_dev = p->is_dev;
+    memcpy(f->lb_prev, p->lb_last, sizeof f->lb_prev);
+    f->pvp_best = p->pvp_best;
+    f->attempts = p->lb_attempts;
+    p->lb_attempts = 0;
     snapshot(p, &f->rys);
     p->flushing = 1;
     p->last_flush_ms = ms_now_ms();
@@ -371,6 +403,9 @@ static void adopt(struct join *j, struct ms_gconn *c)
         p->xp = j->rys.xp;
         p->checkpoint = j->rys.checkpoint;
         p->pvp_points = j->rys.pvp_points;
+        p->pvp_best = j->rys.pvp_points;
+        for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
+            p->lb_last[b] = -1;
         p->petals = parse_object(j->rys.petals);
         p->failed_crafts = parse_object(j->rys.failed_crafts);
         p->mob_kills = parse_object(j->rys.mob_kills);
@@ -421,6 +456,10 @@ static void join_run(void *arg)
     }
     else if (rc != MS_DB_OK)
         j->verdict = ms_auth_error;
+    // the player is online now: their numbers on the leaderboards are put right
+    else if (!j->account.is_dev)
+        ms_lb_push_rysteria(j->uuid, j->account.username, &j->rys, 0, 0, NULL,
+                            NULL);
 }
 
 static void join_done(void *arg)
@@ -586,6 +625,16 @@ static void on_save(struct ms_gconn *c, struct ms_reader *r)
         read_loadout(r, loadout);
         ms_reader_string(r, nickname, sizeof nickname);
     }
+    // and after that what the leaderboards need: Ancient craft attempts since the
+    // last save, and the highest PvP score
+    uint64_t attempts = 0, pvp_best = 0;
+    if (has_tail && !r->error && ms_reader_remaining(r) > 0)
+    {
+        attempts = ms_reader_varuint(r);
+        pvp_best = ms_reader_varuint(r);
+        if (r->error)
+            attempts = pvp_best = 0;
+    }
     struct player *p = r->error ? NULL : find_player(uuid);
     if (p == NULL || p->conn != c || !isfinite(xp) || xp < 0)
     {
@@ -610,6 +659,10 @@ static void on_save(struct ms_gconn *c, struct ms_reader *r)
         p->loadout = loadout;
         ms_strlcpy(p->nickname, nickname, sizeof p->nickname);
     }
+    if (attempts > 0 && attempts < 1000000)
+        p->lb_attempts += attempts;
+    if (pvp_best > (uint64_t)p->pvp_best && pvp_best < (uint64_t)INT64_MAX)
+        p->pvp_best = (int64_t)pvp_best;
     ++p->version;
 }
 
@@ -1121,6 +1174,9 @@ void ms_games_shutdown()
         {
             p->flushed_version = p->version;
             ++saved;
+            if (!p->is_dev)
+                ms_lb_push_rysteria(p->uuid, p->username, &r, p->pvp_best,
+                                    p->lb_attempts, p->lb_last, NULL);
         }
         else
             ms_log("games", "FAILED to save %s on shutdown", p->uuid);

@@ -25,11 +25,14 @@
 #include "config.h"
 #include "games.h"
 #include "jobs.h"
+#include "leaderboard.h"
 #include "util.h"
 
 #define MAX_BODY (32 * 1024)
 
 static volatile sig_atomic_t quit;
+
+int ms_server_quitting() { return quit; }
 static struct lws_context *context;
 static lws_sorted_usec_list_t tick_sul;
 
@@ -353,6 +356,7 @@ int ms_server_run()
     }
     ms_jobs_set_context(context);
     ms_games_set_context(context);
+    ms_lb_verify_start();
     lws_sul_schedule(context, 0, &tick_sul, tick, 250 * LWS_US_PER_MS);
     ms_log("server", "listening on %s:%u (db: %s)",
            MS_CONFIG.bind_address[0] ? MS_CONFIG.bind_address : "*",

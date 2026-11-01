@@ -90,6 +90,22 @@ struct ms_db_lb_entry
     char *extra; // malloc'd json
 };
 
+// how lb_apply combines the new value with what the board holds
+enum ms_lb_mode
+{
+    ms_lb_set, // exactly this value; 0 or less takes the player off the board
+    ms_lb_max, // the larger of the two
+    ms_lb_add  // adds to it
+};
+
+// who an account is, for walking through all of them
+struct ms_db_account_ref
+{
+    char uuid[MS_UUID_SIZE];
+    char username[65];
+    int is_dev;
+};
+
 enum ms_db_account_key
 {
     ms_db_by_uuid,
@@ -137,8 +153,24 @@ struct ms_db
 
     int (*lb_submit)(struct ms_db *, char const *board, char const *uuid,
                      double score, char const *extra_json);
+    // best first, equal scores in the order they were reached, players with a
+    // score of 0 or less are never listed. Returns the count or MS_DB_ERROR
     int (*lb_top)(struct ms_db *, char const *board, int limit,
                   struct ms_db_lb_entry *out);
+    // The leaderboard of the leaderboard page: one number per player and board
+    // that follows the player's data (set), only ever grows (max, add), and
+    // carries the name to show in `extra_json`. Idempotent for set and max.
+    int (*lb_apply)(struct ms_db *, char const *board, char const *uuid,
+                    double value, enum ms_lb_mode mode,
+                    char const *extra_json);
+    // a player's own place on a board (1 = best): MS_DB_OK, MS_DB_NOT_FOUND
+    // (not listed) or MS_DB_ERROR
+    int (*lb_rank)(struct ms_db *, char const *board, char const *uuid,
+                   double *score, int64_t *rank);
+    // every account in a stable order, `limit` at a time from `offset`;
+    // returns how many were written or MS_DB_ERROR
+    int (*account_page)(struct ms_db *, int offset, int limit,
+                        struct ms_db_account_ref *out);
 
     // Change feed for backup servers (GET /backup). `since` / `source` are the
     // cursor and source id from the previous answer (NULL for the first pull).

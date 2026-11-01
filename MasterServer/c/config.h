@@ -53,6 +53,9 @@ struct ms_config
     char restart_command[512];
     // how long to wait for it to come back before giving up
     uint32_t restart_wait_seconds;
+    // 1 = on start-up every account is checked against its saves and the
+    // leaderboards are corrected (leaderboard.c)
+    uint32_t leaderboard_verify;
 };
 
 extern struct ms_config MS_CONFIG;

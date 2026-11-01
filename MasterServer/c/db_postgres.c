@@ -620,8 +620,9 @@ static int pg_lb_top(struct ms_db *db, char const *board, int limit,
     char const *params[] = {board, lim};
     PGresult *r = run(c,
                       "SELECT uuid, score, extra::text FROM"
-                      " leaderboards.entries WHERE board = $1"
-                      " ORDER BY score DESC LIMIT $2::int",
+                      " leaderboards.entries WHERE board = $1 AND score > 0"
+                      " ORDER BY score DESC, updated_at ASC, uuid ASC"
+                      " LIMIT $2::int",
                       2, params);
     int result;
     if (PQresultStatus(r) != PGRES_TUPLES_OK)
@@ -637,6 +638,116 @@ static int pg_lb_top(struct ms_db *db, char const *board, int limit,
             ms_strlcpy(out[i].uuid, PQgetvalue(r, i, 0), sizeof out[i].uuid);
             out[i].score = atof(PQgetvalue(r, i, 1));
             out[i].extra = strdup(PQgetvalue(r, i, 2));
+        }
+        result = n;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_lb_apply(struct ms_db *db, char const *board, char const *uuid,
+                       double value, enum ms_lb_mode mode,
+                       char const *extra_json)
+{
+    if (mode == ms_lb_set && value <= 0)
+    {
+        char const *params[] = {board, uuid};
+        return pg_simple(db, "lb_apply delete",
+                         "DELETE FROM leaderboards.entries"
+                         " WHERE board = $1 AND uuid = $2",
+                         2, params);
+    }
+    if (mode != ms_lb_set && value <= 0)
+        return MS_DB_OK; // nothing to add, nothing to raise
+    char s[64];
+    snprintf(s, sizeof s, "%.17g", value);
+    char updated[32];
+    fmt_i64(updated, sizeof updated, ms_now());
+    char const *mode_text = mode == ms_lb_set ? "set"
+                            : mode == ms_lb_max ? "max" : "add";
+    char const *params[] = {board, uuid, s, extra_json ? extra_json : "{}",
+                            updated, mode_text};
+    // updated_at only moves when the score does: it decides who is ahead of an
+    // equal score (the one who got there first)
+#define LB_NEW_SCORE                                                           \
+    "(CASE $6::text WHEN 'set' THEN EXCLUDED.score"                            \
+    " WHEN 'max' THEN GREATEST(leaderboards.entries.score, EXCLUDED.score)"    \
+    " ELSE leaderboards.entries.score + EXCLUDED.score END)"
+    return pg_simple(db, "lb_apply",
+                     "INSERT INTO leaderboards.entries (board, uuid, score,"
+                     " extra, updated_at) VALUES ($1,$2,$3::double precision,"
+                     " $4::jsonb,$5::bigint)"
+                     " ON CONFLICT (board, uuid) DO UPDATE SET"
+                     " updated_at = CASE WHEN " LB_NEW_SCORE
+                     " = leaderboards.entries.score THEN"
+                     " leaderboards.entries.updated_at ELSE EXCLUDED.updated_at"
+                     " END, score = " LB_NEW_SCORE ", extra = EXCLUDED.extra",
+                     6, params);
+#undef LB_NEW_SCORE
+}
+
+static int pg_lb_rank(struct ms_db *db, char const *board, char const *uuid,
+                      double *score, int64_t *rank)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char const *params[] = {board, uuid};
+    PGresult *r = run(
+        c,
+        "SELECT e.score, (SELECT count(*) FROM leaderboards.entries o"
+        " WHERE o.board = e.board AND o.score > 0 AND (o.score > e.score OR"
+        " (o.score = e.score AND (o.updated_at < e.updated_at OR"
+        " (o.updated_at = e.updated_at AND o.uuid < e.uuid))))) + 1"
+        " FROM leaderboards.entries e"
+        " WHERE e.board = $1 AND e.uuid = $2 AND e.score > 0",
+        2, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("lb_rank", r);
+    else if (PQntuples(r) == 0)
+        result = MS_DB_NOT_FOUND;
+    else
+    {
+        *score = atof(PQgetvalue(r, 0, 0));
+        *rank = atoll(PQgetvalue(r, 0, 1));
+        result = MS_DB_OK;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_account_page(struct ms_db *db, int offset, int limit,
+                           struct ms_db_account_ref *out)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char off[16], lim[16];
+    snprintf(off, sizeof off, "%d", offset);
+    snprintf(lim, sizeof lim, "%d", limit);
+    char const *params[] = {lim, off};
+    PGresult *r = run(c,
+                      "SELECT uuid, username, is_dev FROM accounts.accounts"
+                      " ORDER BY uuid LIMIT $1::int OFFSET $2::int",
+                      2, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("account_page", r);
+    else
+    {
+        int n = PQntuples(r);
+        if (n > limit)
+            n = limit;
+        for (int i = 0; i < n; ++i)
+        {
+            memset(&out[i], 0, sizeof out[i]);
+            ms_strlcpy(out[i].uuid, PQgetvalue(r, i, 0), sizeof out[i].uuid);
+            ms_strlcpy(out[i].username, PQgetvalue(r, i, 1),
+                       sizeof out[i].username);
+            out[i].is_dev = PQgetvalue(r, i, 2)[0] == 't';
         }
         result = n;
     }
@@ -1008,6 +1119,9 @@ struct ms_db *ms_db_postgres_open()
     db->gardn_apply = pg_gardn_apply;
     db->lb_submit = pg_lb_submit;
     db->lb_top = pg_lb_top;
+    db->lb_apply = pg_lb_apply;
+    db->lb_rank = pg_lb_rank;
+    db->account_page = pg_account_page;
     db->backup_pull = pg_backup;
     db->ping = pg_ping;
     db->close = pg_close;

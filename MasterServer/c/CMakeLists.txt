@@ -50,6 +50,7 @@ set(MS_SOURCES
     discord.c
     games.c
     jobs.c
+    leaderboard.c
     oauth.c
     proto.c
     ratelimit.c

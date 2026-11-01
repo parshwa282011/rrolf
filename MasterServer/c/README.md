@@ -68,6 +68,28 @@ on SIGTERM/SIGINT) the master runs `RESTART_COMMAND` once, with `{name}` replace
 the server is not connected again after `RESTART_WAIT_SECONDS` (default 90), it gives up; the next drop tries
 again. Empty `RESTART_COMMAND` = never. The log lines start with `[restart]`.
 
+## Leaderboards
+
+`GET /leaderboard[?me=<uuid>]` (public, CORS allow-list, 90 per 10 minutes per ip) answers everything the page
+`Client/public/leaderboard.html` shows in one go: both games, every board, the best ten of each (name and score, no
+uuids) and, with `me`, where that player stands on each board. The top lists are cached for 8 seconds for everybody.
+The page itself asks at most 60 times in 10 minutes, then waits for the window to end and rests for 3 minutes
+(`budget` in every answer tells it the numbers).
+
+The numbers are kept in the leaderboards section (`board, uuid, score, {"name"}`) so that ranking never reads the
+saves. **Rysteria:** `rr_level` (level and how far to the next, as one number), `rr_ancient_attempts`, `rr_pvp_best`,
+`rr_ancients` (owned now), `rr_ancient_kills`, `rr_mythics` (owned), `rr_kills`. **Gardn:** `gardn_kills`,
+`gardn_best_score`, `gardn_mythics` (in all saves). They are written
+
+* when a player **joins** a Rysteria server, and when a game server **saves** them (every few seconds while they play):
+  everything a save can prove is set exactly (ancients owned can go down), the PvP best only goes up, and the Ancient
+  craft attempts the game server counted (the end of the save message) are added;
+* when gardn reports a player (with their saves, once a minute): kills are added, Mythic petals and best score set;
+* a player who is offline changes nothing;
+* **on start-up** a worker walks through every account once and corrects the boards from the saves (levels, owned and
+  killed Ancients, Mythics, kills, best gardn score). Counters no save holds (craft attempts, gardn kills, gardn Mythics, the
+  PvP peak) are never lowered. `LEADERBOARD_VERIFY=0` turns it off.
+
 ## Tests
 
 ```sh
@@ -75,5 +97,6 @@ build/tests/test_core                         # encoding, wire format, tokens
 DB_TYPE=postgres POSTGRES_URI=... build/tests/test_db   # backend conformance
 DB_TYPE=mongo MONGO_URI=... build/tests/test_db
 SERVER_SECRET=... node tests/e2e.js           # against a running master
+node tests/leaderboard.js                     # saves -> boards -> /leaderboard (a throwaway master, see the file)
 ```
 `test_db` and `e2e.js` create accounts: use a throwaway database.

@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "api.h"
+#include "leaderboard.h"
 #include "util.h"
 
 #define MAX_FLUSH_CHANGES 512
@@ -175,6 +176,25 @@ static int apply_change(cJSON const *change)
     ms_db_gsave_free(adds, add_count);
     free(adds);
     free(removes);
+    // what gardn counted for the leaderboards: kills since its last report, and
+    // the Mythic petals and best score of the player's saves
+    if (result == 0)
+    {
+        cJSON const *kills = cJSON_GetObjectItemCaseSensitive(change, "kills");
+        cJSON const *mythics = cJSON_GetObjectItemCaseSensitive(change, "mythics");
+        cJSON const *best = cJSON_GetObjectItemCaseSensitive(change, "best_score");
+        uint64_t k = cJSON_IsNumber(kills) && kills->valuedouble > 0 &&
+                             kills->valuedouble < 1e9
+                         ? (uint64_t)kills->valuedouble
+                         : 0;
+        int have = cJSON_IsNumber(mythics) && cJSON_IsNumber(best) &&
+                   mythics->valuedouble >= 0 && best->valuedouble >= 0 &&
+                   mythics->valuedouble < 1e9 && best->valuedouble < 4294967296.0;
+        if (k > 0 || have)
+            ms_lb_push_gardn(uuid, k, have,
+                             have ? (uint64_t)mythics->valuedouble : 0,
+                             have ? (uint64_t)best->valuedouble : 0);
+    }
     return result;
 }
 

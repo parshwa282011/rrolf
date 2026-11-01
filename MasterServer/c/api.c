@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "leaderboard.h"
 #include "ratelimit.h"
 #include "util.h"
 
@@ -48,6 +49,10 @@ struct route
 static struct route const ROUTES[] = {
     {"GET", "/health", 0, ms_h_health, route_public, "health", 120, 60},
     {"GET", "/backup", 0, ms_h_backup, route_clone, NULL, 0, 0},
+    // the page asks at most 60 times in 10 minutes (see leaderboard.c); a few
+    // more are let through for a second tab or a page that was reloaded
+    {"GET", "/leaderboard", 0, ms_h_leaderboard, route_public, "leaderboard",
+     90, 600},
 
     {"POST", "/auth/signup", 0, ms_h_signup, route_public, "signup", 5, 3600},
     {"POST", "/auth/login", 0, ms_h_login, route_public, "login", 10, 600},

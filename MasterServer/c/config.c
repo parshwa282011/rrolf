@@ -149,6 +149,7 @@ int ms_config_from_env()
     c->restart_wait_seconds = get_uint("RESTART_WAIT_SECONDS", 90);
     if (c->restart_wait_seconds < 5)
         c->restart_wait_seconds = 5;
+    c->leaderboard_verify = get_uint("LEADERBOARD_VERIFY", 1);
 
     // secrets must exist and be long enough to be worth anything
     struct
