@@ -72,9 +72,10 @@ struct rr_server_client
     uint64_t pvp_points;
     // for the leaderboards (MasterServer/c/leaderboard.c): the highest PvP score
     // this player reached, and the Ancient craft attempts made since the master
-    // was last told
+    // was last told, and the players this one killed in the PvP zone since then
     uint64_t pvp_best;
     uint64_t lb_ancient_attempts;
+    uint64_t lb_pvp_kills;
     float player_accel_x;
     float player_accel_y;
     char ip_address[100];

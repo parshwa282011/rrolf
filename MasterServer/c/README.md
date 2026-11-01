@@ -77,17 +77,17 @@ The page itself asks at most 60 times in 10 minutes, then waits for the window t
 (`budget` in every answer tells it the numbers).
 
 The numbers are kept in the leaderboards section (`board, uuid, score, {"name"}`) so that ranking never reads the
-saves. **Rysteria:** `rr_level` (level and how far to the next, as one number), `rr_ancient_attempts`, `rr_pvp_best`,
-`rr_ancients` (owned now), `rr_ancient_kills`, `rr_mythics` (owned), `rr_kills`. **Gardn:** `gardn_kills`,
+saves. **Rysteria:** `rr_level` (level and how far to the next, as one number), `rr_pvp_kills`, `rr_pvp_best`,
+`rr_ancient_attempts`, `rr_ancients` (owned now), `rr_ancient_kills`, `rr_kills` (mobs). **Gardn:** `gardn_kills`,
 `gardn_best_score`, `gardn_mythics` (in all saves). They are written
 
 * when a player **joins** a Rysteria server, and when a game server **saves** them (every few seconds while they play):
   everything a save can prove is set exactly (ancients owned can go down), the PvP best only goes up, and the Ancient
-  craft attempts the game server counted (the end of the save message) are added;
+  craft attempts and the players killed in PvP that the game server counted (the end of the save message) are added;
 * when gardn reports a player (with their saves, once a minute): kills are added, Mythic petals and best score set;
 * a player who is offline changes nothing;
 * **on start-up** a worker walks through every account once and corrects the boards from the saves (levels, owned and
-  killed Ancients, Mythics, kills, best gardn score). Counters no save holds (craft attempts, gardn kills, gardn Mythics, the
+  killed Ancients, kills, best gardn score). Counters no save holds (craft attempts, PvP kills, gardn kills, gardn Mythics, the
   PvP peak) are never lowered. `LEADERBOARD_VERIFY=0` turns it off.
 
 ## Tests

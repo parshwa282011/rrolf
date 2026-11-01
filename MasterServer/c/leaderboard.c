@@ -50,17 +50,17 @@ struct board
 static struct board const BOARDS[] = {
     {"rr_level", "rysteria", "Level", "", "level",
      "How far the player has levelled"},
-    {"rr_ancient_attempts", "rysteria", "Ancient craft attempts", "", "int",
-     "Tries to craft an Ancient petal, successful or not"},
+    {"rr_pvp_kills", "rysteria", "PvP kills", "", "int",
+     "Players killed in the PvP zone"},
     {"rr_pvp_best", "rysteria", "Best PvP score", "", "int",
      "Highest score reached in the PvP zone"},
+    {"rr_ancient_attempts", "rysteria", "Ancient craft attempts", "", "int",
+     "Tries to craft an Ancient petal, successful or not"},
     {"rr_ancients", "rysteria", "Ancients owned", "", "int",
      "Ancient petals in the inventory right now"},
     {"rr_ancient_kills", "rysteria", "Ancients killed", "", "int",
      "Ancient mobs killed"},
-    {"rr_mythics", "rysteria", "Mythic petals", "", "int",
-     "Mythic petals in the inventory"},
-    {"rr_kills", "rysteria", "Rysteria kills", "", "int",
+    {"rr_kills", "rysteria", "Mob kills", "", "int",
      "Mobs killed in Rysteria"},
     {"gardn_kills", "gardn", "Gardn kills", "", "int", "Kills in gardn"},
     {"gardn_best_score", "gardn", "Highest score", "", "int",
@@ -123,11 +123,10 @@ void ms_lb_rysteria_values(struct ms_db_rysteria const *rys,
     out[0] = level_score(rys->xp);
     out[2] = rys->pvp_points > 0 ? (double)rys->pvp_points : 0;
     cJSON *petals = cJSON_Parse(rys->petals ? rys->petals : "{}");
-    out[3] = sum_counts(petals, RARITY_ANCIENT, NULL);
-    out[5] = sum_counts(petals, RARITY_MYTHIC, NULL);
+    out[4] = sum_counts(petals, RARITY_ANCIENT, NULL);
     cJSON_Delete(petals);
     cJSON *mobs = cJSON_Parse(rys->mob_kills ? rys->mob_kills : "{}");
-    out[4] = sum_counts(mobs, RARITY_ANCIENT, &out[6]);
+    out[5] = sum_counts(mobs, RARITY_ANCIENT, &out[6]);
     cJSON_Delete(mobs);
 }
 
@@ -152,7 +151,7 @@ static int apply(int board, char const *uuid, double value,
 
 int ms_lb_push_rysteria(char const *uuid, char const *username,
                         struct ms_db_rysteria const *rys, int64_t pvp_best,
-                        uint64_t attempts, double const *prev,
+                        struct ms_lb_counters const *counts, double const *prev,
                         double now[MS_LB_RYSTERIA_BOARDS])
 {
     double v[MS_LB_RYSTERIA_BOARDS];
@@ -163,7 +162,7 @@ int ms_lb_push_rysteria(char const *uuid, char const *username,
     int failed = 0;
     for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
     {
-        if (b == 1)
+        if (b == 1 || b == 3)
             continue; // counted below
         if (now != NULL)
             now[b] = prev != NULL ? prev[b] : -1;
@@ -175,8 +174,15 @@ int ms_lb_push_rysteria(char const *uuid, char const *username,
         else if (now != NULL)
             now[b] = v[b];
     }
-    if (attempts > 0 && apply(1, uuid, (double)attempts, ms_lb_add, extra) != 0)
-        ++failed;
+    if (counts != NULL)
+    {
+        if (counts->pvp_kills > 0 &&
+            apply(1, uuid, (double)counts->pvp_kills, ms_lb_add, extra) != 0)
+            ++failed;
+        if (counts->attempts > 0 &&
+            apply(3, uuid, (double)counts->attempts, ms_lb_add, extra) != 0)
+            ++failed;
+    }
     free(extra);
     return failed ? -1 : 0;
 }
@@ -235,7 +241,7 @@ static void verify_run(void *arg)
             if (MS_DB->rysteria_get(MS_DB, a->uuid, &rys) == MS_DB_OK)
             {
                 // everything a save can prove, without the counters it can not
-                if (ms_lb_push_rysteria(a->uuid, a->username, &rys, 0, 0, NULL,
+                if (ms_lb_push_rysteria(a->uuid, a->username, &rys, 0, NULL, NULL,
                                         NULL) != 0)
                     ++v->corrected;
             }

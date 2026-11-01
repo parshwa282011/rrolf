@@ -132,6 +132,7 @@ void rr_component_flower_set_dead(struct rr_component_flower *this,
                 struct rr_component_player_info *killer_info =
                     rr_simulation_get_player_info(simulation,
                                                   health->last_attacker);
+                ++killer_info->client->lb_pvp_kills;
                 killer_info->client->pvp_points +=
                     player_info->client->pvp_points / 3;
                 player_info->client->pvp_points /= 2;

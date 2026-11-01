@@ -379,6 +379,7 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     this->pvp_points = rr_binary_encoder_read_varuint(encoder);
     this->pvp_best = this->pvp_points;
     this->lb_ancient_attempts = 0;
+    this->lb_pvp_kills = 0;
     for (uint8_t biome = 0; biome < RR_CLIENT_SAVED_BIOMES; ++biome)
     {
         this->checkpoint[biome] = rr_binary_encoder_read_uint8(encoder);
@@ -491,13 +492,16 @@ void rr_server_client_write_to_api(struct rr_server_client *this)
     }
     rr_binary_encoder_write_uint8(&encoder, 0);
     rr_binary_encoder_write_nt_string(&encoder, this->saved_nickname);
-    // for the leaderboards: the attempts since the last save, and the best PvP
-    // score (this is called on every change of the points)
+    // for the leaderboards: the attempts since the last save, the best PvP
+    // score (this is called on every change of the points) and the players
+    // killed in PvP since the last save
     if (this->pvp_points > this->pvp_best)
         this->pvp_best = this->pvp_points;
     rr_binary_encoder_write_varuint(&encoder, this->lb_ancient_attempts);
     rr_binary_encoder_write_varuint(&encoder, this->pvp_best);
+    rr_binary_encoder_write_varuint(&encoder, this->lb_pvp_kills);
     this->lb_ancient_attempts = 0;
+    this->lb_pvp_kills = 0;
     lws_write(this->server->api_client, encoder.start,
               encoder.at - encoder.start, LWS_WRITE_BINARY);
 }

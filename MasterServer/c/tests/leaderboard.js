@@ -25,13 +25,13 @@ const levelOf = (xp) => { const f = (l) => { if (l <= 60) return (l + 5) * Math.
     const join = async (acct, pos) => { ws.send(Buffer.concat([Buffer.from([0]), str(acct.uuid), str(acct.pl_p), str(""), vu(1000 + pos), Buffer.from([pos])])); await sleep(600); };
     await join(A, 0);
     const xp = 3000;
-    const save = (acct, xpv, pvp, attempts, best, extraPetals = []) => ws.send(Buffer.concat([
+    const save = (acct, xpv, pvp, attempts, best, extraPetals = [], pvpKills = 0) => ws.send(Buffer.concat([
         Buffer.from([2]), str(acct.uuid), f64(xpv), vu(pvp), Buffer.from([0, 0, 0]),
         Buffer.from([3, 7]), vu(2), Buffer.from([4, 5]), vu(5), Buffer.from([1, 0]), vu(40), ...extraPetals, Buffer.from([0]),   // petals: ancient x2, mythic x5, common x40
         Buffer.from([0]),                                                                                                         // failed crafts
         Buffer.from([3, 7]), vu(3), Buffer.from([2, 0]), vu(10), Buffer.from([0]),                                                // kills: ancient mob x3 (id 2 + 1), common x10
-        Buffer.from([0]), str("Nick"), vu(attempts), vu(best)]));                                                                  // loadout none, nickname, attempts, pvp best
-    save(A, xp, 50, 12, 900);
+        Buffer.from([0]), str("Nick"), vu(attempts), vu(best), vu(pvpKills)]));                                                    // loadout none, nickname, attempts, pvp best, pvp kills
+    save(A, xp, 50, 12, 900, [], 4);
     await sleep(1800);
     let [st, lb] = await http("/leaderboard?me=" + A.uuid, { headers: { origin: "https://test.example" } });
     check(st === 200 && lb.ok, "GET /leaderboard -> " + st);
@@ -39,7 +39,9 @@ const levelOf = (xp) => { const f = (l) => { if (l <= 60) return (l + 5) * Math.
     const mine = (id) => board(id)?.me;
     check(Math.floor(mine("rr_level")?.score) === levelOf(xp), `level ${Math.floor(mine("rr_level")?.score)} == ${levelOf(xp)}`);
     check(mine("rr_ancients")?.score === 2, "ancients owned 2");
-    check(mine("rr_mythics")?.score === 5, "mythic petals 5");
+    check(mine("rr_mythics") === undefined && board("rr_mythics") === undefined, "no Rysteria mythic board");
+    check(mine("rr_pvp_kills")?.score === 4, "pvp kills 4");
+    check(lb.games[0].boards.slice(0, 3).map((b) => b.id).join() === "rr_level,rr_pvp_kills,rr_pvp_best", "level, pvp kills, pvp best come first");
     check(mine("rr_kills")?.score === 13, "kills 13: " + mine("rr_kills")?.score);
     check(mine("rr_ancient_kills")?.score === 3, "ancient kills 3");
     check(mine("rr_ancient_attempts")?.score === 12, "ancient attempts 12");
@@ -48,15 +50,16 @@ const levelOf = (xp) => { const f = (l) => { if (l <= 60) return (l + 5) * Math.
     check(mine("rr_kills").rank > 10 || board("rr_kills").entries.some((e) => e.me && e.name === name), "I am flagged in the top list under my name when I am in it");
     check(!JSON.stringify(lb).includes(A.uuid), "no uuid anywhere in the answer");
     // attempts add up, a lower pvp peak never lowers the best, ancients can go down
-    save(A, xp, 70, 5, 100, []);
+    save(A, xp, 70, 5, 100, [], 3);
     await sleep(1800);
     [st, lb] = await http("/leaderboard?me=" + A.uuid);
     check(mine("rr_ancient_attempts")?.score === 17, "attempts 12 + 5 = " + mine("rr_ancient_attempts")?.score);
     check(mine("rr_pvp_best")?.score === 900, "pvp best stays 900");
+    check(mine("rr_pvp_kills")?.score === 7, "pvp kills 4 + 3 = " + mine("rr_pvp_kills")?.score);
     // second player, rank
     await join(B, 1);
     ws.send(Buffer.concat([Buffer.from([2]), str(B.uuid), f64(xp * 4), vu(0), Buffer.from([0, 0, 0]), Buffer.from([0]), Buffer.from([0]), Buffer.from([0]), Buffer.from([0]), str("N2"), vu(0), vu(0)]));
-    await sleep(1800);
+    await sleep(9000); // the top lists are shared for a few seconds (CACHE_MS)
     [st, lb] = await http("/leaderboard?me=" + B.uuid);
     const rankB = mine("rr_level")?.rank;
     [st, lb] = await http("/leaderboard?me=" + A.uuid);
