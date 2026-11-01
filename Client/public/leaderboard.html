@@ -1,0 +1,438 @@
+<!--
+Copyright (C) 2024 Paul Johnson
+Copyright (C) 2024-2025 Maxim Nesterov
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rysteria Leaderboards</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="logo.png" rel="icon" type="image/png">
+<style>
+@font-face {
+    font-family: "Ubuntu";
+    font-weight: 700;
+    src: url("fonts/Ubuntu-Bold.ttf") format("truetype");
+}
+:root {
+    --grass: #1ea761;
+    --grass-dark: #167a47;
+    --ink: #222;
+    --panel: rgba(255, 255, 255, 0.16);
+    --panel-line: rgba(255, 255, 255, 0.28);
+    --gold: #ffd54a;
+    --silver: #d7dee3;
+    --bronze: #e39a5f;
+    /* the rarity colours of the game */
+    --common: #7eef6d; --unusual: #ffe65d; --rare: #4d52e3; --epic: #861fde;
+    --legendary: #de1f1f; --mythic: #1fdbde; --exotic: #ff2b75; --ancient: #2bffa3;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body {
+    font-family: "Ubuntu", system-ui, sans-serif;
+    font-weight: 700;
+    color: #fff;
+    background:
+        radial-gradient(1200px 700px at 15% -10%, #3cc97d 0%, transparent 60%),
+        radial-gradient(900px 600px at 100% 10%, #14803f 0%, transparent 55%),
+        var(--grass);
+    background-attachment: fixed;
+    overflow-x: hidden;
+}
+/* the outlined text of the game */
+.outline { text-shadow: -2px 0 var(--ink), 2px 0 var(--ink), 0 -2px var(--ink), 0 2px var(--ink),
+    -1.5px -1.5px var(--ink), 1.5px -1.5px var(--ink), -1.5px 1.5px var(--ink), 1.5px 1.5px var(--ink); }
+
+/* drifting petals behind everything */
+#petals { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+#petals i {
+    position: absolute; bottom: -40px; border-radius: 50%; background: rgba(255, 255, 255, 0.55);
+    animation: drift linear infinite;
+}
+@keyframes drift {
+    from { transform: translate3d(0, 0, 0); opacity: 0; }
+    10% { opacity: 1; }
+    to { transform: translate3d(var(--dx), -115vh, 0); opacity: 0; }
+}
+
+main { position: relative; z-index: 1; max-width: 1500px; margin: 0 auto; padding: 22px 18px 60px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
+header .brand { display: flex; align-items: center; gap: 14px; }
+header img { width: 58px; height: 58px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.3)); }
+header h1 { font-size: 44px; line-height: 1; letter-spacing: 0.5px; }
+header h1 small { display: block; font-size: 16px; opacity: 0.9; margin-top: 4px; letter-spacing: 1px; text-transform: uppercase; }
+header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+.btn {
+    font: inherit; color: #fff; cursor: pointer; text-decoration: none;
+    padding: 9px 18px; border-radius: 10px; border: 3px solid var(--ink);
+    background: #3fbf6f; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+    transition: transform 0.08s, filter 0.15s;
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
+.btn.alt { background: #4a8cf0; }
+.btn.warn { background: #d4b30c; }
+.btn[disabled] { filter: grayscale(0.7) brightness(0.8); cursor: not-allowed; }
+
+/* the live strip: how many requests are left and when the next one goes */
+#strip {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+    padding: 10px 16px; margin-bottom: 20px;
+    background: var(--panel); border: 2px solid var(--panel-line); border-radius: 14px;
+    backdrop-filter: blur(4px); font-size: 15px;
+}
+#dot { width: 12px; height: 12px; border-radius: 50%; background: #9aa; box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25); }
+#dot.live { background: var(--ancient); animation: pulse 1.8s infinite; }
+#dot.wait { background: var(--unusual); }
+#dot.pause { background: var(--legendary); }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(43, 255, 163, 0.35); } 50% { box-shadow: 0 0 0 8px rgba(43, 255, 163, 0); } }
+#status { flex: 1 1 260px; }
+#meter { width: 190px; height: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); overflow: hidden; border: 2px solid var(--ink); }
+#meter b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--common), var(--unusual), var(--legendary)); transition: width 0.4s; }
+#budget { font-variant-numeric: tabular-nums; opacity: 0.95; }
+
+.games { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 1100px) { .games { grid-template-columns: minmax(0, 1fr); } }
+
+.game { background: var(--panel); border: 2px solid var(--panel-line); border-radius: 22px; padding: 18px; backdrop-filter: blur(4px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+.game > h2 { font-size: 30px; display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.game > h2 svg { width: 38px; height: 38px; }
+.game .bar { height: 7px; border-radius: 6px; margin-bottom: 16px; }
+.game.rysteria .bar { background: linear-gradient(90deg, var(--common), var(--unusual), var(--rare), var(--epic), var(--legendary), var(--mythic), var(--exotic), var(--ancient)); }
+.game.gardn .bar { background: linear-gradient(90deg, #ffe65d, #ffb347, #ff7e6b); }
+
+/* as many cards in a row as fit; they reflow when the window changes */
+.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; grid-auto-flow: row dense; }
+
+.card {
+    --accent: var(--common);
+    background: rgba(8, 60, 32, 0.42); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 16px;
+    padding: 12px 12px 10px; position: relative; overflow: hidden;
+    animation: rise 0.5s both;
+}
+.card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--accent); }
+@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+.card h3 { font-size: 19px; display: flex; align-items: center; gap: 9px; margin: 4px 0 2px; }
+.card h3 .ico { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); border: 2px solid var(--ink); display: grid; place-items: center; flex: none; }
+.card h3 .ico svg { width: 19px; height: 19px; }
+.card p.note { font-size: 12px; opacity: 0.75; margin: 0 0 8px 39px; font-weight: 400; }
+
+.rows { list-style: none; position: relative; }
+.rows li {
+    display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 8px;
+    padding: 5px 8px; margin: 3px 0; border-radius: 10px; font-size: 15px;
+    background: rgba(255, 255, 255, 0.09);
+}
+.rows li .rk { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: rgba(0, 0, 0, 0.28); }
+.rows li.r1 .rk { background: var(--gold); color: var(--ink); box-shadow: 0 0 12px rgba(255, 213, 74, 0.7); }
+.rows li.r2 .rk { background: var(--silver); color: var(--ink); }
+.rows li.r3 .rk { background: var(--bronze); color: var(--ink); }
+.rows li.r1 { background: linear-gradient(90deg, rgba(255, 213, 74, 0.28), rgba(255, 255, 255, 0.09)); }
+.rows li .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rows li .sc { font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45); }
+.rows li .sc::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 1.5px solid var(--ink); margin-right: 7px; vertical-align: 1px; }
+.rows li.empty { opacity: 0.45; background: rgba(255, 255, 255, 0.04); font-weight: 400; }
+.rows li.flash { animation: flash 1.2s; }
+@keyframes flash { 0% { background: rgba(43, 255, 163, 0.55); } 100% { background: rgba(255, 255, 255, 0.09); } }
+
+/* you */
+.rows li.me {
+    background: rgba(255, 255, 255, 0.3); outline: 3px solid #fff; outline-offset: -1px;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.55); position: relative;
+}
+.rows li.me .nm::after { content: "YOU"; margin-left: 8px; font-size: 10px; padding: 2px 6px; border-radius: 6px; background: var(--accent); color: var(--ink); vertical-align: 2px; }
+.rows li.gap { background: none; display: block; text-align: center; padding: 0; margin: 0; font-size: 20px; line-height: 14px; opacity: 0.7; letter-spacing: 4px; }
+.you-note { font-size: 12px; font-weight: 400; opacity: 0.8; margin: 6px 4px 0; }
+
+#error { display: none; margin-bottom: 16px; padding: 10px 16px; border-radius: 12px; background: rgba(222, 31, 31, 0.55); border: 2px solid var(--ink); }
+.foot { margin-top: 26px; text-align: center; font-size: 13px; opacity: 0.8; font-weight: 400; }
+</style>
+</head>
+<body>
+<div id="petals"></div>
+<main>
+    <header>
+        <div class="brand">
+            <img src="logo.png" alt="">
+            <h1 class="outline">Leaderboards<small class="outline">Rysteria &amp; Gardn</small></h1>
+        </div>
+        <nav>
+            <a class="btn" href="/">Play Rysteria</a>
+            <a class="btn warn" href="/gardn/">Play Gardn</a>
+            <button class="btn alt" id="refresh" type="button">Refresh</button>
+        </nav>
+    </header>
+
+    <section id="strip">
+        <span id="dot"></span>
+        <span id="status">Loading...</span>
+        <span id="meter"><b></b></span>
+        <span id="budget"></span>
+    </section>
+    <div id="error"></div>
+
+    <div class="games" id="games"></div>
+    <p class="foot" id="foot">Your numbers update when you play: a player who is offline keeps what they had.</p>
+</main>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- settings
+// The page asks the master server for the leaderboards and for nothing else.
+// At most REQUESTS asks in a WINDOW of ten minutes; when they are used up it
+// waits for the window to end, then rests for PAUSE before it starts again. The
+// count lives in localStorage, so a reload or a second tab cannot get around it.
+const budget = { requests: 60, window: 600, pause: 180 };   // the master may say otherwise
+const REFRESH_SECONDS = 15;     // 40 asks in a window, 20 are left for the button
+const BUTTON_GAP_SECONDS = 4;
+const STORE = "rr_leaderboard_budget";
+
+const qs = new URLSearchParams(location.search);
+// api-game.<domain> when this page is on game.<domain>
+function apiBase() {
+    if (qs.get("api")) return qs.get("api").replace(/\/+$/, "");
+    if (/^game\./.test(location.hostname)) return location.protocol + "//" + location.host.replace(/^game\./, "api-game.");
+    return location.protocol + "//" + location.hostname + ":55554";
+}
+const me = (() => {
+    try { const u = localStorage.getItem("rivet_account_uuid") || ""; return /^[0-9a-f-]{36}$/i.test(u) ? u : ""; }
+    catch (e) { return ""; }
+})();
+
+// ------------------------------------------------------------ the budget
+function readBudget() {
+    try { const b = JSON.parse(localStorage.getItem(STORE)); if (b && typeof b.start === "number") return b; } catch (e) {}
+    return { start: 0, count: 0, until: 0 };
+}
+function writeBudget(b) { try { localStorage.setItem(STORE, JSON.stringify(b)); } catch (e) {} }
+
+// what may happen now: {mode: "ok" | "spent" | "pause", until}
+function budgetState(now) {
+    let b = readBudget();
+    if (b.until && now < b.until) return { mode: "pause", until: b.until, b };
+    if (b.until && now >= b.until) b = { start: 0, count: 0, until: 0 };            // rest is over
+    if (!b.start) b = { start: now, count: 0, until: 0 };
+    const end = b.start + budget.window * 1000;
+    if (now >= end) {
+        if (b.count >= budget.requests) {                                            // used up: rest now
+            b.until = end + budget.pause * 1000;
+            writeBudget(b);
+            return now < b.until ? { mode: "pause", until: b.until, b } : budgetState(now);
+        }
+        b = { start: now, count: 0, until: 0 };                                      // a quiet window: a new one
+    }
+    writeBudget(b);
+    return b.count >= budget.requests ? { mode: "spent", until: end, b } : { mode: "ok", until: end, b };
+}
+function spend() { const b = readBudget(); b.count = (b.count || 0) + 1; writeBudget(b); }
+function exhaust() { const b = readBudget(); b.count = budget.requests; writeBudget(b); }
+
+// -------------------------------------------------------------- the page
+const $ = (id) => document.getElementById(id);
+const GAMES = {
+    rysteria: { title: "Rysteria", cls: "rysteria" },
+    gardn: { title: "Gardn", cls: "gardn" },
+};
+// colour and picture of every board: the rarities of the game
+const LOOK = {
+    rr_level:            { c: "var(--common)",    i: "star" },
+    rr_ancient_attempts: { c: "var(--exotic)",    i: "dice" },
+    rr_pvp_best:         { c: "var(--legendary)", i: "sword" },
+    rr_ancients:         { c: "var(--ancient)",   i: "gem" },
+    rr_ancient_kills:    { c: "var(--epic)",      i: "skull" },
+    rr_mythics:          { c: "var(--mythic)",    i: "gem" },
+    rr_kills:            { c: "var(--unusual)",   i: "bolt" },
+    gardn_kills:         { c: "var(--legendary)", i: "bolt" },
+    gardn_best_score:    { c: "var(--unusual)",   i: "crown" },
+    gardn_mythics:       { c: "var(--mythic)",    i: "gem" },
+};
+const ICONS = {
+    star: '<path d="M12 2.5l2.9 6.2 6.7.8-5 4.6 1.4 6.7L12 17.4 6 20.8l1.4-6.7-5-4.6 6.7-.8z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
+    dice: '<rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="#fff" stroke="#222" stroke-width="1.6"/><circle cx="8.5" cy="8.5" r="1.7" fill="#222"/><circle cx="15.5" cy="15.5" r="1.7" fill="#222"/><circle cx="12" cy="12" r="1.7" fill="#222"/>',
+    sword: '<path d="M4 20l9.5-9.5M13 11l5.5-7 1.5.3.3 1.5-7 5.5M6.5 14.5l3 3M3.5 20.5l2-2" stroke="#222" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M4 20l9.5-9.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>',
+    gem: '<path d="M6 4h12l4 6-10 11L2 10z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/><path d="M2 10h20M9 4l-2 6 5 11 5-11-2-6" fill="none" stroke="#222" stroke-width="1.2"/>',
+    skull: '<path d="M12 2.5c-4.6 0-8 3.1-8 7.4 0 2.4 1.1 4 2.5 5v3.1h2.3v-1.8h1.6v1.8h3.2v-1.8h1.6v1.8h2.3V15c1.4-1 2.5-2.6 2.5-5C20 5.600 16.600 2.500 12 2.500z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.6" cy="10.2" r="2" fill="#222"/><circle cx="15.4" cy="10.2" r="2" fill="#222"/>',
+    bolt: '<path d="M13.500 2L4.500 13.500h6L9.500 22l9-12h-6z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
+    crown: '<path d="M3 8l4.500 4L12 4l4.500 8L21 8l-2 11H5z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
+    flower: '<g stroke="#222" stroke-width="1.5"><circle cx="12" cy="5.200" r="3.800" fill="#fff"/><circle cx="18.500" cy="9.800" r="3.800" fill="#fff"/><circle cx="16" cy="17.500" r="3.800" fill="#fff"/><circle cx="8" cy="17.500" r="3.800" fill="#fff"/><circle cx="5.500" cy="9.800" r="3.800" fill="#fff"/><circle cx="12" cy="12" r="3.600" fill="#ffe65d"/></g>',
+};
+const svg = (name) => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + "</svg>";
+
+// 1234 -> "1,234"; 12,345,678 -> "12.3M"
+function fmt(score, format) {
+    const n = format === "level" ? Math.floor(score) : Math.round(score);
+    if (n < 1e6) return n.toLocaleString("en-US");
+    const units = [[1e12, "T"], [1e9, "B"], [1e6, "M"]];
+    for (const [v, u] of units) if (n >= v) return (n / v).toFixed(n >= v * 100 ? 0 : 1).replace(/\.0$/, "") + u;
+    return String(n);
+}
+const full = (score, format) => (format === "level" ? Math.floor(score) : Math.round(score)).toLocaleString("en-US");
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// remember the previous scores to flash what changed
+const lastScore = new Map();
+
+function rowHtml(e, board, extraClass) {
+    const rank = e.rank;
+    const cls = ["r" + rank, e.me ? "me" : "", extraClass || ""].join(" ").trim();
+    return '<li class="' + cls + '" data-key="' + esc(e.key) + '" data-flash="' + (e.flash ? 1 : 0) + '">' +
+        '<span class="rk">' + rank.toLocaleString("en-US") + "</span>" +
+        '<span class="nm">' + esc(e.name) + "</span>" +
+        '<span class="sc" title="' + full(e.score, board.format) + '">' + fmt(e.score, board.format) + "</span></li>";
+}
+
+function cardHtml(board) {
+    const look = LOOK[board.id] || { c: "var(--common)", i: "star" };
+    let rows = "";
+    const inTop = board.entries.some((e) => e.me);
+    for (const e of board.entries) {
+        e.key = board.id + ":" + e.name;
+        const was = lastScore.get(e.key);
+        e.flash = was !== undefined && was !== e.score;
+        lastScore.set(e.key, e.score);
+        rows += rowHtml(e, board);
+    }
+    for (let i = board.entries.length; i < 10; ++i)
+        rows += '<li class="empty"><span class="rk">' + (i + 1) + '</span><span class="nm">Nobody yet</span><span class="sc">-</span></li>';
+    // under the top ten: where you are, when you are not in it
+    let youRows = "", youNote = "";
+    if (me && !inTop && board.me) {
+        youRows = '<li class="gap">&middot;&middot;&middot;</li>' +
+            rowHtml({ rank: board.me.rank, name: "You", score: board.me.score, me: true, key: board.id + ":you" }, board);
+    } else if (me && !inTop) {
+        youNote = '<p class="you-note">You are not on this board yet.</p>';
+    }
+    return '<article class="card" style="--accent:' + look.c + '" data-board="' + board.id + '">' +
+        '<h3><span class="ico">' + svg(look.i) + "</span>" + esc(board.title) + "</h3>" +
+        '<p class="note">' + esc(board.note || "") + "</p>" +
+        '<ul class="rows">' + rows + youRows + "</ul>" + youNote + "</article>";
+}
+
+// slide the rows to their new places when the order changed (FLIP)
+function render(data) {
+    const root = $("games");
+    const before = new Map();
+    root.querySelectorAll(".rows li[data-key]").forEach((li) => before.set(li.dataset.key, li.getBoundingClientRect()));
+    let html = "";
+    for (const g of data.games) {
+        const info = GAMES[g.id] || { title: g.id, cls: g.id };
+        html += '<section class="game ' + info.cls + '"><h2 class="outline">' + svg("flower") + esc(info.title) + '</h2><div class="bar"></div><div class="boards">';
+        for (const b of g.boards) html += cardHtml(b);
+        html += "</div></section>";
+    }
+    const firstDraw = !root.children.length;
+    root.innerHTML = html;
+    if (!firstDraw) root.querySelectorAll(".card").forEach((c) => (c.style.animation = "none"));
+    root.querySelectorAll(".rows li[data-key]").forEach((li) => {
+        const old = before.get(li.dataset.key);
+        if (old && li.animate) {
+            const now = li.getBoundingClientRect();
+            const dx = old.left - now.left, dy = old.top - now.top;
+            if (dx || dy) li.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" });
+        }
+        if (li.dataset.flash === "1") li.classList.add("flash");
+    });
+}
+
+// ------------------------------------------------------------- asking
+let inFlight = false, lastAsk = 0, lastGood = 0, lastError = "";
+
+async function ask(manual) {
+    const now = Date.now();
+    if (inFlight || budgetState(now).mode !== "ok") return;
+    inFlight = true;
+    lastAsk = now;
+    spend();
+    try {
+        const url = apiBase() + "/leaderboard" + (me ? "?me=" + encodeURIComponent(me) : "");
+        const res = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
+        if (res.status === 429) { exhaust(); throw new Error("The server asks us to slow down."); }
+        if (!res.ok) throw new Error("The server answered " + res.status + ".");
+        const data = await res.json();
+        if (!data.ok || !Array.isArray(data.games)) throw new Error("The leaderboards are not available.");
+        if (data.budget) {
+            budget.requests = data.budget.requests || budget.requests;
+            budget.window = data.budget.window_seconds || budget.window;
+            budget.pause = data.budget.pause_seconds || budget.pause;
+        }
+        render(data);
+        lastGood = Date.now();
+        lastError = "";
+        $("error").style.display = "none";
+    } catch (e) {
+        lastError = e.message || String(e);
+        $("error").textContent = lastError + " Showing the last numbers we got.";
+        $("error").style.display = "block";
+    } finally {
+        inFlight = false;
+        paint();
+    }
+}
+
+const clock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+function paint() {
+    const now = Date.now();
+    const st = budgetState(now);
+    const used = Math.min(st.b.count || 0, budget.requests);
+    $("budget").textContent = "Requests " + used + " / " + budget.requests;
+    $("meter").firstElementChild.style.width = (100 * used / budget.requests) + "%";
+    const dot = $("dot"), status = $("status"), btn = $("refresh");
+    if (st.mode === "pause") {
+        dot.className = "pause";
+        status.textContent = "Resting for " + clock(st.until - now) + ". The leaderboards come back on their own.";
+    } else if (st.mode === "spent") {
+        dot.className = "wait";
+        status.textContent = "All " + budget.requests + " requests of this window are used. Waiting " + clock(st.until - now) + " for the window to end, then a short rest.";
+    } else {
+        dot.className = document.hidden ? "wait" : "live";
+        const next = Math.max(0, REFRESH_SECONDS * 1000 - (now - lastAsk));
+        status.textContent = document.hidden ? "Paused while this tab is hidden."
+            : (lastGood ? "Live. Next update in " + Math.ceil(next / 1000) + " s" : "Loading...") +
+              " - window ends in " + clock(st.until - now);
+    }
+    btn.disabled = st.mode !== "ok" || inFlight || now - lastAsk < BUTTON_GAP_SECONDS * 1000;
+}
+
+setInterval(() => {
+    const now = Date.now();
+    if (!document.hidden && budgetState(now).mode === "ok" && now - lastAsk >= REFRESH_SECONDS * 1000) ask(false);
+    paint();
+}, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) paint(); });
+$("refresh").addEventListener("click", () => ask(true));
+
+// petals drifting up the page
+(() => {
+    const box = $("petals");
+    for (let i = 0; i < 26; ++i) {
+        const p = document.createElement("i");
+        const size = 5 + Math.random() * 14;
+        p.style.cssText = "left:" + Math.random() * 100 + "%;width:" + size + "px;height:" + size + "px;--dx:" + (Math.random() * 160 - 80) +
+            "px;animation-duration:" + (16 + Math.random() * 22) + "s;animation-delay:-" + Math.random() * 30 + "s;opacity:.0";
+        box.appendChild(p);
+    }
+})();
+
+if (!me) $("foot").textContent = "Log in on the game page and your own place shows up under every top ten. Your numbers update when you play.";
+ask(false);
+paint();
+</script>
+</body>
+</html>
