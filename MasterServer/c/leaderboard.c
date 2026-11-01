@@ -433,3 +433,78 @@ void ms_h_leaderboard(struct ms_req *req, struct ms_res *res)
     }
     ms_res_json(res, 200, root);
 }
+
+// ------------------------------------------------------------- gardn stats
+
+// every petal in every gardn save is counted by reading all the saves, so it is
+// done at most this often, whatever the number of visitors
+#define STATS_CACHE_MS (10 * 60 * 1000)
+#define STATS_MAX_PETALS 512
+
+struct stats_cache
+{
+    pthread_mutex_t lock;
+    int64_t at_ms;
+    int count;
+    int64_t saves;
+    int64_t players;
+    struct ms_db_petal_stat petals[STATS_MAX_PETALS];
+};
+static struct stats_cache stats = {.lock = PTHREAD_MUTEX_INITIALIZER};
+
+// GET /stats/gardn
+// How often each petal is in the saves of gardn: `copies` slots, `saves` saves
+// holding it, most copies first. The names of the petals are the page's.
+void ms_h_gardn_stats(struct ms_req *req, struct ms_res *res)
+{
+    (void)req;
+    if (MS_DB == NULL || MS_DB->gardn_petal_stats == NULL)
+    {
+        ms_res_error(res, 503, "unavailable", NULL);
+        return;
+    }
+    cJSON *root = cJSON_CreateObject();
+    pthread_mutex_lock(&stats.lock);
+    int64_t now = ms_now_ms();
+    if (stats.at_ms == 0 || now - stats.at_ms >= STATS_CACHE_MS)
+    {
+        int64_t saves = 0, players = 0;
+        static struct ms_db_petal_stat fresh[STATS_MAX_PETALS];
+        int n = MS_DB->gardn_petal_stats(MS_DB, fresh, STATS_MAX_PETALS, &saves,
+                                         &players);
+        if (n >= 0)
+        {
+            memcpy(stats.petals, fresh, sizeof(fresh[0]) * (size_t)n);
+            stats.count = n;
+            stats.saves = saves;
+            stats.players = players;
+            stats.at_ms = now;
+        }
+        else if (stats.at_ms == 0)
+        {
+            pthread_mutex_unlock(&stats.lock);
+            cJSON_Delete(root);
+            ms_res_error(res, 503, "unavailable", NULL);
+            return;
+        } // else: the old numbers are still good
+    }
+    cJSON_AddBoolToObject(root, "ok", 1);
+    cJSON_AddNumberToObject(root, "generated", (double)(stats.at_ms / 1000));
+    cJSON *budget = cJSON_AddObjectToObject(root, "budget");
+    cJSON_AddNumberToObject(budget, "requests", BUDGET_REQUESTS);
+    cJSON_AddNumberToObject(budget, "window_seconds", BUDGET_WINDOW_SECONDS);
+    cJSON_AddNumberToObject(budget, "pause_seconds", BUDGET_PAUSE_SECONDS);
+    cJSON_AddNumberToObject(root, "saves", (double)stats.saves);
+    cJSON_AddNumberToObject(root, "players", (double)stats.players);
+    cJSON *petals = cJSON_AddArrayToObject(root, "petals");
+    for (int i = 0; i < stats.count; ++i)
+    {
+        cJSON *p = cJSON_CreateObject();
+        cJSON_AddNumberToObject(p, "id", stats.petals[i].id);
+        cJSON_AddNumberToObject(p, "copies", (double)stats.petals[i].copies);
+        cJSON_AddNumberToObject(p, "saves", (double)stats.petals[i].saves);
+        cJSON_AddItemToArray(petals, p);
+    }
+    pthread_mutex_unlock(&stats.lock);
+    ms_res_json(res, 200, root);
+}

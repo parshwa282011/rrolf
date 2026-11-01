@@ -53,6 +53,8 @@ static struct route const ROUTES[] = {
     // more are let through for a second tab or a page that was reloaded
     {"GET", "/leaderboard", 0, ms_h_leaderboard, route_public, "leaderboard",
      90, 600},
+    // the same for the stats page
+    {"GET", "/stats/gardn", 0, ms_h_gardn_stats, route_public, "stats", 90, 600},
 
     {"POST", "/auth/signup", 0, ms_h_signup, route_public, "signup", 5, 3600},
     {"POST", "/auth/login", 0, ms_h_login, route_public, "login", 10, 600},

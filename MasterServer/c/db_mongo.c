@@ -673,6 +673,72 @@ static int mg_lb_top(struct ms_db *db, char const *board, int limit,
     return result;
 }
 
+// the documents an aggregation of the gardn collection gives, one number out of
+// each (-1 on an error)
+static int64_t mg_gardn_aggregate_count(mongoc_collection_t *c, char const *json,
+                                        char const *key)
+{
+    bson_error_t error;
+    bson_t *pipeline = bson_new_from_json((uint8_t const *)json, -1, &error);
+    if (pipeline == NULL)
+        return log_error("gardn_petal_stats pipeline", &error);
+    mongoc_cursor_t *cursor =
+        mongoc_collection_aggregate(c, MONGOC_QUERY_NONE, pipeline, NULL, NULL);
+    bson_t const *doc;
+    int64_t n = 0;
+    if (mongoc_cursor_next(cursor, &doc))
+        n = int_field(doc, key);
+    if (mongoc_cursor_error(cursor, &error))
+        n = log_error("gardn_petal_stats totals", &error);
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(pipeline);
+    return n;
+}
+
+static int mg_gardn_petal_stats(struct ms_db *db, struct ms_db_petal_stat *out,
+                                int max, int64_t *saves, int64_t *players)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "gardn");
+    int result = MS_DB_ERROR;
+    *saves = mg_gardn_aggregate_count(c, "{\"pipeline\":[{\"$count\":\"n\"}]}", "n");
+    *players = mg_gardn_aggregate_count(
+        c, "{\"pipeline\":[{\"$group\":{\"_id\":\"$uuid\"}},{\"$count\":\"n\"}]}", "n");
+    char json[600];
+    snprintf(json, sizeof json,
+             "{\"pipeline\":[{\"$unwind\":\"$loadout\"},"
+             "{\"$match\":{\"loadout\":{\"$gt\":0}}},"
+             "{\"$group\":{\"_id\":{\"p\":\"$loadout\",\"s\":\"$_id\"},\"n\":{\"$sum\":1}}},"
+             "{\"$group\":{\"_id\":\"$_id.p\",\"copies\":{\"$sum\":\"$n\"},\"saves\":{\"$sum\":1}}},"
+             "{\"$sort\":{\"copies\":-1,\"_id\":1}},{\"$limit\":%d}]}",
+             max);
+    bson_error_t error;
+    bson_t *pipeline = bson_new_from_json((uint8_t const *)json, -1, &error);
+    if (pipeline != NULL && *saves >= 0 && *players >= 0)
+    {
+        mongoc_cursor_t *cursor = mongoc_collection_aggregate(
+            c, MONGOC_QUERY_NONE, pipeline, NULL, NULL);
+        bson_t const *doc;
+        int n = 0;
+        while (n < max && mongoc_cursor_next(cursor, &doc))
+        {
+            out[n].id = (int)int_field(doc, "_id");
+            out[n].copies = int_field(doc, "copies");
+            out[n].saves = int_field(doc, "saves");
+            ++n;
+        }
+        result = mongoc_cursor_error(cursor, &error)
+                     ? log_error("gardn_petal_stats", &error)
+                     : n;
+        mongoc_cursor_destroy(cursor);
+    }
+    bson_destroy(pipeline);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_lb_apply(struct ms_db *db, char const *board, char const *uuid,
                        double value, enum ms_lb_mode mode,
                        char const *extra_json)
@@ -938,6 +1004,7 @@ struct ms_db *ms_db_mongo_open()
     db->lb_top = mg_lb_top;
     db->lb_apply = mg_lb_apply;
     db->lb_rank = mg_lb_rank;
+    db->gardn_petal_stats = mg_gardn_petal_stats;
     db->account_page = mg_account_page;
     db->ping = mg_ping;
     db->close = mg_close;

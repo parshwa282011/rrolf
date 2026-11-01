@@ -646,6 +646,54 @@ static int pg_lb_top(struct ms_db *db, char const *board, int limit,
     return result;
 }
 
+static int pg_gardn_petal_stats(struct ms_db *db, struct ms_db_petal_stat *out,
+                                int max, int64_t *saves, int64_t *players)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    int result;
+    PGresult *r = run(c,
+                      "SELECT count(*), count(DISTINCT uuid) FROM gardn.saves",
+                      0, NULL);
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("gardn_petal_stats totals", r);
+    else
+    {
+        *saves = atoll(PQgetvalue(r, 0, 0));
+        *players = atoll(PQgetvalue(r, 0, 1));
+        PQclear(r);
+        char lim[16];
+        snprintf(lim, sizeof lim, "%d", max);
+        char const *params[] = {lim};
+        r = run(c,
+                "SELECT e.v::int, count(*), count(DISTINCT (s.uuid, s.save_id))"
+                " FROM gardn.saves s,"
+                " LATERAL jsonb_array_elements_text(s.loadout) AS e(v)"
+                " WHERE e.v ~ '^[1-9][0-9]{0,4}$'"
+                " GROUP BY 1 ORDER BY 2 DESC, 1 ASC LIMIT $1::int",
+                1, params);
+        if (PQresultStatus(r) != PGRES_TUPLES_OK)
+            result = log_failure("gardn_petal_stats", r);
+        else
+        {
+            int n = PQntuples(r);
+            if (n > max)
+                n = max;
+            for (int i = 0; i < n; ++i)
+            {
+                out[i].id = atoi(PQgetvalue(r, i, 0));
+                out[i].copies = atoll(PQgetvalue(r, i, 1));
+                out[i].saves = atoll(PQgetvalue(r, i, 2));
+            }
+            result = n;
+        }
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
 static int pg_lb_apply(struct ms_db *db, char const *board, char const *uuid,
                        double value, enum ms_lb_mode mode,
                        char const *extra_json)
@@ -1121,6 +1169,7 @@ struct ms_db *ms_db_postgres_open()
     db->lb_top = pg_lb_top;
     db->lb_apply = pg_lb_apply;
     db->lb_rank = pg_lb_rank;
+    db->gardn_petal_stats = pg_gardn_petal_stats;
     db->account_page = pg_account_page;
     db->backup_pull = pg_backup;
     db->ping = pg_ping;

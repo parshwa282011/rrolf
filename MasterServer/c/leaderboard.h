@@ -72,3 +72,6 @@ int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
 void ms_lb_verify_start();
 
 void ms_h_leaderboard(struct ms_req *, struct ms_res *);
+// GET /stats/gardn: how often each petal is in the saves of gardn, for the stats
+// page. Reads all the saves, at most once every ten minutes
+void ms_h_gardn_stats(struct ms_req *, struct ms_res *);

@@ -69,6 +69,21 @@ const levelOf = (xp) => { const f = (l) => { if (l <= 60) return (l + 5) * Math.
     // gardn report through the server route
     const flush = await http("/srv/gardn/flush", { method: "POST", headers: { "x-server-secret": SECRET, origin: "" }, body: JSON.stringify({ changes: [{ uuid: A.uuid, add: [], remove: [], kills: 7, mythics: 4, best_score: 123456 }] }) });
     check(flush[0] === 200 || flush[0] === 403, "gardn flush answered " + flush[0]);
+    // petal stats: every petal in the loadouts of all gardn saves (0 is no petal)
+    const srv = { "x-server-secret": SECRET, origin: "" };
+    const put = (uuid, id, loadout) => http("/srv/gardn/flush", { method: "POST", headers: srv, body: JSON.stringify({ changes: [{ uuid, add: [{ save_id: id, score: 10, loadout, created_at: 1 }], remove: [] }] }) });
+    await put(A.uuid, "s1", [1, 1, 5, 0]);
+    await put(A.uuid, "s2", [5, 5, 7]);
+    await put(B.uuid, "s3", [5]);
+    let [sst, stats] = await http("/stats/gardn");
+    check(sst === 200 && stats.ok, "GET /stats/gardn -> " + sst);
+    const petal = (id) => stats.petals.find((p) => p.id === id);
+    check(stats.saves === 3 && stats.players === 2, `3 saves of 2 players: ${stats.saves}, ${stats.players}`);
+    check(petal(5)?.copies === 4 && petal(5)?.saves === 3, "petal 5: 4 copies in 3 saves " + JSON.stringify(petal(5)));
+    check(petal(1)?.copies === 2 && petal(1)?.saves === 1, "petal 1: 2 copies in 1 save");
+    check(petal(7)?.copies === 1 && petal(0) === undefined, "petal 7 once, no petal 0");
+    check(stats.petals.map((p) => p.id).join() === "5,1,7", "most copies first: " + stats.petals.map((p) => p.id).join());
+    check(stats.budget?.requests === 60, "the page's budget is in the answer");
     ws.close();
     console.log(failures ? "FAILURES " + failures : "ALL PASSED");
     console.log(JSON.stringify({ A: A.uuid, name }));

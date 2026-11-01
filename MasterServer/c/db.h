@@ -83,6 +83,14 @@ struct ms_db_gsave
     int64_t created_at;
 };
 
+// how often a petal id is in the loadouts of the gardn saves (stats page)
+struct ms_db_petal_stat
+{
+    int id;
+    int64_t copies; // slots holding it, in all saves
+    int64_t saves;  // saves holding it at least once
+};
+
 struct ms_db_lb_entry
 {
     char uuid[MS_UUID_SIZE];
@@ -167,6 +175,12 @@ struct ms_db
     // (not listed) or MS_DB_ERROR
     int (*lb_rank)(struct ms_db *, char const *board, char const *uuid,
                    double *score, int64_t *rank);
+    // Counts every petal in the loadouts of all gardn saves (nothing, id 0, is
+    // not counted), most copies first, at most `max` of them. `saves` and
+    // `players` receive how many saves and how many accounts with saves there are.
+    // Reads every save: call it rarely. Returns the count or MS_DB_ERROR
+    int (*gardn_petal_stats)(struct ms_db *, struct ms_db_petal_stat *out,
+                             int max, int64_t *saves, int64_t *players);
     // every account in a stable order, `limit` at a time from `offset`;
     // returns how many were written or MS_DB_ERROR
     int (*account_page)(struct ms_db *, int offset, int limit,
