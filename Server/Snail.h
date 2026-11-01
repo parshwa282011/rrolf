@@ -93,3 +93,7 @@ void rr_snail_send_state(struct rr_server *, struct rr_server_client *);
 uint8_t rr_snail_dev_start(struct rr_server *, uint8_t rarity);
 // is this mob a snail that is asleep
 uint8_t rr_snail_is_asleep(struct rr_server *, EntityIdx mob);
+// is this mob a snail that no mob may go for: one that has not been woken, or
+// that has a player within RR_SNAIL_WAKE_RADIUS (the mobs go for the players
+// until nobody is near it)
+uint8_t rr_snail_mobs_leave_alone(struct rr_server *, EntityIdx mob);

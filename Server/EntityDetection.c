@@ -16,7 +16,9 @@
 
 #include <Server/EntityDetection.h>
 #include <Server/Client.h>
+#include <Server/Server.h>
 #include <Server/Simulation.h>
+#include <Server/Snail.h>
 #include <Server/SpatialHash.h>
 
 #include <Shared/Vector.h>
@@ -64,6 +66,11 @@ void shg_cb_enemy(EntityIdx potential, void *_captures)
            rr_simulation_get_petal(simulation, potential)->id == rr_petal_id_nest) &&
           rr_simulation_get_petal(simulation, potential)->detached));
     if (!allow)
+        return;
+    if (rr_simulation_has_mob(simulation, potential) &&
+        rr_simulation_get_mob(simulation, potential)->id == rr_mob_id_snail &&
+        simulation->server != NULL &&
+        rr_snail_mobs_leave_alone(simulation->server, potential))
         return;
     if (dev_cheat_enabled(simulation, potential, no_aggro))
         return;
@@ -132,6 +139,11 @@ void shg_cb_rand_enemy(EntityIdx potential, void *_captures)
            rr_simulation_get_petal(simulation, potential)->id == rr_petal_id_nest) &&
           rr_simulation_get_petal(simulation, potential)->detached));
     if (!allow)
+        return;
+    if (rr_simulation_has_mob(simulation, potential) &&
+        rr_simulation_get_mob(simulation, potential)->id == rr_mob_id_snail &&
+        simulation->server != NULL &&
+        rr_snail_mobs_leave_alone(simulation->server, potential))
         return;
     if (dev_cheat_enabled(simulation, potential, no_aggro))
         return;

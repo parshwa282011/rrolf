@@ -326,10 +326,13 @@ extern float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max];
 // own tier. RR_SNAIL_NAZAR_CHANCE[snail rarity][nazar rarity] is the chance in
 // percent of a nazar of that rarity, rolled on its own
 #define RR_SNAIL_OWN_TIER_CHANCE 0.4f
-// A snail is at least epic and starts in the part of the map of its own rarity:
-// an epic one in e/E, a legendary in l/L, a mythic in m/M, an exotic in x/X and an
-// ancient in a/A (template difficulty 8 * rarity to 8 * rarity + 4), so what it
-// meets on its way is not too much for it. It waits there, hurt by nothing, until
+// A snail is at least epic and starts in the part of the map one rarity below its
+// own, which is closer to the hole: an epic one in r/R, a legendary in e/E, a
+// mythic in l/L, an exotic in m/M and an ancient in x/X (template difficulty
+// 8 * rarity to 8 * rarity + 4 of that lower rarity), so it is easy to lead home
+// and what it meets on its way is not too much for it. Mobs leave it alone while
+// it sleeps and while a player is within RR_SNAIL_WAKE_RADIUS of it (they go for
+// the players), and go for it once nobody is. It waits there, hurt by nothing, until
 // a player comes within RR_SNAIL_WAKE_RADIUS of it. Only once it sets off does it
 // keep the area around it loaded, and then the mobs that spawn around it are as
 // rare as it is wherever it walks (snail_difficulty in struct rr_maze_grid), so
@@ -337,6 +340,8 @@ extern float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max];
 #define RR_SNAIL_MIN_RARITY rr_rarity_id_epic
 #define RR_SNAIL_ZONE_MIN(rarity) (8 * (rarity))
 #define RR_SNAIL_ZONE_MAX(rarity) (8 * (rarity) + 4)
+// the rarity of the map zone a snail of a rarity starts in
+#define RR_SNAIL_START_RARITY(rarity) ((rarity) - 1)
 #define RR_SNAIL_HUNT_DIFFICULTY(rarity) (8 * (rarity))
 #define RR_SNAIL_WAKE_RADIUS 2500
 #define RR_SNAIL_REWARD_RADIUS 5000

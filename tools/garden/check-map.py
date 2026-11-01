@@ -26,11 +26,13 @@ LETTERS = {"_": 0, "c": 1, "C": 4, "u": 8, "U": 12, "r": 16, "R": 20, "e": 24,
            "E": 28, "l": 32, "L": 36, "m": 40, "M": 44, "x": 48, "X": 52,
            "a": 56, "A": 60}
 
-# rarity -> template difficulty range a snail of it starts in (epic is 3): its
-# own letters, 8 * rarity to 8 * rarity + 4. Same as RR_SNAIL_ZONE_MIN/MAX in
-# Shared/StaticData.h, which the script checks below
-ZONES = {name: (8 * r, 8 * r + 4) for r, name in
+# rarity -> template difficulty range a snail of it starts in (epic is 3): the
+# letters of the rarity below its own, 8 * (rarity - 1) to 8 * (rarity - 1) + 4.
+# Same as RR_SNAIL_ZONE_MIN/MAX of RR_SNAIL_START_RARITY in Shared/StaticData.h,
+# which the script checks below
+ZONES = {name: (8 * (r - 1), 8 * (r - 1) + 4) for r, name in
          enumerate(["common", "unusual", "rare", "epic", "legendary", "mythic", "exotic", "ancient"]) if r >= 3}
+assert "RR_SNAIL_START_RARITY(rarity) ((rarity) - 1)" in HEADER
 assert "RR_SNAIL_ZONE_MIN(rarity) (8 * (rarity))" in HEADER and "RR_SNAIL_ZONE_MAX(rarity) (8 * (rarity) + 4)" in HEADER
 
 block = re.search(r"RR_DEFINE_MAZE\(GARDEN, 80\) = \{(.*?)\n\};", SRC, re.S).group(1)

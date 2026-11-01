@@ -25,8 +25,17 @@
 #include <Server/EntityDetection.h>
 #include <Server/MobAi/Ai.h>
 #include <Server/Simulation.h>
+#include <Server/Snail.h>
 #include <Shared/Entity.h>
 #include <Shared/Vector.h>
+
+// a mob that went for the snail lets go of it when a player comes near it
+static uint8_t snail_is_left_alone(struct rr_simulation *this, EntityHash target)
+{
+    return this->server != NULL && rr_simulation_has_mob(this, target) &&
+           rr_simulation_get_mob(this, target)->id == rr_mob_id_snail &&
+           rr_snail_mobs_leave_alone(this->server, target);
+}
 
 static void system_for_each(EntityIdx entity, void *simulation)
 {
@@ -49,7 +58,8 @@ static void system_for_each(EntityIdx entity, void *simulation)
     if (ai->target_entity != RR_NULL_ENTITY &&
         (!rr_simulation_entity_alive(simulation, ai->target_entity) ||
          is_dead_flower(simulation, ai->target_entity) ||
-         dev_cheat_enabled(this, ai->target_entity, no_aggro)))
+         dev_cheat_enabled(this, ai->target_entity, no_aggro) ||
+         snail_is_left_alone(this, ai->target_entity)))
     {
         ai->target_entity = RR_NULL_ENTITY;
         ai->ai_state = rr_ai_state_idle;

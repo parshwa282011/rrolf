@@ -79,8 +79,8 @@ static void push_event(struct rr_snail *s, uint8_t type, uint8_t rarity,
 // the template difficulty a snail of a rarity starts in, see StaticData.h
 static void start_zone(uint8_t rarity, uint8_t *min, uint8_t *max)
 {
-    *min = RR_SNAIL_ZONE_MIN(rarity);
-    *max = RR_SNAIL_ZONE_MAX(rarity);
+    *min = RR_SNAIL_ZONE_MIN(RR_SNAIL_START_RARITY(rarity));
+    *max = RR_SNAIL_ZONE_MAX(RR_SNAIL_START_RARITY(rarity));
 }
 
 // a random template cell in the zone of a rarity that can reach the hole, 0xffff
@@ -553,6 +553,24 @@ uint8_t rr_snail_is_asleep(struct rr_server *this, EntityIdx mob)
         if (r->phase == rr_snail_phase_running && r->snail != RR_NULL_ENTITY &&
             r->snail_id == mob)
             return r->waiting;
+    }
+    return 0;
+}
+
+uint8_t rr_snail_mobs_leave_alone(struct rr_server *this, EntityIdx mob)
+{
+    for (uint8_t i = 0; i < RR_SNAIL_MAX_RUNS; ++i)
+    {
+        struct rr_snail_run *r = &this->snail.runs[i];
+        if (r->phase != rr_snail_phase_running || r->snail == RR_NULL_ENTITY ||
+            r->snail_id != mob)
+            continue;
+        if (r->waiting)
+            return 1;
+        struct rr_component_physical *physical =
+            rr_simulation_get_physical(&this->simulation, mob);
+        return player_distance_sq(this, physical->x, physical->y) <
+               (float)RR_SNAIL_WAKE_RADIUS * RR_SNAIL_WAKE_RADIUS;
     }
     return 0;
 }

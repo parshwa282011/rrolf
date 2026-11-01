@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <Server/EntityAllocation.h>
+#include <Server/EntityDetection.h>
 #include <Server/Server.h>
 #include <Server/Simulation.h>
 #include <Server/Snail.h>
@@ -57,6 +58,13 @@ static struct rr_simulation *sim() { return &server.simulation; }
 
 // A hive or hole nobody is near unloads after 30 seconds, and there are no
 // players here, so the holes are told that somebody is
+static uint8_t any_target(struct rr_simulation *s, EntityIdx seeker,
+                          EntityIdx target, void *captures)
+{
+    (void)s; (void)seeker; (void)target; (void)captures;
+    return 1;
+}
+
 static void tick(uint32_t n)
 {
     for (uint32_t i = 0; i < n; ++i)
@@ -353,7 +361,8 @@ int main()
             uint32_t cx = p->x / (2 * RR_MAZES[rr_biome_id_garden].grid_size);
             uint32_t cy = p->y / (2 * RR_MAZES[rr_biome_id_garden].grid_size);
             uint8_t difficulty = RR_MAZE_TEMPLATE_GARDEN[cy][cx];
-            uint8_t min = RR_SNAIL_ZONE_MIN(run->rarity), max = RR_SNAIL_ZONE_MAX(run->rarity);
+            uint8_t min = RR_SNAIL_ZONE_MIN(RR_SNAIL_START_RARITY(run->rarity)),
+                    max = RR_SNAIL_ZONE_MAX(RR_SNAIL_START_RARITY(run->rarity));
             CHECK(asked < RR_SNAIL_MIN_RARITY ? run->rarity == RR_SNAIL_MIN_RARITY : run->rarity == asked,
                   "asked for %u, got %u", asked, run->rarity);
             CHECK(difficulty >= min && difficulty <= max,
@@ -373,6 +382,9 @@ int main()
                     rr_snail_tick(&server);
                 }
                 CHECK(run->waiting && run->phase == rr_snail_phase_running, "still asleep with nobody around");
+                CHECK(rr_simulation_find_nearest_enemy(sim(), hitter, 2000, NULL, any_target) != snail,
+                      "mobs do not go for a snail that has not set off");
+                CHECK(rr_snail_mobs_leave_alone(&server, snail) == 1, "the sleeping snail is left alone");
                 CHECK(fabsf(p->x - x) < 1 && fabsf(p->y - y) < 1, "it did not move");
                 CHECK(h->health == hp, "it took no damage");
                 struct rr_component_arena *arena = rr_simulation_get_arena(sim(), 1);
@@ -383,6 +395,9 @@ int main()
                 run->waiting = 0;
                 h->invulnerable = 0;
                 tick(2);
+                CHECK(rr_snail_mobs_leave_alone(&server, snail) == 0, "with no player near it is not left alone");
+                CHECK(rr_simulation_find_nearest_enemy(sim(), hitter, 2000, NULL, any_target) == snail,
+                      "and mobs go for it");
                 CHECK(grid->player_count > 0, "once it set off the cell it is in counts as loaded");
                 CHECK(grid->snail_difficulty == RR_SNAIL_HUNT_DIFFICULTY(run->rarity),
                       "mobs there spawn as for difficulty %.0f (%.0f)", (float)RR_SNAIL_HUNT_DIFFICULTY(run->rarity), grid->snail_difficulty);
