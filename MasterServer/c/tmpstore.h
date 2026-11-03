@@ -45,6 +45,7 @@ struct ms_tmp
     char s4[128];
     int64_t n1;
     int64_t n2;
+    int64_t n3; // reset codes: when the last code was sent
     int64_t expires;
 };
 

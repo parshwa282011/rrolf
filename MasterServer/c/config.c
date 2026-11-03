@@ -134,6 +134,25 @@ int ms_config_from_env()
             "DISCORD_BOT_TOKEN", "");
     get_str(c->discord_redirect_uri, sizeof c->discord_redirect_uri,
             "DISCORD_REDIRECT_URI", "");
+    get_str(c->google_client_id, sizeof c->google_client_id, "GOOGLE_CLIENT_ID", "");
+    get_str(c->google_client_secret, sizeof c->google_client_secret,
+            "GOOGLE_CLIENT_SECRET", "");
+    get_str(c->google_redirect_uri, sizeof c->google_redirect_uri,
+            "GOOGLE_REDIRECT_URI", "");
+    get_str(c->apple_client_id, sizeof c->apple_client_id, "APPLE_CLIENT_ID", "");
+    get_str(c->apple_team_id, sizeof c->apple_team_id, "APPLE_TEAM_ID", "");
+    get_str(c->apple_key_id, sizeof c->apple_key_id, "APPLE_KEY_ID", "");
+    get_str(c->apple_private_key_file, sizeof c->apple_private_key_file,
+            "APPLE_PRIVATE_KEY_FILE", "");
+    get_str(c->apple_redirect_uri, sizeof c->apple_redirect_uri,
+            "APPLE_REDIRECT_URI", "");
+    get_str(c->email_api_url, sizeof c->email_api_url, "EMAIL_API_URL", "");
+    get_str(c->email_api_key, sizeof c->email_api_key, "EMAIL_API_KEY", "");
+    get_str(c->email_api_auth, sizeof c->email_api_auth, "EMAIL_API_AUTH",
+            "Authorization: Bearer {key}");
+    get_str(c->email_api_body, sizeof c->email_api_body, "EMAIL_API_BODY",
+            "{\"from\":{from},\"to\":{to},\"subject\":{subject},\"text\":{text}}");
+    get_str(c->email_from, sizeof c->email_from, "EMAIL_FROM", "");
     get_str(c->trust_proxy_header, sizeof c->trust_proxy_header,
             "TRUST_PROXY_HEADER", "");
     c->flush_interval_ms = get_uint("FLUSH_INTERVAL_MS", 5000);

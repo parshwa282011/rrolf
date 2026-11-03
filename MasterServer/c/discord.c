@@ -113,6 +113,13 @@ static long request(char const *method, char const *url,
     return status;
 }
 
+long ms_http_request(char const *method, char const *url,
+                     struct curl_slist *headers, char const *body,
+                     char **response)
+{
+    return request(method, url, headers, body, response);
+}
+
 int ms_discord_oauth_enabled()
 {
     return MS_CONFIG.discord_client_id[0] && MS_CONFIG.discord_client_secret[0] &&

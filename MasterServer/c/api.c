@@ -88,15 +88,21 @@ static struct route const ROUTES[] = {
      "oauth_exchange", 20, 600},
     {"POST", "/auth/unlink/", 1, ms_h_unlink, route_public, "unlink", 10, 600},
 
-    // present but unavailable for now: google, apple and email
-    {"GET", "/oauth/google/", 1, ms_h_provider_unavailable, route_public,
-     "unavailable", 30, 60},
-    {"POST", "/oauth/google/", 1, ms_h_provider_unavailable, route_public,
-     "unavailable", 30, 60},
-    {"GET", "/oauth/apple/", 1, ms_h_provider_unavailable, route_public,
-     "unavailable", 30, 60},
-    {"POST", "/oauth/apple/", 1, ms_h_provider_unavailable, route_public,
-     "unavailable", 30, 60},
+    {"GET", "/oauth/google/start", 0, ms_h_google_start, route_public,
+     "oauth_start", 20, 600},
+    {"GET", "/oauth/google/callback", 0, ms_h_google_callback, route_public,
+     "oauth_callback", 30, 600},
+    {"POST", "/oauth/google/link-start", 0, ms_h_google_link_start,
+     route_public, "oauth_link", 10, 600},
+    {"GET", "/oauth/apple/start", 0, ms_h_apple_start, route_public,
+     "oauth_start", 20, 600},
+    // Apple posts the browser back here from its own site
+    {"POST", "/oauth/apple/callback", 0, ms_h_apple_callback, route_public,
+     "oauth_callback", 30, 600},
+    {"POST", "/oauth/apple/link-start", 0, ms_h_apple_link_start, route_public,
+     "oauth_link", 10, 600},
+    {"GET", "/oauth/providers", 0, ms_h_providers, route_public, "providers",
+     30, 60},
     {"POST", "/auth/email/", 1, ms_h_provider_unavailable, route_public,
      "unavailable", 30, 60},
 
@@ -327,7 +333,8 @@ void ms_route(struct ms_req *req, struct ms_res *res)
         return;
     }
 
-    if (req->origin[0])
+    // Apple's form post comes from its own site and carries its origin
+    if (req->origin[0] && strcmp(req->path, "/oauth/apple/callback") != 0)
     {
         if (!ms_origin_allowed(req->origin))
         {

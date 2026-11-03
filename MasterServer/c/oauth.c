@@ -30,6 +30,7 @@
 #include "api.h"
 #include "config.h"
 #include "discord.h"
+#include "social.h"
 #include "tmpstore.h"
 #include "util.h"
 
@@ -66,9 +67,28 @@ static void sanitize_username(char *out, size_t size, char const *in)
         out[0] = 0;
 }
 
-void ms_h_discord_start(struct ms_req *req, struct ms_res *res)
+struct provider
 {
-    if (!ms_discord_oauth_enabled() || MS_CONFIG.client_url[0] == 0)
+    char const *name;
+    int (*enabled)();
+    int (*authorize_url)(char const *, char *, size_t);
+    int (*exchange)(char const *, struct ms_discord_user *);
+};
+
+static struct provider const DISCORD = {"discord", ms_discord_oauth_enabled,
+                                        ms_discord_authorize_url,
+                                        ms_discord_exchange_code};
+static struct provider const GOOGLE = {"google", ms_google_enabled,
+                                       ms_google_authorize_url,
+                                       ms_google_exchange_code};
+static struct provider const APPLE = {"apple", ms_apple_enabled,
+                                      ms_apple_authorize_url,
+                                      ms_apple_exchange_code};
+
+static void start_for(struct provider const *P, struct ms_req *req,
+                      struct ms_res *res)
+{
+    if (!P->enabled() || MS_CONFIG.client_url[0] == 0)
     {
         if (MS_CONFIG.client_url[0])
             redirect_client(res, "oauth_error", "unavailable");
@@ -82,7 +102,7 @@ void ms_h_discord_start(struct ms_req *req, struct ms_res *res)
     ms_strlcpy(state.s1, "login", sizeof state.s1);
     char url[1024];
     if (ms_tmp_create(&state, 600) != 0 ||
-        ms_discord_authorize_url(state.id, url, sizeof url) != 0)
+        P->authorize_url(state.id, url, sizeof url) != 0)
     {
         redirect_client(res, "oauth_error", "server_error");
         return;
@@ -90,7 +110,8 @@ void ms_h_discord_start(struct ms_req *req, struct ms_res *res)
     ms_res_redirect(res, url);
 }
 
-void ms_h_discord_link_start(struct ms_req *req, struct ms_res *res)
+static void link_start_for(struct provider const *P, struct ms_req *req,
+                           struct ms_res *res)
 {
     cJSON *body = ms_req_json(req);
     struct ms_db_account a;
@@ -101,7 +122,7 @@ void ms_h_discord_link_start(struct ms_req *req, struct ms_res *res)
         r = ms_auth_invalid;
     if (r != ms_auth_ok)
         ms_auth_res_failure(res, r);
-    else if (!ms_discord_oauth_enabled())
+    else if (!P->enabled())
         ms_res_error(res, 503, "provider_unavailable", NULL);
     else
     {
@@ -112,7 +133,7 @@ void ms_h_discord_link_start(struct ms_req *req, struct ms_res *res)
         ms_strlcpy(state.uuid, a.uuid, sizeof state.uuid);
         char url[1024];
         if (ms_tmp_create(&state, 600) != 0 ||
-            ms_discord_authorize_url(state.id, url, sizeof url) != 0)
+            P->authorize_url(state.id, url, sizeof url) != 0)
             ms_res_error(res, 500, "server_error", NULL);
         else
         {
@@ -125,21 +146,23 @@ void ms_h_discord_link_start(struct ms_req *req, struct ms_res *res)
     cJSON_Delete(body);
 }
 
-void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
+// `args` is the query (Discord, Google) or the form body (Apple's form_post)
+static void callback_for(struct provider const *P, char const *args,
+                         struct ms_res *res)
 {
     if (MS_CONFIG.client_url[0] == 0)
     {
         ms_res_error(res, 503, "provider_unavailable", NULL);
         return;
     }
-    char state_id[128], code[512], error[64];
-    if (ms_query_arg(req->query, "error", error, sizeof error))
+    char state_id[128], code[2048], error[64];
+    if (ms_query_arg(args, "error", error, sizeof error))
     {
         redirect_client(res, "oauth_error", "denied");
         return;
     }
-    if (!ms_query_arg(req->query, "state", state_id, sizeof state_id) ||
-        !ms_query_arg(req->query, "code", code, sizeof code))
+    if (!ms_query_arg(args, "state", state_id, sizeof state_id) ||
+        !ms_query_arg(args, "code", code, sizeof code))
     {
         redirect_client(res, "oauth_error", "bad_request");
         return;
@@ -151,9 +174,9 @@ void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
         return;
     }
     struct ms_discord_user user;
-    if (ms_discord_exchange_code(code, &user) != 0)
+    if (!P->enabled() || P->exchange(code, &user) != 0)
     {
-        redirect_client(res, "oauth_error", "discord_failed");
+        redirect_client(res, "oauth_error", "provider_failed");
         return;
     }
 
@@ -161,7 +184,7 @@ void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
     {
         struct ms_db_link link;
         memset(&link, 0, sizeof link);
-        ms_strlcpy(link.provider, "discord", sizeof link.provider);
+        ms_strlcpy(link.provider, P->name, sizeof link.provider);
         ms_strlcpy(link.provider_user_id, user.id,
                    sizeof link.provider_user_id);
         ms_strlcpy(link.provider_email, user.email, sizeof link.provider_email);
@@ -181,7 +204,7 @@ void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
     memset(&exchange, 0, sizeof exchange);
     exchange.kind = ms_tmp_exchange;
     struct ms_db_account existing;
-    int rc = MS_DB->account_get(MS_DB, ms_db_by_link, "discord", user.id,
+    int rc = MS_DB->account_get(MS_DB, ms_db_by_link, P->name, user.id,
                                 &existing);
     if (rc == MS_DB_OK)
     {
@@ -193,7 +216,7 @@ void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
         struct ms_tmp pending;
         memset(&pending, 0, sizeof pending);
         pending.kind = ms_tmp_pending;
-        ms_strlcpy(pending.s1, "discord", sizeof pending.s1);
+        ms_strlcpy(pending.s1, P->name, sizeof pending.s1);
         ms_strlcpy(pending.s2, user.id, sizeof pending.s2);
         ms_strlcpy(pending.s3, user.email, sizeof pending.s3);
         ms_strlcpy(pending.s4, user.username, sizeof pending.s4);
@@ -247,6 +270,7 @@ void ms_h_oauth_exchange(struct ms_req *req, struct ms_res *res)
     else
     {
         struct ms_tmp pending;
+        memset(&pending, 0, sizeof pending);
         char suggestion[MS_USERNAME_MAX + 1] = "";
         if (ms_tmp_get(ms_tmp_pending, exchange.s2, &pending))
             sanitize_username(suggestion, sizeof suggestion, pending.s4);
@@ -254,7 +278,7 @@ void ms_h_oauth_exchange(struct ms_req *req, struct ms_res *res)
         cJSON_AddBoolToObject(o, "ok", 1);
         cJSON_AddStringToObject(o, "status", "profile_required");
         cJSON_AddStringToObject(o, "pending_id", exchange.s2);
-        cJSON_AddStringToObject(o, "provider", "discord");
+        cJSON_AddStringToObject(o, "provider", pending.s1[0] ? pending.s1 : "discord");
         cJSON_AddStringToObject(o, "suggested_username", suggestion);
         ms_res_json(res, 200, o);
     }
@@ -288,4 +312,64 @@ void ms_h_unlink(struct ms_req *req, struct ms_res *res)
         ms_res_json(res, 200, o);
     }
     cJSON_Delete(body);
+}
+
+// ---- the routes
+
+void ms_h_discord_start(struct ms_req *req, struct ms_res *res)
+{
+    start_for(&DISCORD, req, res);
+}
+void ms_h_discord_link_start(struct ms_req *req, struct ms_res *res)
+{
+    link_start_for(&DISCORD, req, res);
+}
+void ms_h_discord_callback(struct ms_req *req, struct ms_res *res)
+{
+    callback_for(&DISCORD, req->query, res);
+}
+
+void ms_h_google_start(struct ms_req *req, struct ms_res *res)
+{
+    start_for(&GOOGLE, req, res);
+}
+void ms_h_google_link_start(struct ms_req *req, struct ms_res *res)
+{
+    link_start_for(&GOOGLE, req, res);
+}
+void ms_h_google_callback(struct ms_req *req, struct ms_res *res)
+{
+    callback_for(&GOOGLE, req->query, res);
+}
+
+void ms_h_apple_start(struct ms_req *req, struct ms_res *res)
+{
+    start_for(&APPLE, req, res);
+}
+void ms_h_apple_link_start(struct ms_req *req, struct ms_res *res)
+{
+    link_start_for(&APPLE, req, res);
+}
+// Apple sends the browser back with a POST (response_mode=form_post): the code
+// and the state are in the form body
+void ms_h_apple_callback(struct ms_req *req, struct ms_res *res)
+{
+    char form[4096] = "";
+    if (req->body != NULL && req->body_len < sizeof form)
+    {
+        memcpy(form, req->body, req->body_len);
+        form[req->body_len] = 0;
+    }
+    callback_for(&APPLE, form, res);
+}
+
+// which providers can be used right now, for the login page
+void ms_h_providers(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddBoolToObject(o, "discord", ms_discord_oauth_enabled());
+    cJSON_AddBoolToObject(o, "google", ms_google_enabled());
+    cJSON_AddBoolToObject(o, "apple", ms_apple_enabled());
+    ms_res_json(res, 200, o);
 }

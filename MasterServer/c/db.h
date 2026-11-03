@@ -135,6 +135,9 @@ struct ms_db
     int (*account_set_credentials)(struct ms_db *, char const *uuid,
                                    char const *pw_hash,
                                    uint8_t const token_key[32]);
+    // MS_DB_OK, MS_DB_CONFLICT_USERNAME (taken, case-insensitive), MS_DB_ERROR
+    int (*account_set_username)(struct ms_db *, char const *uuid,
+                                char const *username);
     int (*account_set_last_login)(struct ms_db *, char const *uuid,
                                   int64_t when);
 

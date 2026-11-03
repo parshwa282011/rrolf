@@ -342,6 +342,31 @@ static int pg_account_set_last_login(struct ms_db *db, char const *uuid,
                      2, params);
 }
 
+static int pg_account_set_username(struct ms_db *db, char const *uuid,
+                                   char const *username)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char lower[sizeof((struct ms_db_account *)0)->username];
+    ms_str_lower(lower, username, sizeof lower);
+    char const *params[] = {uuid, username, lower};
+    PGresult *r = run(c,
+                      "UPDATE accounts.accounts SET username = $2,"
+                      " username_lower = $3 WHERE uuid = $1",
+                      3, params);
+    int result;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK)
+        result = MS_DB_OK;
+    else if (sqlstate_is(r, "23505"))
+        result = MS_DB_CONFLICT_USERNAME;
+    else
+        result = log_failure("account_set_username", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
 static int pg_link_put(struct ms_db *db, char const *uuid,
                        struct ms_db_link const *l)
 {
@@ -1206,6 +1231,7 @@ struct ms_db *ms_db_postgres_open()
     db->account_get = pg_account_get;
     db->account_set_credentials = pg_account_set_credentials;
     db->account_set_last_login = pg_account_set_last_login;
+    db->account_set_username = pg_account_set_username;
     db->link_put = pg_link_put;
     db->link_delete = pg_link_delete;
     db->links_get = pg_links_get;

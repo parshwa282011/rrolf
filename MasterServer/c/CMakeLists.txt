@@ -40,6 +40,7 @@ endforeach()
 pkg_check_modules(SODIUM REQUIRED IMPORTED_TARGET libsodium)
 pkg_check_modules(WEBSOCKETS REQUIRED IMPORTED_TARGET libwebsockets)
 pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
+pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
 
 set(MS_SOURCES
     api.c
@@ -48,6 +49,7 @@ set(MS_SOURCES
     config.c
     db.c
     discord.c
+    email.c
     games.c
     jobs.c
     leaderboard.c
@@ -56,6 +58,7 @@ set(MS_SOURCES
     ratelimit.c
     reset.c
     server.c
+    social.c
     srv.c
     tmpstore.c
     tokens.c
@@ -63,7 +66,7 @@ set(MS_SOURCES
     ../../Shared/cJSON.c
 )
 
-set(MS_LIBS PkgConfig::SODIUM PkgConfig::WEBSOCKETS PkgConfig::CURL pthread m)
+set(MS_LIBS PkgConfig::SODIUM PkgConfig::WEBSOCKETS PkgConfig::CURL PkgConfig::OPENSSL pthread m)
 set(MS_DEFS "")
 
 if(WITH_POSTGRES)

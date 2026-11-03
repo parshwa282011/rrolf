@@ -87,6 +87,14 @@ void ms_h_reset_confirm(struct ms_req *, struct ms_res *);
 void ms_h_discord_start(struct ms_req *, struct ms_res *);
 void ms_h_discord_callback(struct ms_req *, struct ms_res *);
 void ms_h_discord_link_start(struct ms_req *, struct ms_res *);
+void ms_h_google_start(struct ms_req *, struct ms_res *);
+void ms_h_google_callback(struct ms_req *, struct ms_res *);
+void ms_h_google_link_start(struct ms_req *, struct ms_res *);
+void ms_h_apple_start(struct ms_req *, struct ms_res *);
+void ms_h_apple_callback(struct ms_req *, struct ms_res *);
+void ms_h_apple_link_start(struct ms_req *, struct ms_res *);
+// GET /oauth/providers: which ways to sign in are on
+void ms_h_providers(struct ms_req *, struct ms_res *);
 void ms_h_oauth_exchange(struct ms_req *, struct ms_res *);
 void ms_h_unlink(struct ms_req *, struct ms_res *);
 void ms_h_account_info(struct ms_req *, struct ms_res *);

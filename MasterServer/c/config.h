@@ -45,6 +45,22 @@ struct ms_config
     char discord_client_secret[128];
     char discord_bot_token[128];
     char discord_redirect_uri[256];
+    // Google and Apple sign in; both off while their ids are empty
+    char google_client_id[128];
+    char google_client_secret[128];
+    char google_redirect_uri[256];
+    char apple_client_id[128]; // the Services ID
+    char apple_team_id[32];
+    char apple_key_id[32];
+    char apple_private_key_file[256]; // the .p8 file Apple gave
+    char apple_redirect_uri[256];
+    // outgoing email (codes for password and username changes): an HTTPS API
+    // that takes a JSON body, see email.c
+    char email_api_url[256];
+    char email_api_key[256];
+    char email_api_auth[128]; // header line, {key} is replaced
+    char email_api_body[1024]; // JSON body, {from} {to} {subject} {text}
+    char email_from[128];
     uint32_t flush_interval_ms;
     uint32_t db_pool_size;
     char trust_proxy_header[64]; // e.g. CF-Connecting-IP, "" = use peer ip

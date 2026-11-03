@@ -42,3 +42,10 @@ void ms_http_global_cleanup();
 
 // percent-encodes into out (always NUL terminated); returns length or -1
 int ms_url_encode(char *out, size_t size, char const *in);
+
+// one blocking HTTPS request (10 s limit): the http status, 0 when the transport
+// failed. *response is malloc'd (NULL when there was none)
+struct curl_slist;
+long ms_http_request(char const *method, char const *url,
+                     struct curl_slist *headers, char const *body,
+                     char **response);

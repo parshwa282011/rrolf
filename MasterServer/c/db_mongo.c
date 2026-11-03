@@ -327,6 +327,32 @@ static int mg_account_set_last_login(struct ms_db *db, char const *uuid,
     return r;
 }
 
+static int mg_account_set_username(struct ms_db *db, char const *uuid,
+                                   char const *username)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "accounts");
+    char lower[65];
+    ms_str_lower(lower, username, sizeof lower);
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(uuid));
+    bson_t *update = BCON_NEW("$set", "{", "username", BCON_UTF8(username),
+                              "username_lower", BCON_UTF8(lower), "}");
+    bson_error_t error;
+    int result;
+    if (mongoc_collection_update_one(c, filter, update, NULL, NULL, &error))
+        result = MS_DB_OK;
+    else if (error.code == DUPLICATE_KEY)
+        result = MS_DB_CONFLICT_USERNAME;
+    else
+        result = log_error("account_set_username", &error);
+    bson_destroy(filter);
+    bson_destroy(update);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_link_put(struct ms_db *db, char const *uuid,
                        struct ms_db_link const *l)
 {
@@ -1038,6 +1064,7 @@ struct ms_db *ms_db_mongo_open()
     db->account_get = mg_account_get;
     db->account_set_credentials = mg_account_set_credentials;
     db->account_set_last_login = mg_account_set_last_login;
+    db->account_set_username = mg_account_set_username;
     db->link_put = mg_link_put;
     db->link_delete = mg_link_delete;
     db->links_get = mg_links_get;
