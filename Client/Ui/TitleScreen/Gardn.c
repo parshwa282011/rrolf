@@ -130,3 +130,46 @@ struct rr_ui_element *rr_ui_gardn_toggle_button_init()
     this->should_show = gardn_button_should_show;
     return this;
 }
+
+// The leaderboard and stats pages of this site (scripts/common/edge.js serves
+// them). They open in a new tab; they need no login, the stats page shows the
+// logged in player on its own.
+static void page_button_on_event(struct rr_ui_element *this,
+                                 struct rr_game *game, char const *url)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    if (game->input_data->mouse_buttons_up_this_tick & 1 && game->pressed == this)
+        rr_page_open(url, 0);
+    game->cursor = rr_game_cursor_pointer;
+    data->clickable = 1;
+}
+
+static void leaderboard_button_on_event(struct rr_ui_element *this,
+                                        struct rr_game *game)
+{
+    page_button_on_event(this, game, "/leaderboard");
+}
+
+static void stats_button_on_event(struct rr_ui_element *this,
+                                  struct rr_game *game)
+{
+    page_button_on_event(this, game, "/status");
+}
+
+struct rr_ui_element *rr_ui_leaderboard_page_button_init()
+{
+    struct rr_ui_element *this = rr_ui_labeled_button_init("Leaderboard", 30, NULL);
+    this->on_event = leaderboard_button_on_event;
+    this->should_show = gardn_button_should_show;
+    rr_ui_set_background(this, 0xff3fbf6f);
+    return this;
+}
+
+struct rr_ui_element *rr_ui_stats_page_button_init()
+{
+    struct rr_ui_element *this = rr_ui_labeled_button_init("Stats", 30, NULL);
+    this->on_event = stats_button_on_event;
+    this->should_show = gardn_button_should_show;
+    rr_ui_set_background(this, 0xff4a8cf0);
+    return this;
+}

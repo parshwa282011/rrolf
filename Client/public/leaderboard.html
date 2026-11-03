@@ -21,12 +21,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <meta charset="utf-8">
 <title>Rysteria Leaderboards</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="logo.png" rel="icon" type="image/png">
+<link href="/logo.png" rel="icon" type="image/png">
 <style>
 @font-face {
     font-family: "Ubuntu";
     font-weight: 700;
-    src: url("fonts/Ubuntu-Bold.ttf") format("truetype");
+    src: url("/fonts/Ubuntu-Bold.ttf") format("truetype");
 }
 :root {
     --grass: #1ea761;
@@ -103,12 +103,8 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 #dot.pause { background: var(--legendary); }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(43, 255, 163, 0.35); } 50% { box-shadow: 0 0 0 8px rgba(43, 255, 163, 0); } }
 #status { flex: 1 1 260px; }
-#meter { width: 190px; height: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); overflow: hidden; border: 2px solid var(--ink); }
-#meter b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--common), var(--unusual), var(--legendary)); transition: width 0.4s; }
-#budget { font-variant-numeric: tabular-nums; opacity: 0.95; }
 
-.games { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
-@media (max-width: 1100px) { .games { grid-template-columns: minmax(0, 1fr); } }
+.games { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; align-items: start; }
 
 .game { background: var(--panel); border: 2px solid var(--panel-line); border-radius: 22px; padding: 18px; backdrop-filter: blur(4px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
 .game > h2 { font-size: 30px; display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
@@ -169,22 +165,15 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 <main>
     <header>
         <div class="brand">
-            <img src="logo.png" alt="">
-            <h1 class="outline">Leaderboards<small class="outline">Rysteria &amp; Gardn</small></h1>
+            <img src="/logo.png" alt="">
+            <h1 class="outline">Leaderboards<small class="outline" id="sub">Rysteria</small></h1>
         </div>
-        <nav>
-            <a class="btn" href="/">Play Rysteria</a>
-            <a class="btn warn" href="/gardn/">Play Gardn</a>
-            <a class="btn" href="/stats">Petal stats</a>
-            <button class="btn alt" id="refresh" type="button">Refresh</button>
-        </nav>
+        <nav id="nav"></nav>
     </header>
 
     <section id="strip">
         <span id="dot"></span>
         <span id="status">Loading...</span>
-        <span id="meter"><b></b></span>
-        <span id="budget"></span>
     </section>
     <div id="error"></div>
 
@@ -195,14 +184,11 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 <script>
 "use strict";
 // ---------------------------------------------------------------- settings
-// The page asks the master server for the leaderboards and for nothing else.
-// At most REQUESTS asks in a WINDOW of ten minutes; when they are used up it
-// waits for the window to end, then rests for PAUSE before it starts again. The
-// count lives in localStorage, so a reload or a second tab cannot get around it.
-const budget = { requests: 60, window: 600, pause: 180 };   // the master may say otherwise
-const REFRESH_SECONDS = 15;     // 40 asks in a window, 20 are left for the button
+// /leaderboard shows Rysteria, /gardn/leaderboard shows gardn. Nothing here limits
+// the number of asks: the master does (60 a minute for an address, answers 429).
+const GAME = location.pathname.indexOf("/gardn") === 0 ? "gardn" : "rysteria";
+const REFRESH_SECONDS = 15;
 const BUTTON_GAP_SECONDS = 4;
-const STORE = "rr_leaderboard_budget";
 
 const qs = new URLSearchParams(location.search);
 // api-game.<domain> when this page is on game.<domain>
@@ -212,40 +198,19 @@ function apiBase() {
     return location.protocol + "//" + location.hostname + ":55554";
 }
 const me = (() => {
-    try { const u = localStorage.getItem("rivet_account_uuid") || ""; return /^[0-9a-f-]{36}$/i.test(u) ? u : ""; }
+    try { const u = localStorage.getItem("uuid") || localStorage.getItem("rivet_account_uuid") || ""; return /^[0-9a-f-]{36}$/i.test(u) ? u : ""; }
     catch (e) { return ""; }
 })();
 
-// ------------------------------------------------------------ the budget
-function readBudget() {
-    try { const b = JSON.parse(localStorage.getItem(STORE)); if (b && typeof b.start === "number") return b; } catch (e) {}
-    return { start: 0, count: 0, until: 0 };
-}
-function writeBudget(b) { try { localStorage.setItem(STORE, JSON.stringify(b)); } catch (e) {} }
-
-// what may happen now: {mode: "ok" | "spent" | "pause", until}
-function budgetState(now) {
-    let b = readBudget();
-    if (b.until && now < b.until) return { mode: "pause", until: b.until, b };
-    if (b.until && now >= b.until) b = { start: 0, count: 0, until: 0 };            // rest is over
-    if (!b.start) b = { start: now, count: 0, until: 0 };
-    const end = b.start + budget.window * 1000;
-    if (now >= end) {
-        if (b.count >= budget.requests) {                                            // used up: rest now
-            b.until = end + budget.pause * 1000;
-            writeBudget(b);
-            return now < b.until ? { mode: "pause", until: b.until, b } : budgetState(now);
-        }
-        b = { start: now, count: 0, until: 0 };                                      // a quiet window: a new one
-    }
-    writeBudget(b);
-    return b.count >= budget.requests ? { mode: "spent", until: end, b } : { mode: "ok", until: end, b };
-}
-function spend() { const b = readBudget(); b.count = (b.count || 0) + 1; writeBudget(b); }
-function exhaust() { const b = readBudget(); b.count = budget.requests; writeBudget(b); }
-
 // -------------------------------------------------------------- the page
 const $ = (id) => document.getElementById(id);
+// the buttons: the other pages of this game, and the other game
+$("nav").innerHTML = (GAME === "gardn"
+    ? '<a class="btn warn" href="/gardn/">Play Gardn</a><a class="btn" href="/gardn/stats">Petal stats</a><a class="btn" href="/leaderboard">Rysteria leaderboards</a>'
+    : '<a class="btn" href="/">Play Rysteria</a><a class="btn" href="/status">My stats</a><a class="btn" href="/stats">Find a player</a><a class="btn warn" href="/gardn/leaderboard">Gardn leaderboards</a>') +
+    '<button class="btn alt" id="refresh" type="button">Refresh</button>';
+$("sub").textContent = GAME === "gardn" ? "Gardn" : "Rysteria";
+document.title = (GAME === "gardn" ? "Gardn" : "Rysteria") + " Leaderboards";
 const GAMES = {
     rysteria: { title: "Rysteria", cls: "rysteria" },
     gardn: { title: "Gardn", cls: "gardn" },
@@ -262,6 +227,9 @@ const LOOK = {
     gardn_kills:         { c: "var(--legendary)", i: "bolt" },
     gardn_best_score:    { c: "var(--unusual)",   i: "crown" },
     gardn_mythics:       { c: "var(--mythic)",    i: "gem" },
+    mg_ctf_wins:         { c: "var(--rare)",      i: "flag" },
+    mg_tdm_wins:         { c: "var(--legendary)", i: "sword" },
+    mg_has_wins:         { c: "var(--epic)",      i: "eye" },
 };
 const ICONS = {
     star: '<path d="M12 2.5l2.9 6.2 6.7.8-5 4.6 1.4 6.7L12 17.4 6 20.8l1.4-6.7-5-4.6 6.7-.8z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
@@ -271,6 +239,8 @@ const ICONS = {
     skull: '<path d="M12 2.5c-4.6 0-8 3.1-8 7.4 0 2.4 1.1 4 2.5 5v3.1h2.3v-1.8h1.6v1.8h3.2v-1.8h1.6v1.8h2.3V15c1.4-1 2.5-2.6 2.5-5C20 5.600 16.600 2.500 12 2.500z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.6" cy="10.2" r="2" fill="#222"/><circle cx="15.4" cy="10.2" r="2" fill="#222"/>',
     bolt: '<path d="M13.500 2L4.500 13.500h6L9.500 22l9-12h-6z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
     crown: '<path d="M3 8l4.500 4L12 4l4.500 8L21 8l-2 11H5z" fill="#fff" stroke="#222" stroke-width="1.6" stroke-linejoin="round"/>',
+    flag: '<path d="M5 21V3M5 4h13l-3 4.500 3 4.500H5" fill="#fff" stroke="#222" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>',
+    eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="#fff" stroke="#222" stroke-width="1.6"/><circle cx="12" cy="12" r="3.200" fill="#222"/>',
     flower: '<g stroke="#222" stroke-width="1.5"><circle cx="12" cy="5.200" r="3.800" fill="#fff"/><circle cx="18.500" cy="9.800" r="3.800" fill="#fff"/><circle cx="16" cy="17.500" r="3.800" fill="#fff"/><circle cx="8" cy="17.500" r="3.800" fill="#fff"/><circle cx="5.500" cy="9.800" r="3.800" fill="#fff"/><circle cx="12" cy="12" r="3.600" fill="#ffe65d"/></g>',
 };
 const svg = (name) => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + "</svg>";
@@ -352,33 +322,27 @@ function render(data) {
 }
 
 // ------------------------------------------------------------- asking
-let inFlight = false, lastAsk = 0, lastGood = 0, lastError = "";
+// The master limits how often an address may ask (60 a minute for everything). The
+// page only keeps its pace and, when the master still says 429, waits a minute.
+let inFlight = false, lastAsk = 0, lastGood = 0, backoffUntil = 0;
 
 async function ask(manual) {
     const now = Date.now();
-    if (inFlight || budgetState(now).mode !== "ok") return;
+    if (inFlight || now < backoffUntil) return;
     inFlight = true;
     lastAsk = now;
-    spend();
     try {
-        const url = apiBase() + "/leaderboard" + (me ? "?me=" + encodeURIComponent(me) : "");
+        const url = apiBase() + "/leaderboard?game=" + GAME + (me ? "&me=" + encodeURIComponent(me) : "");
         const res = await fetch(url, { headers: { accept: "application/json" }, cache: "no-store" });
-        if (res.status === 429) { exhaust(); throw new Error("The server asks us to slow down."); }
+        if (res.status === 429) { backoffUntil = Date.now() + 60000; throw new Error("The server asks us to slow down."); }
         if (!res.ok) throw new Error("The server answered " + res.status + ".");
         const data = await res.json();
         if (!data.ok || !Array.isArray(data.games)) throw new Error("The leaderboards are not available.");
-        if (data.budget) {
-            budget.requests = data.budget.requests || budget.requests;
-            budget.window = data.budget.window_seconds || budget.window;
-            budget.pause = data.budget.pause_seconds || budget.pause;
-        }
         render(data);
         lastGood = Date.now();
-        lastError = "";
         $("error").style.display = "none";
     } catch (e) {
-        lastError = e.message || String(e);
-        $("error").textContent = lastError + " Showing the last numbers we got.";
+        $("error").textContent = (e.message || String(e)) + " Showing the last numbers we got.";
         $("error").style.display = "block";
     } finally {
         inFlight = false;
@@ -390,30 +354,22 @@ const clock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math
 
 function paint() {
     const now = Date.now();
-    const st = budgetState(now);
-    const used = Math.min(st.b.count || 0, budget.requests);
-    $("budget").textContent = "Requests " + used + " / " + budget.requests;
-    $("meter").firstElementChild.style.width = (100 * used / budget.requests) + "%";
     const dot = $("dot"), status = $("status"), btn = $("refresh");
-    if (st.mode === "pause") {
+    if (now < backoffUntil) {
         dot.className = "pause";
-        status.textContent = "Resting for " + clock(st.until - now) + ". The leaderboards come back on their own.";
-    } else if (st.mode === "spent") {
-        dot.className = "wait";
-        status.textContent = "All " + budget.requests + " requests of this window are used. Waiting " + clock(st.until - now) + " for the window to end, then a short rest.";
+        status.textContent = "Too many requests from this address. Asking again in " + clock(backoffUntil - now) + ".";
     } else {
         dot.className = document.hidden ? "wait" : "live";
         const next = Math.max(0, REFRESH_SECONDS * 1000 - (now - lastAsk));
         status.textContent = document.hidden ? "Paused while this tab is hidden."
-            : (lastGood ? "Live. Next update in " + Math.ceil(next / 1000) + " s" : "Loading...") +
-              " - window ends in " + clock(st.until - now);
+            : (lastGood ? "Live. Next update in " + Math.ceil(next / 1000) + " s" : "Loading...");
     }
-    btn.disabled = st.mode !== "ok" || inFlight || now - lastAsk < BUTTON_GAP_SECONDS * 1000;
+    btn.disabled = now < backoffUntil || inFlight || now - lastAsk < BUTTON_GAP_SECONDS * 1000;
 }
 
 setInterval(() => {
     const now = Date.now();
-    if (!document.hidden && budgetState(now).mode === "ok" && now - lastAsk >= REFRESH_SECONDS * 1000) ask(false);
+    if (!document.hidden && now >= backoffUntil && now - lastAsk >= REFRESH_SECONDS * 1000) ask(false);
     paint();
 }, 1000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) paint(); });

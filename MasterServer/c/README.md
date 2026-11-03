@@ -70,15 +70,27 @@ again. Empty `RESTART_COMMAND` = never. The log lines start with `[restart]`.
 
 ## Leaderboards
 
-`GET /leaderboard[?me=<uuid>]` (public, CORS allow-list, 90 per 10 minutes per ip) answers everything the page
-`Client/public/leaderboard.html` shows in one go: both games, every board, the best ten of each (name and score, no
-uuids) and, with `me`, where that player stands on each board. The top lists are cached for 8 seconds for everybody.
-The page itself asks at most 60 times in 10 minutes, then waits for the window to end and rests for 3 minutes
-(`budget` in every answer tells it the numbers).
+`GET /leaderboard[?game=rysteria|gardn][&me=<uuid>]` (public, CORS allow-list) answers what the pages
+`Client/public/leaderboard.html` show: the boards of one game (both without `game`), the best ten of each (name and
+score, no uuids) and, with `me`, where that player stands on each board. The top lists are cached for 8 seconds for
+everybody. The pages are `/leaderboard` (Rysteria) and `/gardn/leaderboard` (gardn), see `scripts/common/edge.js`.
+
+**Rate limit, on the master, not in the pages:** every route a browser can reach shares one bucket of
+`MS_PUBLIC_PER_MINUTE` (60) requests a minute per address (`CF-Connecting-IP`), and each route has its own, tighter,
+bucket as well (`api.c`): the leaderboards, profiles and stats 60 a minute, the search 30. The answer is 429.
+
+`GET /profile?uuid=<uuid>` or `?name=<username>` is the public page of an account (`/stats?uuid=...`, `/status`):
+username, level, the Rysteria boards with the place on each, the highest PvP score, the loadout, and the minigames
+record (`ctf`, `tdm`, `has`: wins, played, lost, win percent). No email, links or tokens, and no dev accounts.
+`GET /profile/search?q=<start of a name>` lists up to ten usernames (case-insensitive prefix).
+
+**Minigames** (`rrolf-minigames`) never save anything but this: when a match ends the game server sends op 9 (mode,
+PIN, and per player uuid and won). It counts only if the PIN equals `MINIGAMES_PIN` of the master (empty = nothing
+counts). Played and won are the boards `mg_<mode>_played` (hidden) and `mg_<mode>_wins` (on the Rysteria page).
 
 The numbers are kept in the leaderboards section (`board, uuid, score, {"name"}`) so that ranking never reads the
 saves. **Rysteria:** `rr_level` (level and how far to the next, as one number), `rr_pvp_kills`, `rr_pvp_best`,
-`rr_ancient_attempts`, `rr_ancients` (owned now), `rr_ancient_kills`, `rr_kills` (mobs). **Gardn:** `gardn_kills`,
+`rr_ancient_attempts`, `rr_ancients` (owned now), `rr_ancient_kills`, `rr_kills` (mobs). **Gardn:** `gardn_kills` (players killed),
 `gardn_best_score`, `gardn_mythics` (in all saves). They are written
 
 * when a player **joins** a Rysteria server, and when a game server **saves** them (every few seconds while they play):

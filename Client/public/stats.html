@@ -19,17 +19,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Gardn Petal Stats</title>
+<title>Rysteria Stats</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link href="logo.png" rel="icon" type="image/png">
+<link href="/logo.png" rel="icon" type="image/png">
 <style>
 @font-face {
     font-family: "Ubuntu";
     font-weight: 700;
-    src: url("fonts/Ubuntu-Bold.ttf") format("truetype");
+    src: url("/fonts/Ubuntu-Bold.ttf") format("truetype");
 }
 :root {
     --grass: #1ea761;
+    --grass-dark: #167a47;
     --ink: #222;
     --panel: rgba(255, 255, 255, 0.16);
     --panel-line: rgba(255, 255, 255, 0.28);
@@ -53,11 +54,16 @@ body {
     background-attachment: fixed;
     overflow-x: hidden;
 }
+/* the outlined text of the game */
 .outline { text-shadow: -2px 0 var(--ink), 2px 0 var(--ink), 0 -2px var(--ink), 0 2px var(--ink),
     -1.5px -1.5px var(--ink), 1.5px -1.5px var(--ink), -1.5px 1.5px var(--ink), 1.5px 1.5px var(--ink); }
 
+/* drifting petals behind everything */
 #petals { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
-#petals i { position: absolute; bottom: -40px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); animation: drift linear infinite; }
+#petals i {
+    position: absolute; bottom: -40px; border-radius: 50%; background: rgba(255, 255, 255, 0.55);
+    animation: drift linear infinite;
+}
 @keyframes drift {
     from { transform: translate3d(0, 0, 0); opacity: 0; }
     10% { opacity: 1; }
@@ -65,6 +71,7 @@ body {
 }
 
 main { position: relative; z-index: 1; max-width: 1500px; margin: 0 auto; padding: 22px 18px 60px; }
+
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
 header .brand { display: flex; align-items: center; gap: 14px; }
 header img { width: 58px; height: 58px; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.3)); }
@@ -83,88 +90,48 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .btn.warn { background: #d4b30c; }
 .btn[disabled] { filter: grayscale(0.7) brightness(0.8); cursor: not-allowed; }
 
-#strip {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
-    padding: 10px 16px; margin-bottom: 20px;
-    background: var(--panel); border: 2px solid var(--panel-line); border-radius: 14px;
-    backdrop-filter: blur(4px); font-size: 15px;
-}
-#dot { width: 12px; height: 12px; border-radius: 50%; background: #9aa; box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25); }
-#dot.live { background: var(--ancient); animation: pulse 1.8s infinite; }
-#dot.wait { background: var(--unusual); }
-#dot.pause { background: var(--legendary); }
-@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 3px rgba(43, 255, 163, 0.35); } 50% { box-shadow: 0 0 0 8px rgba(43, 255, 163, 0); } }
-#status { flex: 1 1 260px; }
-#meter { width: 190px; height: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); overflow: hidden; border: 2px solid var(--ink); }
-#meter b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--common), var(--unusual), var(--legendary)); transition: width 0.4s; }
-#budget { font-variant-numeric: tabular-nums; opacity: 0.95; }
+
+#strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 10px 16px; margin-bottom: 20px;
+    background: var(--panel); border: 2px solid var(--panel-line); border-radius: 14px; backdrop-filter: blur(4px); }
+#q { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 18px; color: #fff; padding: 9px 14px; border-radius: 10px; border: 3px solid var(--ink);
+    background: rgba(0, 0, 0, 0.3); outline: none; }
+#q::placeholder { color: rgba(255, 255, 255, 0.6); }
+#results { list-style: none; margin: -8px 0 18px; display: none; background: rgba(8, 60, 32, 0.7); border: 2px solid var(--panel-line); border-radius: 14px; overflow: hidden; }
+#results li a { display: block; padding: 9px 16px; color: #fff; text-decoration: none; }
+#results li a:hover { background: rgba(255, 255, 255, 0.18); }
+#results li.none { padding: 9px 16px; opacity: 0.7; font-weight: 400; }
+.sheet { display: grid; gap: 22px; }
+.panel { background: var(--panel); border: 2px solid var(--panel-line); border-radius: 22px; padding: 18px; backdrop-filter: blur(4px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
+.panel > h2 { font-size: 26px; margin-bottom: 12px; }
+.who { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
+.who h2 { font-size: 40px; line-height: 1.05; overflow-wrap: anywhere; }
+.who small { display: block; font-size: 14px; font-weight: 400; opacity: 0.85; margin-top: 4px; }
+.lvl { min-width: 84px; text-align: center; padding: 8px 14px; border-radius: 14px; border: 3px solid var(--ink); background: var(--common); color: var(--ink); font-size: 26px; line-height: 1; }
+.lvl small { display: block; font-size: 11px; opacity: 0.8; font-weight: 700; letter-spacing: 1px; }
+.who .btn { margin-left: auto; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.tile { --accent: var(--common); background: rgba(8, 60, 32, 0.42); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 14px; padding: 10px 12px; position: relative; overflow: hidden; }
+.tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--accent); }
+.tile.big { grid-column: span 2; }
+.tile .k { font-size: 13px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+.tile .v { font-size: 28px; font-variant-numeric: tabular-nums; }
+.tile .r { font-size: 12px; font-weight: 400; opacity: 0.8; }
+.modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.mode { background: rgba(8, 60, 32, 0.42); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 16px; padding: 12px; }
+.mode h3 { font-size: 20px; margin-bottom: 6px; }
+.mode .line { display: flex; justify-content: space-between; font-size: 15px; padding: 2px 0; }
+.mode .pct { height: 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.3); border: 2px solid var(--ink); overflow: hidden; margin-top: 8px; }
+.mode .pct b { display: block; height: 100%; background: linear-gradient(90deg, var(--exotic), var(--unusual), var(--ancient)); }
+.mode .note { font-size: 12px; font-weight: 400; opacity: 0.75; margin-top: 6px; }
+.slots { display: flex; flex-wrap: wrap; gap: 10px; }
+.slot { --c: var(--common); width: 92px; padding: 8px 4px 6px; text-align: center; border-radius: 14px; border: 3px solid var(--ink); background: var(--c); color: var(--ink); }
+.slot .dotp { width: 36px; height: 36px; margin: 0 auto 4px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); border: 3px solid var(--ink); }
+.slot .nm { font-size: 13px; line-height: 1.1; overflow-wrap: anywhere; }
+.slot .rar { font-size: 10px; opacity: 0.8; }
+.slot.empty { background: rgba(0, 0, 0, 0.25); color: #fff; border-style: dashed; opacity: 0.6; }
+.gap { height: 4px; }
 #error { display: none; margin-bottom: 16px; padding: 10px 16px; border-radius: 12px; background: rgba(222, 31, 31, 0.55); border: 2px solid var(--ink); }
-
-.panel { background: var(--panel); border: 2px solid var(--panel-line); border-radius: 22px; padding: 18px; backdrop-filter: blur(4px); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); margin-bottom: 22px; }
-.panel > h2 { font-size: 28px; margin-bottom: 4px; }
-.panel .bar { height: 7px; border-radius: 6px; margin-bottom: 16px; background: linear-gradient(90deg, #ffe65d, #ffb347, #ff7e6b); }
-
-/* the four numbers on top */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 22px; }
-.tile { background: rgba(8, 60, 32, 0.42); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 16px; padding: 12px 16px; position: relative; overflow: hidden; animation: rise 0.5s both; }
-.tile::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px; background: var(--c, var(--common)); }
-.tile b { display: block; font-size: 34px; font-variant-numeric: tabular-nums; margin-top: 4px; }
-.tile span { font-size: 13px; opacity: 0.85; font-weight: 400; }
-@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
-
-/* controls */
-.controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; margin-bottom: 16px; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip {
-    font: inherit; font-size: 14px; color: #fff; cursor: pointer; padding: 5px 13px; border-radius: 999px;
-    background: rgba(0, 0, 0, 0.28); border: 2px solid rgba(255, 255, 255, 0.25); transition: background 0.15s, transform 0.08s;
-}
-.chip:hover { background: rgba(0, 0, 0, 0.4); }
-.chip.on { background: var(--c, #3fbf6f); border-color: var(--ink); color: var(--ink); }
-.chip.on.dark { color: #fff; }
-.controls label { font-size: 13px; opacity: 0.85; font-weight: 400; margin-right: 4px; }
-
-/* the three best */
-.podium { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-bottom: 20px; }
-.pod { position: relative; padding: 16px 14px 14px; border-radius: 18px; text-align: center; border: 2px solid rgba(255, 255, 255, 0.25); background: rgba(8, 60, 32, 0.45); overflow: hidden; animation: rise 0.5s both; }
-.pod::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 6px; background: var(--c); }
-.pod .medal { position: absolute; top: 10px; left: 10px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--ink); background: var(--m); font-size: 15px; }
-.pod.p1 { --m: var(--gold); box-shadow: 0 0 26px rgba(255, 213, 74, 0.35); }
-.pod.p2 { --m: var(--silver); }
-.pod.p3 { --m: var(--bronze); }
-.pod .big { width: 92px; height: 92px; margin: 6px auto 8px; display: block; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.3)); animation: bob 3.2s ease-in-out infinite; }
-@keyframes bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
-.pod h3 { font-size: 22px; }
-.pod .tag { display: inline-block; margin: 3px 0 6px; font-size: 11px; padding: 2px 9px; border-radius: 6px; background: var(--c); color: var(--ink); text-transform: uppercase; letter-spacing: 0.5px; }
-.pod .num { font-size: 26px; font-variant-numeric: tabular-nums; }
-.pod .sub { font-size: 12px; font-weight: 400; opacity: 0.85; }
-
-/* every petal, as many columns as fit */
-#list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px 14px; position: relative; }
-.row {
-    display: grid; grid-template-columns: 34px 46px 1fr; align-items: center; gap: 4px 10px;
-    padding: 8px 12px 8px 8px; border-radius: 14px; background: rgba(255, 255, 255, 0.09);
-    border: 2px solid transparent; position: relative; overflow: hidden; animation: rise 0.45s both;
-}
-.row .rk { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: rgba(0, 0, 0, 0.28); }
-.row.r1 .rk { background: var(--gold); color: var(--ink); } .row.r2 .rk { background: var(--silver); color: var(--ink); } .row.r3 .rk { background: var(--bronze); color: var(--ink); }
-.row svg.ico { width: 44px; height: 44px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
-.row .info { min-width: 0; }
-.row .top { display: flex; gap: 7px; align-items: center; }
-.row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; min-width: 0; flex: 0 1 auto; }
-.row .top small { flex: none; font-size: 10px; padding: 1px 6px; border-radius: 5px; background: var(--c); color: var(--ink); text-transform: uppercase; }
-.row .val { margin-left: auto; flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 16px; text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45); }
-.row .meter { height: 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.3); border: 2px solid var(--ink); margin-top: 4px; overflow: hidden; }
-.row .meter i { display: block; height: 100%; width: 0; background: var(--c); border-radius: 4px; transition: width 0.7s cubic-bezier(.2,.8,.2,1); }
-.row .more { font-size: 11px; font-weight: 400; opacity: 0.8; margin-top: 2px; display: flex; justify-content: space-between; }
-.row.flash { animation: flash 1.2s; }
-@keyframes flash { 0% { background: rgba(43, 255, 163, 0.55); } 100% { background: rgba(255, 255, 255, 0.09); } }
-
-#all { margin: 16px auto 0; display: none; }
-#unused { margin-top: 18px; font-size: 13px; font-weight: 400; opacity: 0.9; }
-#unused b { font-weight: 700; }
 .foot { margin-top: 26px; text-align: center; font-size: 13px; opacity: 0.8; font-weight: 400; }
-#empty { display: none; text-align: center; padding: 30px 0; font-size: 18px; }
 </style>
 </head>
 <body>
@@ -172,379 +139,163 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 <main>
     <header>
         <div class="brand">
-            <img src="logo.png" alt="">
-            <h1 class="outline">Petal Stats<small class="outline">Gardn - what is in the saves</small></h1>
+            <img src="/logo.png" alt="">
+            <h1 class="outline">Stats<small class="outline" id="sub">Rysteria</small></h1>
         </div>
         <nav>
-            <a class="btn" href="/leaderboard">Leaderboards</a>
-            <a class="btn warn" href="/gardn/">Play Gardn</a>
-            <button class="btn alt" id="refresh" type="button">Refresh</button>
+            <a class="btn" href="/">Play Rysteria</a>
+            <a class="btn" href="/status">My stats</a>
+            <a class="btn alt" href="/leaderboard">Leaderboards</a>
+            <a class="btn warn" href="/gardn/stats">Gardn stats</a>
         </nav>
     </header>
 
     <section id="strip">
-        <span id="dot"></span>
-        <span id="status">Loading...</span>
-        <span id="meter"><b></b></span>
-        <span id="budget"></span>
+        <input id="q" type="search" placeholder="Find a player by username" autocomplete="off" maxlength="40" spellcheck="false">
+        <button class="btn" id="go" type="button">Search</button>
     </section>
+    <ul id="results"></ul>
     <div id="error"></div>
 
-    <div class="tiles" id="tiles"></div>
-
-    <section class="panel">
-        <h2 class="outline">Most saved petals</h2>
-        <div class="bar"></div>
-        <div class="controls">
-            <div><label>Count by</label><span class="chips" id="sorts">
-                <button class="chip on" data-sort="copies" type="button">Copies in saves</button>
-                <button class="chip" data-sort="saves" type="button">Saves holding it</button>
-            </span></div>
-            <div><label>Rarity</label><span class="chips" id="rarities"></span></div>
-        </div>
-        <div class="podium" id="podium"></div>
-        <div id="list"></div>
-        <p id="empty">No petals match.</p>
-        <button class="btn alt" id="all" type="button"></button>
-        <p id="unused"></p>
-    </section>
-    <p class="foot">Every petal in every saved loadout of every account is counted. The numbers are refreshed every ten minutes.</p>
+    <div class="sheet" id="sheet"></div>
+    <p class="foot" id="foot">Only public numbers are shown. Wins in the minigames count when the match was started with the PIN.</p>
 </main>
 
 <script>
 "use strict";
-// the names and rarities of gardn's petals, by id (scripts/gen-petal-table.py)
-/*PETALS-BEGIN*/
-const RARITIES = ["Common", "Unusual", "Rare", "Epic", "Legendary", "Mythic", "Unique"];
-const PETALS = [   // [name, rarity], the index is the petal id
-    ["None", 0],
-    ["Basic", 0],
-    ["Fast", 0],
-    ["Heavy", 0],
-    ["Stinger", 1],
-    ["Leaf", 1],
-    ["Twin", 1],
-    ["Rose", 1],
-    ["Iris", 1],
-    ["Missile", 2],
-    ["Dandelion", 2],
-    ["Bubble", 2],
-    ["Faster", 2],
-    ["Rock", 2],
-    ["Cactus", 2],
-    ["Web", 2],
-    ["Wing", 2],
-    ["Peas", 2],
-    ["Sand", 2],
-    ["Pincer", 2],
-    ["Rose", 2],
-    ["Triplet", 3],
-    ["Egg", 3],
-    ["Iris", 3],
-    ["Pollen", 3],
-    ["Peas", 3],
-    ["Egg", 3],
-    ["Rose", 3],
-    ["Stick", 4],
-    ["Stinger", 4],
-    ["Web", 4],
-    ["Antennae", 4],
-    ["Cactus", 4],
-    ["Heaviest", 3],
-    ["Third Eye", 5],
-    ["Observer", 5],
-    ["Cactus", 3],
-    ["Salt", 2],
-    ["Basic", 6],
-    ["Square", 6],
-    ["Moon", 5],
-    ["Lotus", 3],
-    ["Cutter", 3],
-    ["Yin Yang", 3],
-    ["Yggdrasil", 5],
-    ["Rice", 3],
-    ["Bone", 4],
-    ["Yucca", 1],
-    ["Corn", 3],
-    ["Missile", 3],
-    ["Missile", 4],
-    ["Egg", 4],
-    ["Egg", 5],
-    ["Leaf", 4],
-    ["Lightning", 3],
-    ["Lightning", 4],
-    ["Uranium", 4],
-    ["Stinger", 5],
-    ["Web", 5],
-    ["Soil", 4],
-    ["Powder", 4],
-    ["Shell", 4],
-    ["Sponge", 4],
-    ["Honey", 2],
-    ["Magnet", 5],
-    ["Butterfly", 5]
-];
-/*PETALS-END*/
-const RARITY_COLOR = ["#7eef6d", "#ffe65d", "#4d52e3", "#861fde", "#de1f1f", "#1fdbde", "#ff2b75"];
-const DARK_TEXT = [true, true, false, false, false, true, true];   // readable text on the colour
+// the names of Rysteria's petals, by id (scripts/gen-petal-table.py)
+/*RRPETALS-BEGIN*/
+const RR_PETALS = ["Secret", "Petal", "Pellet", "Fossil", "Stinger", "Berry", "Shell", "Peas", "Leaf", "Egg", "Magnet", "Uranium", "Feather", "Azalea", "Bone", "Web", "Seed", "Gravel", "Club", "Crest", "Droplet", "Beak", "Lightning", "Third Eye", "Nest", "Fireball", "Meat", "Bubble", "Meteor", "Mandible", "Wax", "Sand", "Mint", "Bee Egg", "Beehive Post", "Nazar"];   // the index is the petal id
+/*RRPETALS-END*/
+const RARITIES = ["Common", "Unusual", "Rare", "Epic", "Legendary", "Mythic", "Exotic", "Ancient"];
+const RARITY_VAR = ["common", "unusual", "rare", "epic", "legendary", "mythic", "exotic", "ancient"];
+const MODES = { ctf: "Capture the flag", tdm: "Team deathmatch", has: "Hide and seek" };
+const LOOK = { rr_level: "common", rr_pvp_kills: "legendary", rr_pvp_best: "exotic", rr_ancient_attempts: "mythic", rr_ancients: "ancient", rr_ancient_kills: "epic", rr_kills: "unusual" };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// ---------------------------------------------------------------- settings
-// Like the leaderboard page: it asks the master server for these numbers and for
-// nothing else, at most REQUESTS times in a WINDOW of ten minutes; when they are
-// used up it waits for the window to end, then rests for PAUSE. The count lives in
-// localStorage, so a reload or a second tab cannot get around it.
-const budget = { requests: 60, window: 600, pause: 180 };   // the master may say otherwise
-const REFRESH_SECONDS = 60;     // the master only recounts every ten minutes
-const BUTTON_GAP_SECONDS = 4;
-const STORE = "rr_stats_budget";
-const SHOWN = 24;               // petals listed before "show all"
-
+// Nothing here limits the number of asks: the master does (60 a minute for an
+// address, 30 for searches) and answers 429.
 const qs = new URLSearchParams(location.search);
 function apiBase() {
     if (qs.get("api")) return qs.get("api").replace(/\/+$/, "");
     if (/^game\./.test(location.hostname)) return location.protocol + "//" + location.host.replace(/^game\./, "api-game.");
     return location.protocol + "//" + location.hostname + ":55554";
 }
-
-function readBudget() {
-    try { const b = JSON.parse(localStorage.getItem(STORE)); if (b && typeof b.start === "number") return b; } catch (e) {}
-    return { start: 0, count: 0, until: 0 };
-}
-function writeBudget(b) { try { localStorage.setItem(STORE, JSON.stringify(b)); } catch (e) {} }
-function budgetState(now) {
-    let b = readBudget();
-    if (b.until && now < b.until) return { mode: "pause", until: b.until, b };
-    if (b.until && now >= b.until) b = { start: 0, count: 0, until: 0 };
-    if (!b.start) b = { start: now, count: 0, until: 0 };
-    const end = b.start + budget.window * 1000;
-    if (now >= end) {
-        if (b.count >= budget.requests) {
-            b.until = end + budget.pause * 1000;
-            writeBudget(b);
-            return now < b.until ? { mode: "pause", until: b.until, b } : budgetState(now);
-        }
-        b = { start: now, count: 0, until: 0 };
-    }
-    writeBudget(b);
-    return b.count >= budget.requests ? { mode: "spent", until: end, b } : { mode: "ok", until: end, b };
-}
-function spend() { const b = readBudget(); b.count = (b.count || 0) + 1; writeBudget(b); }
-function exhaust() { const b = readBudget(); b.count = budget.requests; writeBudget(b); }
-
-// -------------------------------------------------------------- the page
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const nf = (n) => Math.round(n).toLocaleString("en-US");
-function short(n) {
-    if (n < 1e6) return nf(n);
+const num = (n) => Math.round(n).toLocaleString("en-US");
+function fmt(n) {
+    n = Math.round(n);
+    if (n < 1e6) return n.toLocaleString("en-US");
     for (const [v, u] of [[1e12, "T"], [1e9, "B"], [1e6, "M"]]) if (n >= v) return (n / v).toFixed(n >= v * 100 ? 0 : 1).replace(/\.0$/, "") + u;
     return String(n);
 }
-const petalName = (id) => (PETALS[id] ? PETALS[id][0] : "Petal #" + id);
-const petalRarity = (id) => (PETALS[id] ? PETALS[id][1] : 0);
+const me = (() => {
+    try { const u = localStorage.getItem("uuid") || localStorage.getItem("rivet_account_uuid") || ""; return UUID.test(u) ? u : ""; }
+    catch (e) { return ""; }
+})();
 
-// a petal: a round, shiny blob in the colour of its rarity with its first letter
-function petalSvg(id, cls) {
-    const c = RARITY_COLOR[petalRarity(id)];
-    const letter = petalName(id).replace(/[^A-Za-z0-9]/g, "").charAt(0).toUpperCase() || "?";
-    return '<svg class="' + cls + '" viewBox="0 0 48 48" aria-hidden="true">' +
-        '<defs><radialGradient id="g' + id + cls + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".35" stop-color="' + c + '"/><stop offset="1" stop-color="' + c + '" stop-opacity=".78"/></radialGradient></defs>' +
-        '<circle cx="24" cy="24" r="19.500" fill="url(#g' + id + cls + ')" stroke="#222" stroke-width="3"/>' +
-        '<text x="24" y="31" text-anchor="middle" font-family="Ubuntu,system-ui,sans-serif" font-weight="700" font-size="21" fill="#222" fill-opacity=".72">' + esc(letter) + "</text></svg>";
+// /status is the page of the logged in player, /stats?uuid=... anybody's
+const isStatus = location.pathname.replace(/\/+$/, "") === "/status";
+let target = qs.get("uuid") || "";
+if (isStatus) target = me;
+let targetName = isStatus ? "" : (qs.get("name") || "");
+
+let busyUntil = 0;
+async function api(path) {
+    if (Date.now() < busyUntil) throw new Error("Too many requests from this address. Try again in a minute.");
+    const res = await fetch(apiBase() + path, { headers: { accept: "application/json" }, cache: "no-store" });
+    if (res.status === 429) { busyUntil = Date.now() + 60000; throw new Error("Too many requests from this address. Try again in a minute."); }
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 404) throw new Error("No such player.");
+    if (!res.ok || !body.ok) throw new Error("The server answered " + res.status + ".");
+    return body;
+}
+function fail(message) { $("error").textContent = message; $("error").style.display = "block"; }
+
+function slotHtml(entry) {
+    if (!Array.isArray(entry) || !entry[0]) return '<div class="slot empty"><div class="dotp"></div><div class="nm">empty</div></div>';
+    const id = entry[0], r = Math.max(0, Math.min(7, entry[1] | 0));
+    return '<div class="slot" style="--c:var(--' + RARITY_VAR[r] + ')"><div class="dotp"></div><div class="nm">' + esc(RR_PETALS[id] || "Petal " + id) +
+        '</div><div class="rar">' + RARITIES[r] + "</div></div>";
 }
 
-let data = null;                 // the last answer
-let sortKey = "copies";
-let rarityFilter = -1;           // -1 = all
-let showAll = false;
-const lastValue = new Map();     // petal id -> last value shown, to flash the changed ones
+function render(p) {
+    document.title = p.name + " - Rysteria Stats";
+    const link = location.origin + "/stats?uuid=" + p.uuid;
+    let h = '<section class="panel who"><div><h2 class="outline">' + esc(p.name) + "</h2><small>Joined " +
+        (p.created ? new Date(p.created * 1000).toLocaleDateString() : "?") + "</small></div>" +
+        '<div class="lvl">' + num(p.level) + "<small>LEVEL</small></div>" +
+        '<button class="btn alt" id="share" type="button">Copy link</button></section>';
 
-function buildChips() {
-    let html = '<button class="chip on" data-rarity="-1" type="button">All</button>';
-    RARITIES.forEach((r, i) => {
-        html += '<button class="chip' + (DARK_TEXT[i] ? "" : " dark") + '" style="--c:' + RARITY_COLOR[i] + '" data-rarity="' + i + '" type="button">' + esc(r) + "</button>";
+    h += '<section class="panel"><h2 class="outline">Stats</h2><div class="tiles">';
+    h += '<div class="tile big" style="--accent:var(--exotic)"><div class="k">Highest PvP score</div><div class="v" title="' + num(p.pvp_best) + '">' + fmt(p.pvp_best) + "</div></div>";
+    for (const s of p.stats) {
+        if (s.id === "rr_pvp_best" || s.id === "rr_level") continue;
+        h += '<div class="tile" style="--accent:var(--' + (LOOK[s.id] || "common") + ')"><div class="k">' + esc(s.title) + '</div><div class="v" title="' + num(s.score) +
+            '">' + fmt(s.score) + '</div><div class="r">' + (s.rank ? "#" + num(s.rank) + " on the leaderboard" : "not ranked") + "</div></div>";
+    }
+    h += "</div></section>";
+
+    h += '<section class="panel"><h2 class="outline">Minigames</h2><div class="modes">';
+    for (const m of Object.keys(MODES)) {
+        const g = p.minigames[m] || { wins: 0, played: 0, lost: 0, win_percent: 0 };
+        h += '<div class="mode"><h3>' + MODES[m] + '</h3><div class="line"><span>Won</span><span>' + num(g.wins) + '</span></div><div class="line"><span>Lost</span><span>' +
+            num(g.lost) + '</span></div><div class="line"><span>Played</span><span>' + num(g.played) + '</span></div><div class="line"><span>Win rate</span><span>' +
+            g.win_percent + '%</span></div><div class="pct"><b style="width:' + Math.min(100, g.win_percent) + '%"></b></div>' +
+            (g.rank ? '<div class="note">#' + num(g.rank) + " in wins</div>" : "") + "</div>";
+    }
+    h += "</div></section>";
+
+    const slots = Object.keys(p.loadout || {}).sort((a, b) => a - b);
+    h += '<section class="panel"><h2 class="outline">Loadout</h2>';
+    h += slots.length ? '<div class="slots">' + slots.map((k) => slotHtml(p.loadout[k])).join("") + "</div>" : "<p>The loadout is empty.</p>";
+    h += "</section>";
+    $("sheet").innerHTML = h;
+    $("share").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(link); $("share").textContent = "Copied!"; }
+        catch (e) { prompt("Copy this link", link); }
+        setTimeout(() => ($("share").textContent = "Copy link"), 1800);
     });
-    $("rarities").innerHTML = html;
 }
 
-function rows() {
-    const list = data.petals.filter((p) => rarityFilter < 0 || petalRarity(p.id) === rarityFilter);
-    list.sort((a, b) => b[sortKey] - a[sortKey] || b.copies - a.copies || a.id - b.id);
-    return list;
-}
-
-function render() {
-    if (!data) return;
-    const totalCopies = data.petals.reduce((n, p) => n + p.copies, 0);
-    $("tiles").innerHTML =
-        tile("Saves counted", nf(data.saves), "var(--common)", "saved runs in the database") +
-        tile("Players", nf(data.players), "var(--unusual)", "accounts with at least one save") +
-        tile("Petals in saves", short(totalCopies), "var(--legendary)", "slots holding a petal") +
-        tile("Different petals", nf(data.petals.length) + " / " + (PETALS.length - 1), "var(--mythic)", "kinds that are in a save");
-
-    const list = rows();
-    const top = list.length ? list[0][sortKey] : 1;
-    const label = sortKey === "copies" ? "copies" : "saves";
-
-    // the podium
-    let pod = "";
-    list.slice(0, 3).forEach((p, i) => {
-        const r = petalRarity(p.id);
-        pod += '<div class="pod p' + (i + 1) + '" style="--c:' + RARITY_COLOR[r] + ';animation-delay:' + i * 90 + 'ms">' +
-            '<span class="medal">' + (i + 1) + "</span>" + petalSvg(p.id, "big") +
-            '<h3 class="outline">' + esc(petalName(p.id)) + '</h3><span class="tag">' + esc(RARITIES[r] || "") + "</span>" +
-            '<div class="num outline">' + nf(p[sortKey]) + " " + label + "</div>" +
-            '<div class="sub">' + nf(p.saves) + " saves hold it &middot; " + nf(p.copies) + " copies</div></div>";
-    });
-    $("podium").innerHTML = pod;
-
-    // the list: keep the elements, so that they can slide to their new places
-    const root = $("list");
-    const old = new Map();
-    root.querySelectorAll(".row").forEach((el) => old.set(el.dataset.id, el.getBoundingClientRect()));
-    const have = new Map();
-    root.querySelectorAll(".row").forEach((el) => have.set(el.dataset.id, el));
-    const shown = showAll ? list : list.slice(0, SHOWN);
-    const keep = new Set(shown.map((p) => String(p.id)));
-    have.forEach((el, id) => { if (!keep.has(id)) el.remove(); });
-    shown.forEach((p, i) => {
-        const id = String(p.id);
-        const r = petalRarity(p.id);
-        let el = have.get(id);
-        const value = p[sortKey];
-        const was = lastValue.get(p.id);
-        if (!el) {
-            el = document.createElement("div");
-            el.className = "row";
-            el.dataset.id = id;
-            el.style.setProperty("--c", RARITY_COLOR[r]);
-            el.style.animationDelay = Math.min(i, 12) * 30 + "ms";
-            el.innerHTML = '<span class="rk"></span>' + petalSvg(p.id, "ico") +
-                '<div class="info"><div class="top"><span class="nm">' + esc(petalName(p.id)) + '</span><small>' + esc(RARITIES[r] || "") + '</small><span class="val"></span></div>' +
-                '<div class="meter"><i></i></div><div class="more"><span></span><span></span></div></div>';
-        }
-        el.className = "row" + (i < 3 ? " r" + (i + 1) : "") + (was !== undefined && was !== value ? " flash" : "");
-        el.querySelector(".rk").textContent = i + 1;
-        el.querySelector(".val").textContent = short(value) + " " + label;
-        el.querySelector(".val").title = nf(value);
-        const more = el.querySelectorAll(".more span");
-        more[0].textContent = nf(p.saves) + " saves";
-        more[1].textContent = nf(p.copies) + " copies";
-        const share = 100 * value / (sortKey === "copies" ? Math.max(1, totalCopies) : Math.max(1, data.saves));
-        el.querySelector(".meter i").style.width = Math.max(2, 100 * value / top) + "%";
-        el.title = share.toFixed(share < 10 ? 1 : 0) + (sortKey === "copies" ? "% of all petals in saves" : "% of all saves");
-        lastValue.set(p.id, value);
-        root.appendChild(el);   // puts it in order
-    });
-    // slide from the old places
-    root.querySelectorAll(".row").forEach((el) => {
-        const was = old.get(el.dataset.id);
-        if (was && el.animate) {
-            const now = el.getBoundingClientRect();
-            const dx = was.left - now.left, dy = was.top - now.top;
-            if (dx || dy) el.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: 550, easing: "cubic-bezier(.2,.8,.2,1)" });
-        }
-        if (!old.has(el.dataset.id)) return;
-        el.style.animation = "none";
-        if (el.classList.contains("flash")) { void el.offsetWidth; el.style.animation = ""; }
-    });
-    // the bars grow from zero the first time
-    requestAnimationFrame(() => root.querySelectorAll(".row .meter i").forEach((i) => { if (i.dataset.w) return; i.dataset.w = 1; }));
-
-    $("empty").style.display = list.length ? "none" : "block";
-    const all = $("all");
-    all.style.display = list.length > SHOWN ? "block" : "none";
-    all.textContent = showAll ? "Show the best " + SHOWN : "Show all " + list.length + " petals";
-
-    // petals nobody has saved
-    const seen = new Set(data.petals.map((p) => p.id));
-    const never = [];
-    for (let id = 1; id < PETALS.length; ++id) if (!seen.has(id) && (rarityFilter < 0 || petalRarity(id) === rarityFilter)) never.push(petalName(id));
-    $("unused").innerHTML = never.length ? "<b>In no save yet:</b> " + never.map(esc).join(", ") : "";
-}
-function tile(title, value, color, note) {
-    return '<div class="tile" style="--c:' + color + '"><span>' + esc(title) + "</span><b class=\"outline\">" + esc(value) + "</b><span>" + esc(note) + "</span></div>";
-}
-
-$("sorts").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-sort]"); if (!b) return;
-    sortKey = b.dataset.sort;
-    $("sorts").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === b));
-    render();
-});
-$("rarities").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-rarity]"); if (!b) return;
-    rarityFilter = +b.dataset.rarity;
-    $("rarities").querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c === b));
-    render();
-});
-$("all").addEventListener("click", () => { showAll = !showAll; render(); });
-
-// ------------------------------------------------------------- asking
-let inFlight = false, lastAsk = 0, lastGood = 0;
-
-async function ask() {
-    const now = Date.now();
-    if (inFlight || budgetState(now).mode !== "ok") return;
-    inFlight = true;
-    lastAsk = now;
-    spend();
+async function load() {
+    $("error").style.display = "none";
     try {
-        const res = await fetch(apiBase() + "/stats/gardn", { headers: { accept: "application/json" }, cache: "no-store" });
-        if (res.status === 429) { exhaust(); throw new Error("The server asks us to slow down."); }
-        if (!res.ok) throw new Error("The server answered " + res.status + ".");
-        const body = await res.json();
-        if (!body.ok || !Array.isArray(body.petals)) throw new Error("The statistics are not available.");
-        if (body.budget) {
-            budget.requests = body.budget.requests || budget.requests;
-            budget.window = body.budget.window_seconds || budget.window;
-            budget.pause = body.budget.pause_seconds || budget.pause;
+        if (!target && !targetName) {
+            $("sheet").innerHTML = '<section class="panel"><h2 class="outline">' + (isStatus ? "Log in to see your stats" : "Find a player") + "</h2><p>" +
+                (isStatus ? "Open the game page and log in, then come back here. Your page can be shared: it has your link in it."
+                          : "Type a username above, or open a link that ends in ?uuid=...") + "</p></section>";
+            return;
         }
-        data = body;
-        render();
-        lastGood = Date.now();
-        $("error").style.display = "none";
-    } catch (e) {
-        $("error").textContent = (e.message || String(e)) + (data ? " Showing the last numbers we got." : "");
-        $("error").style.display = "block";
-    } finally {
-        inFlight = false;
-        paint();
-    }
+        const p = await api("/profile?" + (target ? "uuid=" + encodeURIComponent(target) : "name=" + encodeURIComponent(targetName)));
+        target = p.uuid;
+        // a link that names the player by uuid can be shared as it is
+        if (!isStatus && qs.get("uuid") !== p.uuid) history.replaceState(null, "", "/stats?uuid=" + p.uuid);
+        render(p);
+    } catch (e) { $("sheet").innerHTML = ""; fail(e.message || String(e)); }
 }
 
-const clock = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
-
-function paint() {
-    const now = Date.now();
-    const st = budgetState(now);
-    const used = Math.min(st.b.count || 0, budget.requests);
-    $("budget").textContent = "Requests " + used + " / " + budget.requests;
-    $("meter").firstElementChild.style.width = (100 * used / budget.requests) + "%";
-    const dot = $("dot"), status = $("status"), btn = $("refresh");
-    if (st.mode === "pause") {
-        dot.className = "pause";
-        status.textContent = "Resting for " + clock(st.until - now) + ". The statistics come back on their own.";
-    } else if (st.mode === "spent") {
-        dot.className = "wait";
-        status.textContent = "All " + budget.requests + " requests of this window are used. Waiting " + clock(st.until - now) + " for the window to end, then a short rest.";
-    } else {
-        dot.className = document.hidden ? "wait" : "live";
-        const next = Math.max(0, REFRESH_SECONDS * 1000 - (now - lastAsk));
-        status.textContent = document.hidden ? "Paused while this tab is hidden."
-            : (lastGood ? "Live. Next update in " + Math.ceil(next / 1000) + " s" : "Loading...") +
-              " - window ends in " + clock(st.until - now);
-    }
-    btn.disabled = st.mode !== "ok" || inFlight || now - lastAsk < BUTTON_GAP_SECONDS * 1000;
+// ------------------------------------------------------------- search
+let timer = 0, seq = 0;
+async function search(immediate) {
+    const q = $("q").value.trim();
+    const list = $("results");
+    if (q.length < 1) { list.style.display = "none"; return; }
+    const mine = ++seq;
+    try {
+        const r = await api("/profile/search?q=" + encodeURIComponent(q));
+        if (mine !== seq) return;
+        list.innerHTML = r.results.length
+            ? r.results.map((x) => '<li><a href="/stats?uuid=' + x.uuid + '">' + esc(x.name) + "</a></li>").join("")
+            : '<li class="none">Nobody has a name that starts like that.</li>';
+        list.style.display = "block";
+        if (immediate && r.results.length === 1) location.href = "/stats?uuid=" + r.results[0].uuid;
+    } catch (e) { list.style.display = "none"; fail(e.message || String(e)); }
 }
-
-setInterval(() => {
-    const now = Date.now();
-    if (!document.hidden && budgetState(now).mode === "ok" && now - lastAsk >= REFRESH_SECONDS * 1000) ask();
-    paint();
-}, 1000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden) paint(); });
-$("refresh").addEventListener("click", () => ask());
+$("q").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => search(false), 450); });
+$("q").addEventListener("keydown", (e) => { if (e.key === "Enter") { clearTimeout(timer); search(true); } });
+$("go").addEventListener("click", () => search(true));
 
 (() => {
     const box = $("petals");
@@ -556,10 +307,7 @@ $("refresh").addEventListener("click", () => ask());
         box.appendChild(p);
     }
 })();
-
-buildChips();
-ask();
-paint();
+load();
 </script>
 </body>
 </html>
