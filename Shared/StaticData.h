@@ -323,10 +323,13 @@ extern uint16_t RR_NAZAR_RELOAD_TICKS[rr_rarity_id_max];
 extern float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max];
 
 // Snail run rewards. Players near the snail when it arrives each get, for every
-// reward petal, one a tier below the snail's rarity and a chance at the snail's
-// own tier. RR_SNAIL_NAZAR_CHANCE[snail rarity][nazar rarity] is the chance in
-// percent of a nazar of that rarity, rolled on its own
-#define RR_SNAIL_OWN_TIER_CHANCE 0.4f
+// reward petal, exactly one, and the rarity is rolled with
+// RR_SNAIL_REWARD_TIER_CHANCE[snail rarity][tiers below the snail]: percent for
+// the snail's own rarity, one below, two below and three below (never below
+// common). RR_SNAIL_NAZAR_CHANCE[snail rarity][nazar rarity] is the chance in
+// percent of a nazar of that rarity, rolled on its own.
+// Every snail below ancient has twice the health of the mob data.
+extern float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4];
 // A snail is at least epic and starts in the part of the map one rarity below its
 // own, which is closer to the hole: an epic one in r/R, a legendary in e/E, a
 // mythic in l/L, an exotic in m/M and an ancient in x/X (template difficulty

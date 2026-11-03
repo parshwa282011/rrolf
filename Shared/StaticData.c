@@ -317,6 +317,19 @@ float RR_SNAIL_NAZAR_CHANCE[rr_rarity_id_max][rr_rarity_id_max] = {
     {85,    50,   25,   10,    2.5f,   0.5f,  0.1f,  0}, // ancient: up to exotic
 };
 
+// percent. Columns: the snail's own rarity, one below, two below, three below.
+// A roll that lands below common (or the petal's lowest rarity) is common
+float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4] = {
+    {10, 70, 20, 0},    // common (a snail is at least epic)
+    {10, 70, 20, 0},    // unusual
+    {10, 70, 20, 0},    // rare
+    {10, 70, 20, 0},    // epic
+    {10, 70, 20, 0},    // legendary
+    {10, 70, 20, 0},    // mythic
+    {0.5f, 14.5f, 70, 15}, // exotic
+    {0.5f, 14.5f, 70, 15}, // ancient
+};
+
 struct rr_ant_hole_rarity_scale RR_ANT_HOLE_RARITY_SCALING[rr_rarity_id_max] = {
 //   size_tier  workers  baby_ants  eggs  digger_first  digger_second
     {0,          6,       6,         4,    0.25f,        0.00f}, // common

@@ -78,8 +78,8 @@ static char *percent_text(float pct)
 }
 
 // What a snail that gets home gives the players near it, see reward_players in
-// Server/Snail.c: nazars by the table, and for shell and mint one a tier below
-// for sure and the snail's own tier sometimes. A snail has no loot[] of its own
+// Server/Snail.c: nazars by the table, and for shell and mint exactly one, its
+// rarity rolled from RR_SNAIL_REWARD_TIER_CHANCE. A snail has no loot[] of its own
 static void add_snail_drops(struct rr_ui_element *this, uint8_t rarity)
 {
     rr_ui_container_add_element(
@@ -117,10 +117,18 @@ static void add_snail_drops(struct rr_ui_element *this, uint8_t rarity)
             float pct = 0;
             if (petal == rr_petal_id_nazar)
                 pct = RR_SNAIL_NAZAR_CHANCE[rarity][r];
-            else if (r + 1 == rarity && r >= min)
-                pct = 100;
-            else if (r == rarity && r >= min)
-                pct = 100 * RR_SNAIL_OWN_TIER_CHANCE;
+            else
+            {
+                // a roll below the petal's lowest rarity gives the lowest
+                for (uint8_t below = 0; below < 4; ++below)
+                {
+                    int given = (int)rarity - below;
+                    if (given < min)
+                        given = min;
+                    if (given == r)
+                        pct += RR_SNAIL_REWARD_TIER_CHANCE[rarity][below];
+                }
+            }
             if (pct <= 0)
                 continue;
             rr_ui_container_add_element(

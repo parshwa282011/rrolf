@@ -268,6 +268,14 @@ static void start_run(struct rr_server *this, struct rr_snail_run *r,
                                           rr_mob_id_snail, rarity,
                                           rr_simulation_team_id_players);
     rr_simulation_get_mob(&this->simulation, e)->no_drop = 1;
+    if (rarity < rr_rarity_id_ancient)
+    {
+        // every snail below ancient has twice the health
+        struct rr_component_health *health =
+            rr_simulation_get_health(&this->simulation, e);
+        rr_component_health_set_max_health(health, health->max_health * 2);
+        rr_component_health_set_health(health, health->max_health);
+    }
     r->snail_id = e;
     r->snail = rr_simulation_get_entity_hash(&this->simulation, e);
     r->snail_x = x;
@@ -307,16 +315,26 @@ static void give(struct rr_component_player_info *player_info, uint8_t id,
     ++player_info->drops_this_tick_size;
 }
 
-// one a tier below the snail always, and the snail's own tier sometimes. Not
-// below the lowest rarity the petal exists at
+// exactly one, its rarity rolled from RR_SNAIL_REWARD_TIER_CHANCE. Not below the
+// lowest rarity the petal exists at
 static void give_reward_petal(struct rr_component_player_info *player_info,
                               uint8_t id, uint8_t rarity)
 {
-    uint8_t min = RR_PETAL_DATA[id].min_rarity;
-    if (rarity >= 1 && rarity - 1 >= min)
-        give(player_info, id, rarity - 1);
-    if (rarity >= min && rr_frand() < RR_SNAIL_OWN_TIER_CHANCE)
-        give(player_info, id, rarity);
+    float roll = rr_frand() * 100;
+    uint8_t below = 3;
+    for (uint8_t i = 0; i < 4; ++i)
+    {
+        roll -= RR_SNAIL_REWARD_TIER_CHANCE[rarity][i];
+        if (roll < 0)
+        {
+            below = i;
+            break;
+        }
+    }
+    int given = rarity - below;
+    if (given < (int)RR_PETAL_DATA[id].min_rarity)
+        given = RR_PETAL_DATA[id].min_rarity;
+    give(player_info, id, (uint8_t)given);
 }
 
 static uint8_t reward_players(struct rr_server *this, struct rr_snail_run *r)
