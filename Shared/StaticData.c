@@ -933,7 +933,7 @@ struct rr_biome_server RR_BIOME_SERVERS[rr_biome_id_max] = {
     {"pvp",       1235,          "pvp"}, // pvp
     {"garden",    1236,           "ga"}, // garden
     {NULL,           0,           NULL}, // beehive, lives inside other arenas
-    {"ctf",       1237,          "ctf"}, // capture the flag
+    {"minigames", 1237,         "mini"}, // minigames: capture the flag, team deathmatch, hide and seek
     {NULL,           0,           NULL}, // ant hole, lives inside other arenas
 };
 

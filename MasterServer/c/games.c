@@ -702,7 +702,7 @@ static void on_account_request(struct ms_gconn *c, struct ms_reader *r)
 
 // ------------------------------------- chat and squads shared between servers
 
-// "rrolf-ctf" is shown as "ctf"
+// "rrolf-minigames" is shown as "minigames"
 static char const *server_label(struct ms_gconn const *c)
 {
     char const *n = c->name[0] ? c->name : c->alias;

@@ -118,7 +118,13 @@ if(GARDEN)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DGARDEN")
 endif()
 
-# capture the flag minigame. It reuses everything the pvp build does (teams per
+# the minigames server (-DMINIGAMES=1): capture the flag, team deathmatch, hide and
+# seek. The code still calls it CTF
+if(MINIGAMES)
+    set(CTF ON)
+endif()
+
+# the minigames. They reuse everything the pvp build does (teams per
 # squad, who can see whom, kill drops), so it turns that on too
 if(CTF)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCTF -DPVP")

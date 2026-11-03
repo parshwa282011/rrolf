@@ -1,3 +1,25 @@
+# Minigames (capture the flag, team deathmatch, hide and seek)
+
+The server is built with `-DMINIGAMES=1` (`rrolf-minigames`, port 1237, `mini-game.parshwa.blog`). Players join with
+their **real account** and see their normal loadout. Nothing a match does is saved. What a match gives, and what it
+needs, depends on the mode the host picks in the host panel (flag button, top left):
+
+* **Capture the flag**: below. Level 30, 5 Epic Basic and 1 Epic Azalea, craftable.
+* **Team deathmatch**: 2 to 4 squads, linked like CTF. The petals and the level of the account, fixed for the match
+  (the loadout can't be changed). No mobs. Nobody respawns: a dead player stays dead until a squad mate seeds them
+  (only squad mates can: the flowers of a squad are one team). **Continue** on the death screen only works when the
+  whole team is dead; **Forfeit** leaves at once. The last team with someone alive wins.
+* **Hide and seek**: the host's squad (up to 5) seeks, everybody else on the server hides. The seekers have 7 slots
+  (five Ancient Stingers, a Legendary Feather, a Legendary Third Eye) and wait 5 minutes while the hiders hide; then they
+  get 10 minutes to find everyone. A hider has a Bubble that comes back every 60 s and nothing else. A hider who is
+  killed (or leaves) is out and can't enter again. The seekers win when every hider is out, the hiders who are alive
+  after 10 minutes win. The host's squad is the only one that has to be linked.
+
+The host can type a **PIN** (optional). A match started with the PIN set in `MINIGAMES_PIN` of the master counts for
+the accounts: played, won and lost, shown on `/stats?uuid=...`. Without it, or with a wrong one, nothing is counted.
+
+Maps: the map of the match is the one compiled in (`Shared/CtfMap.inc`). Uploading a map as JSON is not built yet.
+
 # Capture the flag
 
 A minigame on its own server (`-DCTF`, port 1237, `ctf-game.parshwa.blog`). Nothing is saved: everyone
