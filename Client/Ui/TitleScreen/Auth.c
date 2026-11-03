@@ -33,8 +33,6 @@
 #define GREEN 0xff3aa84a
 #define GREY 0xff666666
 
-#define UNAVAILABLE_NOTE_1 "Google, Apple and email are unavailable right now:"
-#define UNAVAILABLE_NOTE_2 "the email service is not working."
 
 static uint8_t overlay_visible(struct rr_ui_element *this, struct rr_game *game)
 {
@@ -101,14 +99,6 @@ static struct rr_ui_element *message_lines()
         rr_ui_container_init(), 0, 2,
         rr_ui_dynamic_text_init(14, 0xffffe066, message_line_1),
         rr_ui_dynamic_text_init(14, 0xffffe066, message_line_2), NULL);
-}
-
-static struct rr_ui_element *unavailable_note()
-{
-    return rr_ui_v_container_init(
-        rr_ui_container_init(), 0, 2,
-        rr_ui_text_init(UNAVAILABLE_NOTE_1, 12, 0xffcccccc),
-        rr_ui_text_init(UNAVAILABLE_NOTE_2, 12, 0xffcccccc), NULL);
 }
 
 // --------------------------------------------------------------- widgets
@@ -180,11 +170,22 @@ static void on_discord(struct rr_ui_element *this, struct rr_game *game)
         rr_auth_discord(game);
 }
 
-static void on_unavailable(struct rr_ui_element *this, struct rr_game *game)
+static void on_google(struct rr_ui_element *this, struct rr_game *game)
 {
     if (clicked(game))
-        snprintf(game->auth.message, sizeof game->auth.message, "%s",
-                 "Unavailable: the email service is not working right now");
+        rr_auth_google(game);
+}
+
+static void on_apple(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (clicked(game))
+        rr_auth_apple(game);
+}
+
+static void on_reset_send_email(struct rr_ui_element *this, struct rr_game *game)
+{
+    if (clicked(game))
+        rr_auth_reset_send_email(game);
 }
 
 static void on_reset_start(struct rr_ui_element *this, struct rr_game *game)
@@ -225,7 +226,7 @@ static void code_status_text(struct rr_ui_element *this, struct rr_game *game)
     struct rr_ui_dynamic_text_metadata *data = this->data;
     static char buffer[64];
     snprintf(buffer, sizeof buffer, "%s",
-             game->auth.reset_code_sent ? "Code sent on Discord"
+             game->auth.reset_code_sent ? "Code sent, check Discord or your email"
              : game->auth.reset_discord_available
                  ? "Send the code to your Discord"
                  : "Discord is not linked to this account");
@@ -238,9 +239,8 @@ static struct rr_ui_element *social_row()
     return rr_ui_h_container_init(
         rr_ui_container_init(), 0, 8,
         button("Discord", DISCORD_BLUE, on_discord),
-        button("Google", GREY, on_unavailable),
-        button("Apple", GREY, on_unavailable),
-        button("Email", GREY, on_unavailable), NULL);
+        button("Google", 0xffdb4437, on_google),
+        button("Apple", 0xff222222, on_apple), NULL);
 }
 
 // ---------------------------------------------------------------- screens
@@ -267,7 +267,7 @@ static struct rr_ui_element *login_panel(struct rr_game *game)
                                button("Forgot password", GREY, on_forgot),
                                NULL),
         rr_ui_dynamic_text_init(13, 0xffcccccc, social_row_text),
-        social_row(), unavailable_note(), message_lines(), NULL));
+        social_row(), message_lines(), NULL));
 }
 
 static struct rr_ui_element *signup_panel(struct rr_game *game)
@@ -284,7 +284,7 @@ static struct rr_ui_element *signup_panel(struct rr_game *game)
                                button("Create account", GREEN, on_create_account),
                                button("Back", GREY, on_login_screen), NULL),
         rr_ui_dynamic_text_init(13, 0xffcccccc, social_row_text), social_row(),
-        unavailable_note(), message_lines(), NULL));
+        message_lines(), NULL));
 }
 
 static struct rr_ui_element *reset_identify_panel(struct rr_game *game)
@@ -305,14 +305,14 @@ static struct rr_ui_element *reset_code_panel(struct rr_game *game)
     return panel(rr_ui_v_container_init(
         rr_ui_container_init(), 10, 8,
         rr_ui_text_init("Reset your password", 24, 0xffffffff),
-        rr_ui_text_init("Where should we send your code?", 15, 0xffffffff),
+        rr_ui_text_init("Where should we send your code? Pick one.", 15, 0xffffffff),
         rr_ui_h_container_init(rr_ui_container_init(), 0, 8,
                                button("Discord", DISCORD_BLUE, on_reset_send),
-                               button("Email", GREY, on_unavailable),
-                               button("Google", GREY, on_unavailable),
-                               button("Apple", GREY, on_unavailable), NULL),
+                               NULL),
         rr_ui_dynamic_text_init(13, 0xffcccccc, code_status_text),
-        unavailable_note(),
+        field("Or the email of the account", game->auth.email, 254,
+              "auth_reset_email", 0),
+        button("Send to email", GREY, on_reset_send_email),
         field("Code", game->auth.otp, 12, "auth_otp", 0),
         field("New password", game->auth.new_password, 128, "auth_new_password",
               1),

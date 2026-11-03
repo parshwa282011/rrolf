@@ -65,9 +65,13 @@ void rr_auth_start(struct rr_game *);
 void rr_auth_login(struct rr_game *);
 void rr_auth_signup(struct rr_game *);
 void rr_auth_discord(struct rr_game *);
+void rr_auth_google(struct rr_game *);
+void rr_auth_apple(struct rr_game *);
 void rr_auth_link_discord(struct rr_game *);
 void rr_auth_reset_start(struct rr_game *);
 void rr_auth_reset_send(struct rr_game *);
+// the code goes to the address typed in auth.email, if it is the account's
+void rr_auth_reset_send_email(struct rr_game *);
 void rr_auth_reset_confirm(struct rr_game *);
 void rr_auth_complete_profile(struct rr_game *);
 void rr_auth_logout(struct rr_game *);

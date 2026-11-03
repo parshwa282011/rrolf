@@ -34,13 +34,20 @@
 #include "tmpstore.h"
 #include "util.h"
 
+// The phone apps (phones/) sign in in the system's browser, which cannot hand
+// the page a login: for them the browser is sent back to rysteria://oauth, the
+// app catches that and loads the game with the same #oauth_code. Set per request
+static __thread int app_redirect = 0;
+#define APP_URL "rysteria://oauth"
+
 static void redirect_client(struct ms_res *res, char const *key,
                             char const *value)
 {
     char encoded[512];
     ms_url_encode(encoded, sizeof encoded, value);
     char url[768];
-    snprintf(url, sizeof url, "%s#%s=%s", MS_CONFIG.client_url, key, encoded);
+    snprintf(url, sizeof url, "%s#%s=%s",
+             app_redirect ? APP_URL : MS_CONFIG.client_url, key, encoded);
     ms_res_redirect(res, url);
 }
 
@@ -100,6 +107,10 @@ static void start_for(struct provider const *P, struct ms_req *req,
     memset(&state, 0, sizeof state);
     state.kind = ms_tmp_oauth_state;
     ms_strlcpy(state.s1, "login", sizeof state.s1);
+    char app[8];
+    // ?app=1: the phone app asks, the answer goes back to the app
+    if (ms_query_arg(req->query, "app", app, sizeof app) && strcmp(app, "1") == 0)
+        ms_strlcpy(state.s2, "app", sizeof state.s2);
     char url[1024];
     if (ms_tmp_create(&state, 600) != 0 ||
         P->authorize_url(state.id, url, sizeof url) != 0)
@@ -150,6 +161,7 @@ static void link_start_for(struct provider const *P, struct ms_req *req,
 static void callback_for(struct provider const *P, char const *args,
                          struct ms_res *res)
 {
+    app_redirect = 0;
     if (MS_CONFIG.client_url[0] == 0)
     {
         ms_res_error(res, 503, "provider_unavailable", NULL);
@@ -173,6 +185,7 @@ static void callback_for(struct provider const *P, char const *args,
         redirect_client(res, "oauth_error", "expired");
         return;
     }
+    app_redirect = strcmp(state.s2, "app") == 0;
     struct ms_discord_user user;
     if (!P->enabled() || P->exchange(code, &user) != 0)
     {

@@ -290,7 +290,7 @@ void rr_auth_on_response(int kind, int status, char *error, char *message,
         if (ok)
         {
             game->auth.reset_code_sent = 1;
-            set_message(game, "Code sent. Check your Discord messages.");
+            set_message(game, "Code sent. It comes by Discord message or email and lives 10 minutes; a new one can be asked for after a minute.");
         }
         else
             set_message(game, describe_error(error, message));
@@ -383,8 +383,8 @@ void rr_auth_start(struct rr_game *game)
     rr_auth_show(game, rr_auth_screen_login);
     if (returned == 2)
         set_message(game, strcmp(problem, "unavailable") == 0
-                              ? "Discord sign-in is not set up on this server"
-                              : "Discord sign-in did not work, try again");
+                              ? "That sign-in is not set up on this server"
+                              : "Sign-in did not work, try again");
 #else
     // native debug build: no browser, no accounts
     finish_login(game, "00000000-0000-4000-8000-000000000000", "native", "");
@@ -458,6 +458,22 @@ void rr_auth_discord(struct rr_game *game)
 #endif
 }
 
+void rr_auth_google(struct rr_game *game)
+{
+#ifdef EMSCRIPTEN
+    EM_ASM({ window.location.href = UTF8ToString($0) + "oauth/google/start"; },
+           RR_BASE_API_URL);
+#endif
+}
+
+void rr_auth_apple(struct rr_game *game)
+{
+#ifdef EMSCRIPTEN
+    EM_ASM({ window.location.href = UTF8ToString($0) + "oauth/apple/start"; },
+           RR_BASE_API_URL);
+#endif
+}
+
 void rr_auth_link_discord(struct rr_game *game)
 {
 #ifdef EMSCRIPTEN
@@ -510,6 +526,23 @@ void rr_auth_reset_send(struct rr_game *game)
     json_escape(id, sizeof id, game->auth.reset_id);
     snprintf(body, sizeof body, "{\"reset_id\":\"%s\",\"method\":\"discord\"}",
              id);
+    request(kind_reset_send, "auth/reset/send", body);
+}
+
+void rr_auth_reset_send_email(struct rr_game *game)
+{
+    if (game->auth.email[0] == 0)
+    {
+        set_message(game, "Type the email address of the account");
+        return;
+    }
+    REQUIRE_IDLE(game)
+    char id[200], mail[600], body[900];
+    json_escape(id, sizeof id, game->auth.reset_id);
+    json_escape(mail, sizeof mail, game->auth.email);
+    snprintf(body, sizeof body,
+             "{\"reset_id\":\"%s\",\"method\":\"email\",\"email\":\"%s\"}", id,
+             mail);
     request(kind_reset_send, "auth/reset/send", body);
 }
 
