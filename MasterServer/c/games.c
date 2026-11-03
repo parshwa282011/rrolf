@@ -918,6 +918,55 @@ static void restart_jobs_tick(int64_t now_ms)
     }
 }
 
+// op 9: the end of a minigame match. mode\0 pin\0 count:u8, then per player
+// uuid\0 won:u8. Counted for the leaderboards only with the right PIN.
+struct mg_result
+{
+    char mode[8];
+    char pin[64];
+    int count;
+    char uuids[64][MS_UUID_SIZE];
+    uint8_t won[64];
+};
+
+static void mg_result_run(void *arg)
+{
+    struct mg_result *m = arg;
+    if (ms_lb_minigame_result(m->mode, m->pin, m->count,
+                              (char const(*)[MS_UUID_SIZE])m->uuids, m->won) ==
+        0)
+        ms_log("minigames", "%s result counted for %d players", m->mode,
+               m->count);
+    else
+        ms_log("minigames", "%s result not counted (no PIN, wrong PIN or error)",
+               m->mode);
+}
+
+static void mg_result_done(void *arg) { free(arg); }
+
+static void on_minigame_result(struct ms_reader *r)
+{
+    struct mg_result *m = calloc(1, sizeof *m);
+    if (m == NULL)
+        return;
+    ms_reader_string(r, m->mode, sizeof m->mode);
+    ms_reader_string(r, m->pin, sizeof m->pin);
+    uint8_t count = ms_reader_u8(r);
+    for (uint8_t i = 0; i < count && i < 64 && !r->error; ++i)
+    {
+        ms_reader_string(r, m->uuids[i], sizeof m->uuids[i]);
+        m->won[i] = ms_reader_u8(r) != 0;
+        if (!r->error)
+            m->count = i + 1;
+    }
+    if (r->error || m->count == 0)
+    {
+        free(m);
+        return;
+    }
+    ms_jobs_submit(mg_result_run, mg_result_done, m);
+}
+
 static void handle_message(struct ms_gconn *c, uint8_t const *data, size_t len)
 {
     struct ms_reader r;
@@ -944,6 +993,9 @@ static void handle_message(struct ms_gconn *c, uint8_t const *data, size_t len)
         break;
     case 8: // the server is shutting down on purpose: do not restart it
         c->intentional = 1;
+        break;
+    case 9:
+        on_minigame_result(&r);
         break;
     case 101: // server id: the name the server was started with
     {

@@ -30,10 +30,6 @@
 #define RARITY_ANCIENT 7
 
 #define TOP_SIZE 10
-// what the page may ask for, told to it in every answer
-#define BUDGET_REQUESTS 60
-#define BUDGET_WINDOW_SECONDS 600
-#define BUDGET_PAUSE_SECONDS 180
 // the top lists are shared by everybody for this long
 #define CACHE_MS 8000
 
@@ -67,7 +63,23 @@ static struct board const BOARDS[] = {
      "Best score of a gardn save"},
     {"gardn_mythics", "gardn", "Mythics in saves", "", "int",
      "Mythic petals in all saves"},
+    // minigames (MS_LB_MG_WINS + mode, MS_LB_MG_PLAYED + mode), only counted
+    // for matches that were started with the PIN
+    {"mg_ctf_wins", "rysteria", "CTF wins", "", "int",
+     "Capture the flag matches won"},
+    {"mg_tdm_wins", "rysteria", "TDM wins", "", "int",
+     "Team deathmatch matches won"},
+    {"mg_has_wins", "rysteria", "Hide and seek wins", "", "int",
+     "Hide and seek matches won"},
+    // not listed on the page, the profile shows them as "won x, lost y"
+    {"mg_ctf_played", "hidden", "CTF played", "", "int", ""},
+    {"mg_tdm_played", "hidden", "TDM played", "", "int", ""},
+    {"mg_has_played", "hidden", "Hide and seek played", "", "int", ""},
 };
+#define MS_LB_MG_WINS 10
+#define MS_LB_MG_PLAYED 13
+static char const *const MG_MODES[3] = {"ctf", "tdm", "has"};
+static char const *const GAME_IDS[2] = {"rysteria", "gardn"};
 #define BOARD_COUNT ((int)(sizeof BOARDS / sizeof *BOARDS))
 
 // ------------------------------------------------------------------ numbers
@@ -318,6 +330,11 @@ static int cache_refresh()
     for (int b = 0; b < BOARD_COUNT; ++b)
     {
         memset(fresh[b], 0, sizeof fresh[b]);
+        if (strcmp(BOARDS[b].game, "hidden") == 0)
+        {
+            counts[b] = 0;
+            continue;
+        }
         counts[b] = MS_DB->lb_top(MS_DB, BOARDS[b].id, TOP_SIZE, fresh[b]);
         if (counts[b] < 0)
         {
@@ -343,8 +360,8 @@ static char const *name_of(char const *extra_json, char *out, size_t size)
     return out;
 }
 
-// GET /leaderboard?me=<uuid>
-// Everything in one answer: both games, every board, the best ten of each and
+// GET /leaderboard?game=rysteria|gardn&me=<uuid>
+// Every board of the game (both games without `game`), the best ten of each and
 // (when `me` is given) where that player stands. uuids of others are never sent.
 void ms_h_leaderboard(struct ms_req *req, struct ms_res *res)
 {
@@ -353,9 +370,10 @@ void ms_h_leaderboard(struct ms_req *req, struct ms_res *res)
         ms_res_error(res, 503, "unavailable", NULL);
         return;
     }
-    char me[64] = "";
+    char me[64] = "", only[16] = "";
     if (ms_query_arg(req->query, "me", me, sizeof me) && !ms_uuid_valid(me))
         me[0] = 0;
+    ms_query_arg(req->query, "game", only, sizeof only);
 
     cJSON *root = cJSON_CreateObject();
     pthread_mutex_lock(&cache.lock);
@@ -368,43 +386,40 @@ void ms_h_leaderboard(struct ms_req *req, struct ms_res *res)
     }
     cJSON_AddBoolToObject(root, "ok", 1);
     cJSON_AddNumberToObject(root, "generated", (double)(cache.at_ms / 1000));
-    cJSON *budget = cJSON_AddObjectToObject(root, "budget");
-    cJSON_AddNumberToObject(budget, "requests", BUDGET_REQUESTS);
-    cJSON_AddNumberToObject(budget, "window_seconds", BUDGET_WINDOW_SECONDS);
-    cJSON_AddNumberToObject(budget, "pause_seconds", BUDGET_PAUSE_SECONDS);
     cJSON *games = cJSON_AddArrayToObject(root, "games");
-    cJSON *game = NULL;
-    char const *game_id = "";
-    for (int b = 0; b < BOARD_COUNT; ++b)
+    for (size_t g = 0; g < sizeof GAME_IDS / sizeof *GAME_IDS; ++g)
     {
-        if (game == NULL || strcmp(game_id, BOARDS[b].game) != 0)
+        if (only[0] && strcmp(only, GAME_IDS[g]) != 0)
+            continue;
+        cJSON *game = cJSON_CreateObject();
+        cJSON_AddStringToObject(game, "id", GAME_IDS[g]);
+        cJSON *boards = cJSON_AddArrayToObject(game, "boards");
+        cJSON_AddItemToArray(games, game);
+        for (int b = 0; b < BOARD_COUNT; ++b)
         {
-            game = cJSON_CreateObject();
-            game_id = BOARDS[b].game;
-            cJSON_AddStringToObject(game, "id", game_id);
-            cJSON_AddArrayToObject(game, "boards");
-            cJSON_AddItemToArray(games, game);
+            if (strcmp(BOARDS[b].game, GAME_IDS[g]) != 0)
+                continue;
+            cJSON *board = cJSON_CreateObject();
+            cJSON_AddStringToObject(board, "id", BOARDS[b].id);
+            cJSON_AddStringToObject(board, "title", BOARDS[b].title);
+            cJSON_AddStringToObject(board, "note", BOARDS[b].note);
+            cJSON_AddStringToObject(board, "format", BOARDS[b].format);
+            cJSON *entries = cJSON_AddArrayToObject(board, "entries");
+            for (int i = 0; i < cache.count[b]; ++i)
+            {
+                struct ms_db_lb_entry const *e = &cache.top[b][i];
+                char name[65];
+                cJSON *row = cJSON_CreateObject();
+                cJSON_AddNumberToObject(row, "rank", i + 1);
+                cJSON_AddStringToObject(row, "name",
+                                        name_of(e->extra, name, sizeof name));
+                cJSON_AddNumberToObject(row, "score", e->score);
+                if (me[0] && strcmp(e->uuid, me) == 0)
+                    cJSON_AddBoolToObject(row, "me", 1);
+                cJSON_AddItemToArray(entries, row);
+            }
+            cJSON_AddItemToArray(boards, board);
         }
-        cJSON *board = cJSON_CreateObject();
-        cJSON_AddStringToObject(board, "id", BOARDS[b].id);
-        cJSON_AddStringToObject(board, "title", BOARDS[b].title);
-        cJSON_AddStringToObject(board, "note", BOARDS[b].note);
-        cJSON_AddStringToObject(board, "format", BOARDS[b].format);
-        cJSON *entries = cJSON_AddArrayToObject(board, "entries");
-        for (int i = 0; i < cache.count[b]; ++i)
-        {
-            struct ms_db_lb_entry const *e = &cache.top[b][i];
-            char name[65];
-            cJSON *row = cJSON_CreateObject();
-            cJSON_AddNumberToObject(row, "rank", i + 1);
-            cJSON_AddStringToObject(row, "name",
-                                    name_of(e->extra, name, sizeof name));
-            cJSON_AddNumberToObject(row, "score", e->score);
-            if (me[0] && strcmp(e->uuid, me) == 0)
-                cJSON_AddBoolToObject(row, "me", 1);
-            cJSON_AddItemToArray(entries, row);
-        }
-        cJSON_AddItemToArray(cJSON_GetObjectItem(game, "boards"), board);
     }
     pthread_mutex_unlock(&cache.lock);
 
@@ -412,26 +427,211 @@ void ms_h_leaderboard(struct ms_req *req, struct ms_res *res)
     if (me[0])
     {
         cJSON *game_it;
-        int b = 0;
         cJSON_ArrayForEach(game_it, games)
         {
             cJSON *board;
             cJSON_ArrayForEach(board, cJSON_GetObjectItem(game_it, "boards"))
             {
+                char const *id = ms_json_str(board, "id");
                 double score = 0;
                 int64_t rank = 0;
-                if (MS_DB->lb_rank(MS_DB, BOARDS[b].id, me, &score, &rank) ==
-                    MS_DB_OK)
+                if (id != NULL &&
+                    MS_DB->lb_rank(MS_DB, id, me, &score, &rank) == MS_DB_OK)
                 {
                     cJSON *mine = cJSON_AddObjectToObject(board, "me");
                     cJSON_AddNumberToObject(mine, "rank", (double)rank);
                     cJSON_AddNumberToObject(mine, "score", score);
                 }
-                ++b;
             }
         }
     }
     ms_res_json(res, 200, root);
+}
+
+// ----------------------------------------------------------------- profiles
+
+static double board_score(int board, char const *uuid, int64_t *rank)
+{
+    double score = 0;
+    int64_t r = 0;
+    if (MS_DB->lb_rank(MS_DB, BOARDS[board].id, uuid, &score, &r) != MS_DB_OK)
+        score = r = 0;
+    if (rank != NULL)
+        *rank = r;
+    return score;
+}
+
+// GET /profile?uuid=<uuid> or ?name=<username>
+// What anybody may see of an account: name, level, the numbers of the
+// leaderboards with the place on each, the loadout and the minigames record.
+// No email, no links, no tokens. The stats page links to it by uuid.
+void ms_h_profile(struct ms_req *req, struct ms_res *res)
+{
+    char uuid[64], name[80];
+    int have_uuid = ms_query_arg(req->query, "uuid", uuid, sizeof uuid) && uuid[0];
+    int have_name = ms_query_arg(req->query, "name", name, sizeof name) && name[0];
+    struct ms_db_account a;
+    int rc;
+    if (have_uuid && ms_uuid_valid(uuid))
+        rc = MS_DB->account_get(MS_DB, ms_db_by_uuid, uuid, NULL, &a);
+    else if (have_name && !have_uuid)
+    {
+        char lower[80];
+        ms_str_lower(lower, name, sizeof lower);
+        rc = MS_DB->account_get(MS_DB, ms_db_by_username, lower, NULL, &a);
+    }
+    else
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        return;
+    }
+    if (rc == MS_DB_ERROR)
+    {
+        ms_res_error(res, 500, "server_error", NULL);
+        return;
+    }
+    if (rc != MS_DB_OK || a.is_dev)
+    {
+        ms_res_error(res, 404, "not_found", NULL);
+        return;
+    }
+
+    struct ms_db_rysteria rys;
+    ms_db_rysteria_init(&rys);
+    int have_rys = MS_DB->rysteria_get(MS_DB, a.uuid, &rys) == MS_DB_OK;
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "ok", 1);
+    cJSON_AddStringToObject(root, "uuid", a.uuid);
+    cJSON_AddStringToObject(root, "name", a.username);
+    cJSON_AddNumberToObject(root, "created", (double)a.created_at);
+    cJSON_AddNumberToObject(root, "level",
+                            have_rys ? floor(level_score(rys.xp)) : 1);
+    if (have_rys && rys.nickname[0])
+        cJSON_AddStringToObject(root, "nickname", rys.nickname);
+
+    // the Rysteria boards, in the order of the leaderboard page
+    cJSON *stats = cJSON_AddArrayToObject(root, "stats");
+    for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
+    {
+        int64_t rank;
+        double score = board_score(b, a.uuid, &rank);
+        cJSON *row = cJSON_CreateObject();
+        cJSON_AddStringToObject(row, "id", BOARDS[b].id);
+        cJSON_AddStringToObject(row, "title", BOARDS[b].title);
+        cJSON_AddStringToObject(row, "format", BOARDS[b].format);
+        cJSON_AddNumberToObject(row, "score", score);
+        if (rank > 0)
+            cJSON_AddNumberToObject(row, "rank", (double)rank);
+        cJSON_AddItemToArray(stats, row);
+    }
+    cJSON_AddNumberToObject(root, "pvp_best",
+                            board_score(2, a.uuid, NULL));
+
+    // the minigames: won, played, lost and the percentage of wins
+    cJSON *mg = cJSON_AddObjectToObject(root, "minigames");
+    for (int m = 0; m < 3; ++m)
+    {
+        int64_t rank;
+        double wins = board_score(MS_LB_MG_WINS + m, a.uuid, &rank);
+        double played = board_score(MS_LB_MG_PLAYED + m, a.uuid, NULL);
+        if (played < wins)
+            played = wins;
+        cJSON *o = cJSON_AddObjectToObject(mg, MG_MODES[m]);
+        cJSON_AddNumberToObject(o, "wins", wins);
+        cJSON_AddNumberToObject(o, "played", played);
+        cJSON_AddNumberToObject(o, "lost", played - wins);
+        cJSON_AddNumberToObject(o, "win_percent",
+                                played > 0 ? floor(1000 * wins / played) / 10 : 0);
+        if (rank > 0)
+            cJSON_AddNumberToObject(o, "rank", (double)rank);
+    }
+
+    // the loadout as the account holds it: {"slot": [petal id, rarity]}
+    cJSON *loadout = have_rys && rys.loadout ? cJSON_Parse(rys.loadout) : NULL;
+    cJSON_AddItemToObject(root, "loadout",
+                          loadout != NULL ? loadout : cJSON_CreateObject());
+    ms_db_rysteria_free(&rys);
+    ms_res_json(res, 200, root);
+}
+
+// GET /profile/search?q=<start of a username>
+// Up to ten usernames that start with it, to find somebody's stats page.
+void ms_h_profile_search(struct ms_req *req, struct ms_res *res)
+{
+    char q[80], lower[80], clean[80];
+    if (!ms_query_arg(req->query, "q", q, sizeof q) || q[0] == 0 ||
+        strlen(q) > 64)
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        return;
+    }
+    ms_str_lower(lower, q, sizeof lower);
+    // usernames hold letters, digits and _ . - and spaces only
+    size_t o = 0;
+    for (char const *c = lower; *c; ++c)
+        if ((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '_' ||
+            *c == '.' || *c == '-' || *c == ' ')
+            clean[o++] = *c;
+    clean[o] = 0;
+    if (o == 0 || MS_DB->account_search == NULL)
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        return;
+    }
+    struct ms_db_account_ref found[10];
+    int n = MS_DB->account_search(MS_DB, clean, 10, found);
+    if (n < 0)
+    {
+        ms_res_error(res, 500, "server_error", NULL);
+        return;
+    }
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "ok", 1);
+    cJSON *list = cJSON_AddArrayToObject(root, "results");
+    for (int i = 0; i < n; ++i)
+    {
+        cJSON *row = cJSON_CreateObject();
+        cJSON_AddStringToObject(row, "uuid", found[i].uuid);
+        cJSON_AddStringToObject(row, "name", found[i].username);
+        cJSON_AddItemToArray(list, row);
+    }
+    ms_res_json(res, 200, root);
+}
+
+// ---------------------------------------------------------- minigame results
+
+// The minigames server sends the end of a match (games.c, op 9). It only counts
+// when the match was started with the PIN (MINIGAMES_PIN of the master); a wrong
+// or missing PIN changes nothing. Any thread (it reads the database).
+int ms_lb_minigame_result(char const *mode, char const *pin, int count,
+                          char const (*uuids)[MS_UUID_SIZE],
+                          uint8_t const *won)
+{
+    int m = -1;
+    for (int i = 0; i < 3; ++i)
+        if (strcmp(mode, MG_MODES[i]) == 0)
+            m = i;
+    if (m < 0 || MS_CONFIG.minigames_pin[0] == 0 ||
+        !ms_ct_str_equal(pin, MS_CONFIG.minigames_pin))
+        return -1;
+    int failed = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        struct ms_db_account a;
+        if (!ms_uuid_valid(uuids[i]) ||
+            MS_DB->account_get(MS_DB, ms_db_by_uuid, uuids[i], NULL, &a) !=
+                MS_DB_OK ||
+            a.is_dev)
+            continue;
+        char *extra = name_json(a.username);
+        if (apply(MS_LB_MG_PLAYED + m, a.uuid, 1, ms_lb_add, extra) != 0)
+            ++failed;
+        if (won[i] && apply(MS_LB_MG_WINS + m, a.uuid, 1, ms_lb_add, extra) != 0)
+            ++failed;
+        free(extra);
+    }
+    return failed ? -1 : 0;
 }
 
 // ------------------------------------------------------------- gardn stats
@@ -490,10 +690,6 @@ void ms_h_gardn_stats(struct ms_req *req, struct ms_res *res)
     }
     cJSON_AddBoolToObject(root, "ok", 1);
     cJSON_AddNumberToObject(root, "generated", (double)(stats.at_ms / 1000));
-    cJSON *budget = cJSON_AddObjectToObject(root, "budget");
-    cJSON_AddNumberToObject(budget, "requests", BUDGET_REQUESTS);
-    cJSON_AddNumberToObject(budget, "window_seconds", BUDGET_WINDOW_SECONDS);
-    cJSON_AddNumberToObject(budget, "pause_seconds", BUDGET_PAUSE_SECONDS);
     cJSON_AddNumberToObject(root, "saves", (double)stats.saves);
     cJSON_AddNumberToObject(root, "players", (double)stats.players);
     cJSON *petals = cJSON_AddArrayToObject(root, "petals");

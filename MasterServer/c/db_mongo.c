@@ -879,6 +879,51 @@ static int mg_account_page(struct ms_db *db, int offset, int limit,
     return result;
 }
 
+static int mg_account_search(struct ms_db *db, char const *prefix, int limit,
+                             struct ms_db_account_ref *out)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "accounts");
+    // the prefix only holds username characters; escape the ones a regex reads
+    char pattern[160] = "^";
+    size_t o = 1;
+    for (char const *p = prefix; *p && o + 3 < sizeof pattern; ++p)
+    {
+        if (*p == '.' || *p == '-' || *p == '\\')
+            pattern[o++] = '\\';
+        pattern[o++] = *p;
+    }
+    pattern[o] = 0;
+    bson_t *filter = BCON_NEW("username_lower", "{", "$regex",
+                              BCON_UTF8(pattern), "}", "is_dev", "{", "$ne",
+                              BCON_BOOL(true), "}");
+    bson_t *opts = BCON_NEW("sort", "{", "username_lower", BCON_INT32(1), "}",
+                            "limit", BCON_INT32(limit));
+    mongoc_cursor_t *cursor =
+        mongoc_collection_find_with_opts(c, filter, opts, NULL);
+    bson_t const *doc;
+    int n = 0;
+    while (n < limit && mongoc_cursor_next(cursor, &doc))
+    {
+        memset(&out[n], 0, sizeof out[n]);
+        ms_strlcpy(out[n].uuid, str_field(doc, "_id", ""), sizeof out[n].uuid);
+        ms_strlcpy(out[n].username, str_field(doc, "username", ""),
+                   sizeof out[n].username);
+        ++n;
+    }
+    bson_error_t error;
+    int result = mongoc_cursor_error(cursor, &error)
+                     ? log_error("account_search", &error)
+                     : n;
+    mongoc_cursor_destroy(cursor);
+    bson_destroy(opts);
+    bson_destroy(filter);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_ping(struct ms_db *db)
 {
     struct mg *mg = db->ctx;
@@ -1006,6 +1051,7 @@ struct ms_db *ms_db_mongo_open()
     db->lb_rank = mg_lb_rank;
     db->gardn_petal_stats = mg_gardn_petal_stats;
     db->account_page = mg_account_page;
+    db->account_search = mg_account_search;
     db->ping = mg_ping;
     db->close = mg_close;
     ms_log("db", "mongo ready (database %s)", mg->name);

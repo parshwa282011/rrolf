@@ -39,6 +39,7 @@ struct ms_config
     char token_secret_1[128];
     char token_secret_2[128];
     char otp_pepper[128];
+    char minigames_pin[64]; // "" = no match of the minigames server counts
     char client_url[256]; // where OAuth redirects send the browser
     char discord_client_id[64];
     char discord_client_secret[128];

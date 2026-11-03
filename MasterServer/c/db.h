@@ -186,6 +186,12 @@ struct ms_db
     int (*account_page)(struct ms_db *, int offset, int limit,
                         struct ms_db_account_ref *out);
 
+    // usernames that start with `prefix` (lowercased, only username characters),
+    // by name, never a dev account; returns how many were written (at most
+    // `limit`) or MS_DB_ERROR. For the stats page search
+    int (*account_search)(struct ms_db *, char const *prefix, int limit,
+                          struct ms_db_account_ref *out);
+
     // Change feed for backup servers (GET /backup). `since` / `source` are the
     // cursor and source id from the previous answer (NULL for the first pull).
     // Fills *out with a malloc'd newline-delimited json document: a head line,

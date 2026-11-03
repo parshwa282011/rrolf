@@ -124,6 +124,7 @@ int ms_config_from_env()
     get_str(c->token_secret_1, sizeof c->token_secret_1, "TOKEN_SECRET_1", "");
     get_str(c->token_secret_2, sizeof c->token_secret_2, "TOKEN_SECRET_2", "");
     get_str(c->otp_pepper, sizeof c->otp_pepper, "OTP_PEPPER", "");
+    get_str(c->minigames_pin, sizeof c->minigames_pin, "MINIGAMES_PIN", "");
     get_str(c->client_url, sizeof c->client_url, "CLIENT_URL", "");
     get_str(c->discord_client_id, sizeof c->discord_client_id,
             "DISCORD_CLIENT_ID", "");

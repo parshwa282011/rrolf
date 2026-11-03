@@ -804,6 +804,54 @@ static int pg_account_page(struct ms_db *db, int offset, int limit,
     return result;
 }
 
+static int pg_account_search(struct ms_db *db, char const *prefix, int limit,
+                             struct ms_db_account_ref *out)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    // the prefix only holds username characters; _ is a wildcard of LIKE
+    char pattern[160];
+    size_t o = 0;
+    for (char const *p = prefix; *p && o + 3 < sizeof pattern; ++p)
+    {
+        if (*p == '_' || *p == '%' || *p == '\\')
+            pattern[o++] = '\\';
+        pattern[o++] = *p;
+    }
+    pattern[o++] = '%';
+    pattern[o] = 0;
+    char lim[16];
+    snprintf(lim, sizeof lim, "%d", limit);
+    char const *params[] = {pattern, lim};
+    PGresult *r = run(c,
+                      "SELECT uuid, username, is_dev FROM accounts.accounts"
+                      " WHERE username_lower LIKE $1 AND NOT is_dev"
+                      " ORDER BY username_lower LIMIT $2::int",
+                      2, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("account_search", r);
+    else
+    {
+        int n = PQntuples(r);
+        if (n > limit)
+            n = limit;
+        for (int i = 0; i < n; ++i)
+        {
+            memset(&out[i], 0, sizeof out[i]);
+            ms_strlcpy(out[i].uuid, PQgetvalue(r, i, 0), sizeof out[i].uuid);
+            ms_strlcpy(out[i].username, PQgetvalue(r, i, 1),
+                       sizeof out[i].username);
+            out[i].is_dev = 0;
+        }
+        result = n;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
 // ---------------------------------------------------------------- backup feed
 //
 // Every write to the data tables is logged by a trigger into sync.changes
@@ -1171,6 +1219,7 @@ struct ms_db *ms_db_postgres_open()
     db->lb_rank = pg_lb_rank;
     db->gardn_petal_stats = pg_gardn_petal_stats;
     db->account_page = pg_account_page;
+    db->account_search = pg_account_search;
     db->backup_pull = pg_backup;
     db->ping = pg_ping;
     db->close = pg_close;

@@ -25,6 +25,9 @@
 #include "ratelimit.h"
 #include "util.h"
 
+// what one address may ask of the routes a browser can reach, all together
+#define MS_PUBLIC_PER_MINUTE 60
+
 struct ms_db *MS_DB;
 
 enum route_kind
@@ -49,12 +52,14 @@ struct route
 static struct route const ROUTES[] = {
     {"GET", "/health", 0, ms_h_health, route_public, "health", 120, 60},
     {"GET", "/backup", 0, ms_h_backup, route_clone, NULL, 0, 0},
-    // the page asks at most 60 times in 10 minutes (see leaderboard.c); a few
-    // more are let through for a second tab or a page that was reloaded
+    // read by the leaderboard and stats pages. The master limits them, the page
+    // does not have to behave: 60 a minute for an address, all routes together
     {"GET", "/leaderboard", 0, ms_h_leaderboard, route_public, "leaderboard",
-     90, 600},
-    // the same for the stats page
-    {"GET", "/stats/gardn", 0, ms_h_gardn_stats, route_public, "stats", 90, 600},
+     60, 60},
+    {"GET", "/stats/gardn", 0, ms_h_gardn_stats, route_public, "stats", 60, 60},
+    {"GET", "/profile", 0, ms_h_profile, route_public, "profile", 60, 60},
+    {"GET", "/profile/search", 0, ms_h_profile_search, route_public,
+     "profile_search", 30, 60},
 
     {"POST", "/auth/signup", 0, ms_h_signup, route_public, "signup", 5, 3600},
     {"POST", "/auth/login", 0, ms_h_login, route_public, "login", 10, 600},
@@ -332,7 +337,7 @@ void ms_route(struct ms_req *req, struct ms_res *res)
         apply_cors(req, res);
     }
     snprintf(key, sizeof key, "gen:%s", req->ip);
-    if (!ms_rl_hit(key, 240, 60))
+    if (!ms_rl_hit(key, MS_PUBLIC_PER_MINUTE, 60))
     {
         ms_res_error(res, 429, "rate_limited", "Too many requests");
         return;

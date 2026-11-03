@@ -33,7 +33,9 @@
 //
 // Rysteria boards:  rr_level  rr_pvp_kills  rr_pvp_best  rr_ancient_attempts
 //                   rr_ancients  rr_ancient_kills  rr_kills
-// Gardn boards:     gardn_kills  gardn_best_score  gardn_mythics
+// Gardn boards:     gardn_kills (players killed)  gardn_best_score  gardn_mythics
+// Minigame boards:  mg_ctf_wins mg_tdm_wins mg_has_wins (on the Rysteria page),
+//                   mg_*_played (only in the profile)
 
 #define MS_LB_RYSTERIA_BOARDS 7
 
@@ -72,6 +74,17 @@ int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
 void ms_lb_verify_start();
 
 void ms_h_leaderboard(struct ms_req *, struct ms_res *);
+// GET /profile?uuid=|name= and GET /profile/search?q=: the public stats page of
+// an account, and finding it by the start of the username
+void ms_h_profile(struct ms_req *, struct ms_res *);
+void ms_h_profile_search(struct ms_req *, struct ms_res *);
+
+// The end of a minigame match (CTF, TDM or HaS). Counts a played match for every
+// uuid and a win where won[i] is set, but only with the right PIN. Returns 0
+// when it counted. Any thread.
+int ms_lb_minigame_result(char const *mode, char const *pin, int count,
+                          char const (*uuids)[MS_UUID_SIZE],
+                          uint8_t const *won);
 // GET /stats/gardn: how often each petal is in the saves of gardn, for the stats
 // page. Reads all the saves, at most once every ten minutes
 void ms_h_gardn_stats(struct ms_req *, struct ms_res *);
