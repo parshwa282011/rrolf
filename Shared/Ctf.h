@@ -18,8 +18,9 @@
 
 #include <stdint.h>
 
-// Capture the flag: what the server and the client both need to know about
-// the match and the map. The rules themselves are in Server/Ctf.c.
+// The minigames: what the server and the client both need to know about the
+// match and the map. Capture the flag, team deathmatch and hide and seek share
+// the lobby, the squad linking and the phases. The rules are in Server/Ctf.c.
 
 #define RR_CTF_MAX_TEAMS 4
 // no team, no squad
@@ -57,6 +58,29 @@
 #define RR_CTF_POINT_SPACING 800.0f
 // how many recent events the state packet carries, for the banners
 #define RR_CTF_EVENT_HISTORY 4
+
+// what the host picked when linking the squads
+enum rr_mg_mode
+{
+    rr_mg_mode_ctf,
+    rr_mg_mode_tdm,
+    rr_mg_mode_has,
+    rr_mg_mode_count
+};
+
+// the PIN a host may type: a match started with the right one counts for the wins
+// of the accounts (the master decides). Without it, or with a wrong one, nothing is
+// counted and nothing is saved
+#define RR_MG_PIN_MAX 24
+
+// hide and seek: the seekers are the host's squad, everybody else hides. The hide
+// time is the farm phase (the seekers wait), the seek time is the war phase
+#define RR_HAS_HIDE_SECONDS 300
+#define RR_HAS_SEEK_SECONDS 600
+#define RR_HAS_SEEKER_TEAM 0
+#define RR_HAS_HIDER_TEAM 1
+// the bubble of a hider comes back after this long
+#define RR_HAS_BUBBLE_COOLDOWN_TICKS (60 * 25)
 
 enum rr_ctf_phase
 {
@@ -105,7 +129,11 @@ enum rr_ctf_message
     rr_ctf_message_bad_spot,    // a flag point can't go there
     rr_ctf_message_too_close,   // too close to another flag point
     rr_ctf_message_not_member,  // a player outside the match tried to join
-    rr_ctf_message_cancelled
+    rr_ctf_message_cancelled,
+    rr_ctf_message_need_players, // hide and seek: nobody to hide yet
+    rr_ctf_message_cant_leave,   // team deathmatch: the team still has players alive
+    rr_ctf_message_locked,       // the loadout is fixed in this game
+    rr_ctf_message_out           // you died in hide and seek, you can't enter again
 };
 
 // a rectangle of template cells

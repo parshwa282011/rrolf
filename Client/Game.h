@@ -171,6 +171,8 @@ struct rr_game_ctf
     // a state packet has arrived on this connection
     uint8_t active;
     uint8_t phase;
+    uint8_t mode;      // rr_mg_mode, what the server says is being played
+    uint8_t can_leave; // team deathmatch: the death screen may be left
     uint8_t team_count;
     uint8_t my_team;
     uint8_t walls_dropped;
@@ -192,6 +194,8 @@ struct rr_game_ctf
     struct rr_game_ctf_feed_line feed[5];
     // host panel
     char codes[RR_CTF_MAX_TEAMS - 1][16];
+    uint8_t mode_select; // what the host picks, rr_mg_mode
+    char pin[RR_MG_PIN_MAX + 1];
     float start_confirm; // seconds left of "press start again"
     uint8_t place_cycle; // which flag point F moves once all are placed
     uint8_t entered; // the loadout was taken from the server on joining the game

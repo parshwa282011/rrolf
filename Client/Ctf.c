@@ -46,9 +46,15 @@ void rr_ctf_client_reset(struct rr_game *this)
 {
     // the codes the host typed stay, everything the server told us goes
     char codes[RR_CTF_MAX_TEAMS - 1][16];
+    char pin[RR_MG_PIN_MAX + 1];
+    uint8_t mode_select = this->ctf.mode_select;
     memcpy(codes, this->ctf.codes, sizeof codes);
+    memcpy(pin, this->ctf.pin, sizeof pin);
     memset(&this->ctf, 0, sizeof this->ctf);
     memcpy(this->ctf.codes, codes, sizeof codes);
+    memcpy(this->ctf.pin, pin, sizeof pin);
+    this->ctf.mode_select = mode_select;
+    this->ctf.can_leave = 1;
     this->ctf.my_team = RR_CTF_NONE;
     this->ctf.winner = RR_CTF_NONE;
     // a new connection has its own maze
@@ -117,6 +123,18 @@ char const *rr_ctf_client_message_text(struct rr_game *this, char *out,
     case rr_ctf_message_cancelled:
         snprintf(out, size, "Match cancelled.");
         break;
+    case rr_ctf_message_need_players:
+        snprintf(out, size, "Nobody else is on the server to hide yet.");
+        break;
+    case rr_ctf_message_cant_leave:
+        snprintf(out, size, "Your team still has players alive. Forfeit to leave.");
+        break;
+    case rr_ctf_message_locked:
+        snprintf(out, size, "You can't join now.");
+        break;
+    case rr_ctf_message_out:
+        snprintf(out, size, "You were caught: no coming back in this match.");
+        break;
     default:
         out[0] = 0;
         return NULL;
@@ -183,6 +201,7 @@ void rr_ctf_client_read_state(struct rr_game *this, struct proto_bug *d)
     struct rr_game_ctf *c = &this->ctf;
     c->active = 1;
     c->phase = proto_bug_read_uint8(d, "ctf phase");
+    c->mode = proto_bug_read_uint8(d, "ctf mode");
     c->team_count = proto_bug_read_uint8(d, "ctf teams");
     c->my_team = proto_bug_read_uint8(d, "ctf my team");
     uint8_t flags = proto_bug_read_uint8(d, "ctf flags");
@@ -192,6 +211,7 @@ void rr_ctf_client_read_state(struct rr_game *this, struct proto_bug *d)
     c->has_body = flags >> 3 & 1;
     c->is_leader = flags >> 4 & 1;
     c->flags_ready = flags >> 5 & 1;
+    c->can_leave = flags >> 6 & 1;
     c->winner = proto_bug_read_uint8(d, "ctf winner");
     c->message = proto_bug_read_uint8(d, "ctf message");
     c->message_arg = proto_bug_read_uint8(d, "ctf arg");
@@ -292,6 +312,8 @@ void rr_ctf_client_send_create(struct rr_game *this)
         if (this->ctf.codes[i][0] != 0)
             proto_bug_write_string(&encoder, this->ctf.codes[i], 16,
                                    "ctf code");
+    proto_bug_write_uint8(&encoder, this->ctf.mode_select, "mg mode");
+    proto_bug_write_string(&encoder, this->ctf.pin, RR_MG_PIN_MAX + 1, "mg pin");
     rr_websocket_send(&this->socket, encoder.current - encoder.start);
 }
 
@@ -305,6 +327,19 @@ void rr_ctf_client_send_cancel(struct rr_game *this)
 {
     struct proto_bug encoder = begin_packet(this, rr_serverbound_ctf_cancel);
     rr_websocket_send(&this->socket, encoder.current - encoder.start);
+}
+
+void rr_ctf_client_send_forfeit(struct rr_game *this)
+{
+    struct proto_bug encoder = begin_packet(this, rr_serverbound_ctf_forfeit);
+    rr_websocket_send(&this->socket, encoder.current - encoder.start);
+}
+
+char const *rr_ctf_client_team_label(struct rr_game *this, uint8_t team)
+{
+    if (this->ctf.mode == rr_mg_mode_has)
+        return team == RR_HAS_SEEKER_TEAM ? "Seekers" : "Hiders";
+    return rr_ctf_team_name(team);
 }
 
 void rr_ctf_client_send_respawn(struct rr_game *this)

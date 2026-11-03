@@ -355,12 +355,6 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     rr_binary_encoder_read_nt_string(encoder, this->rivet_account.cg_id);
     // dev status is the is_dev flag of the account on the master
     this->dev = rr_binary_encoder_read_uint8(encoder) != 0;
-#ifdef CTF
-    // saveless: the account only says who the player is, a match always starts
-    // from the same level and petals, see Server/Ctf.c
-    rr_server_client_reset_ctf_data(this);
-    return 1;
-#endif
     if (this->dev)
     {
         memset(this->checkpoint, 0, sizeof this->checkpoint);

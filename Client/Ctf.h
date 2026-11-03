@@ -56,6 +56,9 @@ void rr_ctf_client_send_create(struct rr_game *);
 void rr_ctf_client_send_start(struct rr_game *);
 void rr_ctf_client_send_cancel(struct rr_game *);
 void rr_ctf_client_send_respawn(struct rr_game *);
+void rr_ctf_client_send_forfeit(struct rr_game *);
+// Red, Blue... or Seekers and Hiders
+char const *rr_ctf_client_team_label(struct rr_game *, uint8_t team);
 
 // the host panel and the HUD, in Client/Ui
 struct rr_ui_element;

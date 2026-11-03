@@ -29,7 +29,7 @@
 
 #include <Shared/Ctf.h>
 
-// The host's panel for capture the flag. The host makes a private squad, the
+// The host's panel for the minigames: capture the flag, team deathmatch, hide and seek. The host makes a private squad, the
 // other teams tell the host their squad codes, the host types them in, links
 // the squads and starts the match. The server does the checking, what it says
 // shows at the bottom.
@@ -37,6 +37,7 @@
 #define CODE_INPUT_0 "_0x434c"
 #define CODE_INPUT_1 "_0x434d"
 #define CODE_INPUT_2 "_0x434e"
+#define PIN_INPUT "_0x434f"
 
 static char message_line[128];
 static char team_lines[RR_CTF_MAX_TEAMS][64];
@@ -104,6 +105,8 @@ static void link_on_event(struct rr_ui_element *this, struct rr_game *game)
     uint8_t any = 0;
     for (uint8_t i = 0; i < RR_CTF_MAX_TEAMS - 1; ++i)
         any |= game->ctf.codes[i][0] != 0;
+    // hide and seek: the host's squad seeks and everybody else hides
+    any |= game->ctf.mode_select == rr_mg_mode_has;
     data->clickable = can_host(game) && any &&
                       (!game->ctf.active ||
                        game->ctf.phase == rr_ctf_phase_lobby);
@@ -151,6 +154,25 @@ static void cancel_on_event(struct rr_ui_element *this, struct rr_game *game)
     game->cursor = rr_game_cursor_pointer;
 }
 
+// what the host plays: capture the flag, team deathmatch or hide and seek
+static void mode_on_event(struct rr_ui_element *this, struct rr_game *game)
+{
+    static char const *const labels[rr_mg_mode_count] = {
+        "Mode: Capture the flag", "Mode: Team deathmatch",
+        "Mode: Hide and seek"};
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->text = (char *)labels[game->ctf.mode_select % rr_mg_mode_count];
+    data->clickable = can_host(game) &&
+                      (!game->ctf.active || game->ctf.team_count == 0 ||
+                       game->ctf.phase == rr_ctf_phase_lobby);
+    if (!data->clickable)
+        return;
+    if (game->input_data->mouse_buttons_up_this_tick & 1 &&
+        game->pressed == this)
+        game->ctf.mode_select = (game->ctf.mode_select + 1) % rr_mg_mode_count;
+    game->cursor = rr_game_cursor_pointer;
+}
+
 static void button_animate(struct rr_ui_element *this, struct rr_game *game)
 {
     rr_ui_default_animate(this, game);
@@ -193,12 +215,21 @@ struct rr_ui_element *rr_ui_ctf_host_container_init(struct rr_game *game)
                 rr_ui_set_justify(
                     rr_ui_v_container_init(
                         rr_ui_container_init(), 10, 10,
-                        rr_ui_text_init("Capture the Flag", 24, 0xffffffff),
+                        rr_ui_text_init("Minigames", 24, 0xffffffff),
                         rr_ui_text_init(hint_line, 14, 0xffbbbbbb),
-                        rr_ui_text_init("Codes of the other squads (2 to 4 teams):", 15, 0xffffffff),
+                        button_init("Mode: Capture the flag", mode_on_event),
+                        rr_ui_text_init("Codes of the other squads (2 to 4 teams; none for hide and seek, your squad seeks):", 14, 0xffffffff),
                         code_row_init(game, 0, CODE_INPUT_0),
                         code_row_init(game, 1, CODE_INPUT_1),
                         code_row_init(game, 2, CODE_INPUT_2),
+                        rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
+                            rr_ui_text_init("PIN (optional, wins count with it):", 14, 0xffffffff),
+                            rr_ui_set_fill_stroke(
+                                rr_ui_h_container_init(rr_ui_container_init(), 0, 0,
+                                    rr_ui_text_input_init(150, 18, game->ctf.pin, RR_MG_PIN_MAX, PIN_INPUT),
+                                    NULL),
+                            0x00000000, 0x00000000),
+                            NULL),
                         rr_ui_h_container_init(rr_ui_container_init(), 0, 10,
                             button_init("Link squads", link_on_event),
                             button_init("Start", start_on_event),

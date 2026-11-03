@@ -60,6 +60,7 @@ enum rr_serverbound_packet_header
     rr_serverbound_ctf_place_flag,
     rr_serverbound_ctf_cancel,
     rr_serverbound_ctf_respawn,
+    rr_serverbound_ctf_forfeit,
 };
 
 enum rr_clientbound_packet_header

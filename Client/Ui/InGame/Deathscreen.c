@@ -29,6 +29,14 @@ static void continue_to_squad_event(struct rr_ui_element *this,
                                     struct rr_game *game)
 {
     struct rr_ui_labeled_button_metadata *data = this->data;
+    // team deathmatch: Continue is for when the whole team is dead, or forfeit
+    if (game->ctf.mode == rr_mg_mode_tdm && !game->ctf.can_leave)
+    {
+        data->clickable = 0;
+        rr_ui_set_background(this, 0xff777777);
+        return;
+    }
+    rr_ui_set_background(this, 0xff45a8a8);
     if (game->input_data->mouse_buttons_up_this_tick & 1)
     {
         struct proto_bug encoder;
@@ -50,9 +58,26 @@ static uint8_t game_over(struct rr_ui_element *this, struct rr_game *game)
     if (dead && !dead_last_tick)
         chosen_text = rr_frand() >= 0.001;
     dead_last_tick = dead;
-    // in capture the flag players respawn by themselves
+    // in capture the flag players respawn by themselves; in team deathmatch and
+    // hide and seek they don't
     return !game->cache.hide_ui && game->simulation_ready && dead &&
-           !rr_ctf_client_selected(game);
+           (!rr_ctf_client_selected(game) || (game->ctf.active &&
+                                              game->ctf.mode != rr_mg_mode_ctf));
+}
+
+static uint8_t forfeit_should_show(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    return game->ctf.mode == rr_mg_mode_tdm && !game->ctf.can_leave;
+}
+
+static void forfeit_on_event(struct rr_ui_element *this, struct rr_game *game)
+{
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    if (game->input_data->mouse_buttons_up_this_tick & 1 && game->pressed == this)
+        rr_ctf_client_send_forfeit(game);
+    game->cursor = rr_game_cursor_pointer;
 }
 
 static uint8_t text_choose(struct rr_ui_element *this, struct rr_game *game)
@@ -66,6 +91,10 @@ struct rr_ui_element *rr_ui_finished_game_screen_init()
         rr_ui_labeled_button_init("Continue", 36, NULL);
     rr_ui_set_background(leave_game, 0xff45a8a8);
     leave_game->on_event = continue_to_squad_event;
+    struct rr_ui_element *forfeit = rr_ui_labeled_button_init("Forfeit", 30, NULL);
+    rr_ui_set_background(forfeit, 0xffc04040);
+    forfeit->on_event = forfeit_on_event;
+    forfeit->should_show = forfeit_should_show;
     struct rr_ui_element *this = rr_ui_v_container_init(
         rr_ui_container_init(), 10, 10,
         rr_ui_choose_element_init(
@@ -76,6 +105,7 @@ struct rr_ui_element *rr_ui_finished_game_screen_init()
         ),
         rr_ui_static_space_init(150),
         leave_game,
+        forfeit,
         NULL);
     this->should_show = game_over;
     return this;

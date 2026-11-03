@@ -252,9 +252,9 @@ static void minimap_on_render(struct rr_ui_element *this, struct rr_game *game)
         rr_renderer_set_text_align(renderer, 1);
         rr_renderer_set_text_size(renderer, 11);
         rr_renderer_set_line_width(renderer, 11 * 0.12f);
-        rr_renderer_stroke_text(renderer, "[N] or hover: whole map", 0,
+        rr_renderer_stroke_text(renderer, "[;] or hover: whole map", 0,
                                 this->abs_height / 2 - 9);
-        rr_renderer_fill_text(renderer, "[N] or hover: whole map", 0,
+        rr_renderer_fill_text(renderer, "[;] or hover: whole map", 0,
                               this->abs_height / 2 - 9);
     }
 }

@@ -2022,12 +2022,15 @@ void rr_game_tick(struct rr_game *this, float delta)
     }
     if (!this->text_input_focused)
     {
-        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 186))
+        // (the debug information moved from ; to ')
+        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 222))
             this->cache.displaying_debug_information ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'M'))
             this->cache.use_mouse ^= 1;
-        // the minimap shows the whole map instead of the part around you
-        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'N'))
+        // the minimap shows the whole map instead of the part around you, for
+        // maps bigger than 40x40. ; (or N) switches between the two
+        if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 186) ||
+            rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'N'))
             this->full_map ^= 1;
         if (rr_bitset_get_bit(this->input_data->keys_pressed_this_tick, 'H'))
             this->cache.show_hitboxes ^= 1;

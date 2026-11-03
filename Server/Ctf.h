@@ -87,6 +87,9 @@ struct rr_ctf_event
 
 struct rr_ctf_match
 {
+    uint8_t mode; // rr_mg_mode, chosen by the host when linking
+    char pin[RR_MG_PIN_MAX + 1];
+    uint8_t result_sent;
     uint8_t phase;
     uint8_t team_count;
     uint8_t winner;
@@ -163,6 +166,17 @@ void rr_ctf_on_cancel(struct rr_server *, struct rr_server_client *);
 void rr_ctf_on_place_flag(struct rr_server *, struct rr_server_client *,
                           struct proto_bug *);
 void rr_ctf_on_respawn(struct rr_server *, struct rr_server_client *);
+// leave the match for good: team deathmatch lets a player go before their team is
+// all dead this way
+void rr_ctf_on_forfeit(struct rr_server *, struct rr_server_client *);
+// team deathmatch and hide and seek: no mobs spawn
+uint8_t rr_ctf_no_mobs(struct rr_server *);
+// the loadout of the player is fixed for the match
+uint8_t rr_ctf_loadout_locked(struct rr_server *, struct rr_server_client *);
+// the team id a flower of this client has in the simulation. Hide and seek puts
+// every hider in one team, so that they don't hurt each other
+uint32_t rr_ctf_flower_team(struct rr_server *, struct rr_server_client *,
+                            uint32_t squad_team);
 // the player changed their loadout: a flower that is alive has the new petals
 // at once, no respawn is needed
 void rr_ctf_apply_loadout(struct rr_server *, struct rr_server_client *);

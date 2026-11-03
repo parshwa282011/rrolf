@@ -83,7 +83,7 @@ static void hud_on_render(struct rr_ui_element *this, struct rr_game *game)
     case rr_ctf_phase_lobby:
         if (c->team_count == 0)
         {
-            snprintf(title, sizeof title, "Capture the Flag");
+            snprintf(title, sizeof title, "Minigames");
             snprintf(sub, sizeof sub,
                      "The host links the squads from the flag button");
         }
@@ -115,21 +115,53 @@ static void hud_on_render(struct rr_ui_element *this, struct rr_game *game)
         break;
     case rr_ctf_phase_farm:
         rr_ctf_client_format_time(clock, sizeof clock, seconds_left(c));
-        snprintf(title, sizeof title, "Walls drop in %s", clock);
-        snprintf(sub, sizeof sub,
-                 "Farm mobs, craft [C], and set your loadout [Z]");
+        if (c->mode == rr_mg_mode_has)
+        {
+            snprintf(title, sizeof title, "Hide!  seekers out in %s", clock);
+            snprintf(sub, sizeof sub,
+                     c->my_team == RR_HAS_SEEKER_TEAM
+                         ? "Wait for the hiders to hide"
+                         : "Hide anywhere. One bubble, back every 60 s");
+        }
+        else
+        {
+            snprintf(title, sizeof title, "Walls drop in %s", clock);
+            snprintf(sub, sizeof sub,
+                     "Farm mobs, craft [C], and set your loadout [Z]");
+        }
         break;
     case rr_ctf_phase_war:
+        if (c->mode == rr_mg_mode_has)
+        {
+            uint32_t elapsed = c->phase_ticks / RR_CTF_TPS;
+            rr_ctf_client_format_time(
+                clock, sizeof clock,
+                elapsed < RR_HAS_SEEK_SECONDS ? RR_HAS_SEEK_SECONDS - elapsed
+                                              : 0);
+            snprintf(title, sizeof title, "SEEK  %s left", clock);
+            snprintf(sub, sizeof sub,
+                     "Seekers: find every hider. Hiders: survive until the time is up");
+            break;
+        }
         rr_ctf_client_format_time(clock, sizeof clock,
                                   c->phase_ticks / RR_CTF_TPS);
+        if (c->mode == rr_mg_mode_tdm)
+        {
+            snprintf(title, sizeof title, "DEATHMATCH  %s", clock);
+            snprintf(sub, sizeof sub,
+                     "Last team standing wins. Only your squad can seed you back");
+            break;
+        }
         snprintf(title, sizeof title, "WAR  %s", clock);
         snprintf(sub, sizeof sub,
                  "Take their flags to your flag points. With no flag you are out");
         break;
     case rr_ctf_phase_ended:
-        snprintf(title, sizeof title, "%s wins!",
-                 c->winner < RR_CTF_MAX_TEAMS ? rr_ctf_team_name(c->winner)
-                                              : "Nobody");
+        snprintf(title, sizeof title, "%s win%s!",
+                 c->winner < RR_CTF_MAX_TEAMS
+                     ? rr_ctf_client_team_label(game, c->winner)
+                     : "Nobody",
+                 c->mode == rr_mg_mode_has ? "" : "s");
         rr_ctf_client_format_time(clock, sizeof clock, seconds_left(c));
         snprintf(sub, sizeof sub, "Back to the lobby in %s", clock);
         break;
@@ -182,7 +214,7 @@ static void hud_on_render(struct rr_ui_element *this, struct rr_game *game)
         rr_renderer_fill(renderer);
         rr_renderer_stroke(renderer);
         char name[48];
-        snprintf(name, sizeof name, "%s%s", rr_ctf_team_name(t),
+        snprintf(name, sizeof name, "%s%s", rr_ctf_client_team_label(game, t),
                  t == c->my_team ? " (you)" : "");
         text(renderer, name, -HUD_WIDTH / 2 + 42, y + 11, 16,
              team->eliminated ? 0xff999999 : 0xffffffff, 0);

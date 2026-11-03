@@ -28,6 +28,7 @@
 #include <Server/EntityDetection.h>
 #include <Server/MobAi/Ai.h>
 #include <Server/Server.h>
+#include <Server/Ctf.h>
 #include <Server/SpatialHash.h>
 #include <Server/System/System.h>
 #include <Server/Waves.h>
@@ -451,6 +452,10 @@ static int tick_grid(struct rr_simulation *this, struct rr_maze_grid *grid,
 {
     if (grid->value == 0 || (grid->value & 8))
         return 0;
+#ifdef CTF
+    if (this->server != NULL && rr_ctf_no_mobs(this->server))
+        return 0;
+#endif
     grid->local_difficulty =
         rr_fclamp(grid->local_difficulty, -0.5, PLAYER_COUNT_CAP);
     if (grid->local_difficulty > 0)

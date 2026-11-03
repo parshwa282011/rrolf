@@ -28,6 +28,9 @@
 #include <Server/Simulation.h>
 #include <Server/Squad.h>
 
+#include <libwebsockets.h>
+
+#include <Shared/Binary.h>
 #include <Shared/Component/Drop.h>
 #include <Shared/Component/Flower.h>
 #include <Shared/Component/Mob.h>
@@ -84,7 +87,44 @@ uint8_t rr_ctf_client_team(struct rr_server *this,
 {
     if (!client->in_squad)
         return RR_CTF_NONE;
-    return this->ctf.squad_team[client->squad];
+    uint8_t team = this->ctf.squad_team[client->squad];
+    // hide and seek: the host's squad seeks, everybody else hides
+    if (this->ctf.mode == rr_mg_mode_has && team == RR_CTF_NONE &&
+        this->ctf.team_count == 2 && this->ctf.phase != rr_ctf_phase_lobby)
+        return RR_HAS_HIDER_TEAM;
+    return team;
+}
+
+static char const *mode_name(uint8_t mode)
+{
+    static char const *const names[rr_mg_mode_count] = {"ctf", "tdm", "has"};
+    return names[mode % rr_mg_mode_count];
+}
+
+// no mobs in team deathmatch and hide and seek, and nothing to farm
+uint8_t rr_ctf_no_mobs(struct rr_server *this)
+{
+    return this->ctf.mode != rr_mg_mode_ctf && this->ctf.team_count > 0;
+}
+
+// the petals are the ones the account has (team deathmatch) or fixed (hide and
+// seek) and can't be changed while the match runs
+uint8_t rr_ctf_loadout_locked(struct rr_server *this,
+                              struct rr_server_client *client)
+{
+    return this->ctf.mode != rr_mg_mode_ctf &&
+           this->ctf.phase != rr_ctf_phase_lobby &&
+           rr_ctf_client_team(this, client) != RR_CTF_NONE;
+}
+
+uint32_t rr_ctf_flower_team(struct rr_server *this,
+                            struct rr_server_client *client,
+                            uint32_t squad_team)
+{
+    if (client != NULL && this->ctf.mode == rr_mg_mode_has &&
+        rr_ctf_client_team(this, client) == RR_HAS_HIDER_TEAM)
+        return RR_SQUAD_COUNT; // one team for all hiders
+    return squad_team;
 }
 
 uint8_t rr_ctf_squad_locked(struct rr_server *this, uint8_t squad)
@@ -108,6 +148,23 @@ static uint8_t flower_alive(struct rr_server *this,
            !is_dead_flower(&this->simulation, client->player_info->flower_id);
 }
 
+static struct rr_server_client *team_client(struct rr_server *this,
+                                            uint8_t team, uint32_t slot);
+
+// how many players of a team are alive in the game
+static uint8_t team_alive_count(struct rr_server *this, uint8_t team)
+{
+    uint8_t alive = 0;
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+    {
+        struct rr_server_client *client = team_client(this, team, i);
+        if (client != NULL && !client->disconnected && client->player_info != NULL &&
+            flower_alive(this, client))
+            ++alive;
+    }
+    return alive;
+}
+
 // is the client the leader of their squad, which has to be a private one. The
 // leader of the first squad is the host, every leader places their team's flags
 static uint8_t is_leader(struct rr_server *this, struct rr_server_client *client)
@@ -124,6 +181,9 @@ void rr_ctf_spawn_position(struct rr_server *this,
     uint8_t team = rr_ctf_client_team(this, client);
     uint8_t quadrant =
         team == RR_CTF_NONE ? 0 : this->ctf.teams[team].quadrant;
+    // hide and seek: the hiders start in the three corners the seekers don't
+    if (this->ctf.mode == rr_mg_mode_has && team == RR_HAS_HIDER_TEAM)
+        quadrant = 1 + (uint8_t)(rr_frand() * 3) % 3;
     struct rr_ctf_rect *spawn = &RR_CTF_SPAWNS[quadrant];
     float cell = rr_ctf_cell_size();
     *x = (spawn->x + rr_frand() * spawn->w) * cell;
@@ -149,6 +209,102 @@ static void validate_loadout(struct rr_server_client *client,
         else
             --left[id][rarity];
     }
+}
+
+// ---- the data of a match
+//
+// Players join with their real account: the title screen shows the real loadout.
+// When they are put in a match that gives its own level and petals, the real data
+// is kept aside and put back when the match ends. Nothing a match does is saved.
+
+static void level_experience(struct rr_server_client *client, uint32_t level)
+{
+    client->experience = 0;
+    for (uint32_t lvl = 2; lvl <= level; ++lvl)
+        client->experience += xp_to_reach_level(lvl);
+}
+
+static void enter_match_data(struct rr_server *this,
+                             struct rr_server_client *client,
+                             struct rr_squad_member *member)
+{
+    if (client->mg_backup_valid)
+        return;
+    client->mg_backup_valid = 1;
+    client->mg_experience = client->experience;
+    memcpy(client->mg_inventory, client->inventory, sizeof client->inventory);
+    memcpy(client->mg_craft_fails, client->craft_fails,
+           sizeof client->craft_fails);
+    memcpy(client->mg_mob_gallery, client->mob_gallery,
+           sizeof client->mob_gallery);
+    switch (this->ctf.mode)
+    {
+    case rr_mg_mode_ctf:
+        rr_server_client_reset_ctf_data(client);
+        break;
+    case rr_mg_mode_tdm:
+        break; // the petals and the level of the account
+    case rr_mg_mode_has:
+        memset(client->inventory, 0, sizeof client->inventory);
+        memset(member->loadout, 0, sizeof member->loadout);
+        if (rr_ctf_client_team(this, client) == RR_HAS_SEEKER_TEAM)
+        {
+            // 7 slots: five Ancient Stingers, a Legendary Feather and a
+            // Legendary Third Eye
+            level_experience(client, 40);
+            client->inventory[rr_petal_id_stinger][rr_rarity_id_ancient] = 5;
+            client->inventory[rr_petal_id_feather][rr_rarity_id_legendary] = 1;
+            client->inventory[rr_petal_id_third_eye][rr_rarity_id_legendary] = 1;
+            for (uint32_t i = 0; i < 5; ++i)
+            {
+                member->loadout[i].id = rr_petal_id_stinger;
+                member->loadout[i].rarity = rr_rarity_id_ancient;
+            }
+            member->loadout[5].id = rr_petal_id_feather;
+            member->loadout[5].rarity = rr_rarity_id_legendary;
+            member->loadout[6].id = rr_petal_id_third_eye;
+            member->loadout[6].rarity = rr_rarity_id_legendary;
+        }
+        else
+        {
+            // a hider has nothing but a bubble
+            level_experience(client, 1);
+            client->inventory[rr_petal_id_bubble][rr_rarity_id_common] = 1;
+            member->loadout[0].id = rr_petal_id_bubble;
+            member->loadout[0].rarity = rr_rarity_id_common;
+        }
+        break;
+    }
+    member->level = level_from_xp(client->experience);
+}
+
+static void leave_match_data(struct rr_server *this,
+                             struct rr_server_client *client)
+{
+    client->mg_played = client->mg_out = client->mg_forfeit = 0;
+    struct rr_squad_member *member = rr_squad_get_client_slot(this, client);
+    if (member != NULL)
+    {
+        memset(member->loadout, 0, sizeof member->loadout);
+        // what the account had equipped
+        for (uint32_t i = 0; i < 20 && i < RR_MAX_SLOT_COUNT * 2; ++i)
+            member->loadout[i] = client->saved_loadout[i];
+    }
+    if (!client->mg_backup_valid)
+    {
+        if (member != NULL)
+            member->level = level_from_xp(client->experience);
+        return;
+    }
+    client->mg_backup_valid = 0;
+    client->experience = client->mg_experience;
+    memcpy(client->inventory, client->mg_inventory, sizeof client->inventory);
+    memcpy(client->craft_fails, client->mg_craft_fails,
+           sizeof client->craft_fails);
+    memcpy(client->mob_gallery, client->mg_mob_gallery,
+           sizeof client->mob_gallery);
+    if (member != NULL)
+        member->level = level_from_xp(client->experience);
 }
 
 // a player who never picked petals gets the starting ones in their slots
@@ -185,8 +341,11 @@ static void spawn_member(struct rr_server *this,
         client->player_info = NULL;
     }
     member->playing = 1;
+    enter_match_data(this, client, member);
+    client->mg_played = 1;
     validate_loadout(client, member);
-    fill_empty_loadout(member);
+    if (this->ctf.mode == rr_mg_mode_ctf)
+        fill_empty_loadout(member);
     rr_server_client_create_player_info(this, client);
     rr_server_client_create_flower(client);
     client->ctf_respawn_ticks = 0;
@@ -218,20 +377,22 @@ static void unlink_all(struct rr_server *this)
     rr_ctf_match_reset(&this->ctf);
 }
 
-// the player in a slot of the team's squad, NULL if the slot is empty
-static struct rr_server_client *member_client(struct rr_server *this,
-                                              uint8_t team, uint8_t slot)
+// the client in a slot of the server if they play for the team, else NULL
+static struct rr_server_client *team_client(struct rr_server *this,
+                                            uint8_t team, uint32_t slot)
 {
-    struct rr_squad_member *member =
-        &this->squads[this->ctf.teams[team].squad].members[slot];
-    return member->in_use ? member->client : NULL;
+    if (!rr_bitset_get(this->clients_in_use, slot))
+        return NULL;
+    struct rr_server_client *client = &this->clients[slot];
+    return rr_ctf_client_team(this, client) == team ? client : NULL;
 }
 
-// runs the statement that follows once for every player of a team
+// runs the statement that follows once for every player of a team. A team of
+// hide and seek is not one squad, so this looks at everybody on the server
 #define FOR_EACH_MEMBER(THIS, TEAM, CLIENT)                                    \
-    for (uint8_t _slot = 0; _slot < RR_SQUAD_MEMBER_COUNT; ++_slot)            \
+    for (uint32_t _slot = 0; _slot < RR_MAX_CLIENT_COUNT; ++_slot)             \
         for (struct rr_server_client *CLIENT =                                 \
-                 member_client(THIS, TEAM, _slot);                             \
+                 team_client(THIS, TEAM, _slot);                               \
              CLIENT != NULL; CLIENT = NULL)
 
 // ---- what is left lying around
@@ -278,9 +439,8 @@ static void delete_uncollectable_drop(EntityIdx entity, void *captures)
 }
 
 // Nothing of a match is kept. The second it ends, for any reason, every player
-// is back to the starting level and petals: the ones playing, and the ones who
-// lost their connection, whose record is kept for them to come back to. A
-// player who comes back after the end gets a fresh account read anyway.
+// has their real account back: the ones playing, and the ones who lost their
+// connection, whose record is kept for them to come back to.
 static void reset_players(struct rr_server *this)
 {
     for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
@@ -288,16 +448,59 @@ static void reset_players(struct rr_server *this)
         if (!rr_bitset_get(this->clients_in_use, i))
             continue;
         struct rr_server_client *client = &this->clients[i];
-        rr_server_client_reset_ctf_data(client);
-        struct rr_squad_member *member = rr_squad_get_client_slot(this, client);
-        if (member != NULL)
-        {
-            memset(member->loadout, 0, sizeof member->loadout);
-            member->level = level_from_xp(client->experience);
-        }
+        leave_match_data(this, client);
         if (client->verified && !client->disconnected)
             rr_server_client_write_account(client);
     }
+}
+
+// the end of the match, for the accounts. Only counts with the PIN, see
+// MasterServer/c/leaderboard.c; the master checks it
+static void send_result(struct rr_server *this)
+{
+    struct rr_ctf_match *m = &this->ctf;
+    if (m->result_sent || m->pin[0] == 0 || !this->api_ws_ready)
+        return;
+    m->result_sent = 1;
+    struct rr_binary_encoder encoder;
+    rr_binary_encoder_init(&encoder, outgoing_message);
+    rr_binary_encoder_write_uint8(&encoder, 9);
+    rr_binary_encoder_write_nt_string(&encoder, (char *)mode_name(m->mode));
+    rr_binary_encoder_write_nt_string(&encoder, m->pin);
+    uint8_t count = 0;
+    uint8_t *count_at = encoder.at;
+    rr_binary_encoder_write_uint8(&encoder, 0);
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT && count < 60; ++i)
+    {
+        if (!rr_bitset_get(this->clients_in_use, i))
+            continue;
+        struct rr_server_client *client = &this->clients[i];
+        if (!client->mg_played || client->rivet_account.uuid[0] == 0)
+            continue;
+        uint8_t team = rr_ctf_client_team(this, client);
+        uint8_t won = team != RR_CTF_NONE && team == m->winner;
+        // a hider only wins by being alive at the end
+        if (m->mode == rr_mg_mode_has && team == RR_HAS_HIDER_TEAM)
+            won = won && !client->mg_out && flower_alive(this, client);
+        rr_binary_encoder_write_nt_string(&encoder, client->rivet_account.uuid);
+        rr_binary_encoder_write_uint8(&encoder, won);
+        ++count;
+    }
+    *count_at = count;
+    if (count > 0)
+        lws_write(this->api_client, encoder.start, encoder.at - encoder.start,
+                  LWS_WRITE_BINARY);
+}
+
+// hide and seek gives the bubble a long reload, for the time of the match
+static uint32_t bubble_cooldown_normal = 0;
+
+static void set_bubble_cooldown(uint8_t has)
+{
+    if (bubble_cooldown_normal == 0)
+        bubble_cooldown_normal = RR_PETAL_DATA[rr_petal_id_bubble].cooldown;
+    RR_PETAL_DATA[rr_petal_id_bubble].cooldown =
+        has ? RR_HAS_BUBBLE_COOLDOWN_TICKS : bubble_cooldown_normal;
 }
 
 static void end_match(struct rr_server *this)
@@ -308,6 +511,7 @@ static void end_match(struct rr_server *this)
             continue;
         FOR_EACH_MEMBER(this, t, client) remove_from_game(this, client);
     }
+    set_bubble_cooldown(0);
     clear_arena(this);
     rr_ctf_reset_walls();
     unlink_all(this);
@@ -324,6 +528,14 @@ void rr_ctf_on_create(struct rr_server *this, struct rr_server_client *client,
         proto_bug_read_string(encoder, codes[i], 15, "ctf code");
     if (count > RR_CTF_MAX_TEAMS - 1)
         count = RR_CTF_MAX_TEAMS - 1;
+    uint8_t mode = proto_bug_read_uint8(encoder, "mg mode");
+    char pin[RR_MG_PIN_MAX + 1] = {0};
+    proto_bug_read_string(encoder, pin, RR_MG_PIN_MAX, "mg pin");
+    if (mode >= rr_mg_mode_count)
+        mode = rr_mg_mode_ctf;
+    // hide and seek: the host's squad seeks, no other codes are needed
+    if (mode == rr_mg_mode_has)
+        count = 0;
     if (!is_leader(this, client))
     {
         say(client, rr_ctf_message_not_host, 0);
@@ -372,6 +584,8 @@ void rr_ctf_on_create(struct rr_server *this, struct rr_server_client *client,
         squads[n++] = found;
     }
     unlink_all(this);
+    m->mode = mode;
+    memcpy(m->pin, pin, sizeof m->pin);
     m->host_squad = client->squad;
     m->team_count = n;
     for (uint8_t t = 0; t < n; ++t)
@@ -381,7 +595,8 @@ void rr_ctf_on_create(struct rr_server *this, struct rr_server_client *client,
         m->teams[t].quadrant = rr_ctf_team_quadrant(t);
         m->squad_team[squads[t]] = t;
     }
-    printf("[ctf] %u squads linked by %s\n", n, client->rivet_account.uuid);
+    printf("[ctf] %s: %u squads linked by %s\n", mode_name(mode), n,
+           client->rivet_account.uuid);
     say(client, rr_ctf_message_linked, n);
 }
 
@@ -414,10 +629,26 @@ void rr_ctf_on_start(struct rr_server *this, struct rr_server_client *client)
         say(client, rr_ctf_message_busy, 0);
         return;
     }
-    if (m->team_count < 2)
+    if (m->mode != rr_mg_mode_has && m->team_count < 2)
     {
         say(client, rr_ctf_message_need_teams, 0);
         return;
+    }
+    if (m->mode == rr_mg_mode_has)
+    {
+        // somebody has to hide: anybody on the server who is not a seeker
+        uint8_t others = 0;
+        for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+            if (rr_bitset_get(this->clients_in_use, i) &&
+                !this->clients[i].disconnected && this->clients[i].verified &&
+                this->clients[i].in_squad &&
+                this->clients[i].squad != m->host_squad)
+                others = 1;
+        if (!others)
+        {
+            say(client, rr_ctf_message_need_players, 0);
+            return;
+        }
     }
     for (uint8_t t = 0; t < m->team_count; ++t)
         if (this->squads[m->teams[t].squad].member_count == 0)
@@ -441,10 +672,43 @@ void rr_ctf_on_start(struct rr_server *this, struct rr_server_client *client)
         for (uint8_t i = 0; i < RR_CTF_FLAGS_PER_TEAM; ++i)
             team->point_flag[i] = -1;
     }
-    m->phase = rr_ctf_phase_placement;
-    m->phase_ticks = placement_ticks();
+    m->result_sent = 0;
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+        this->clients[i].mg_played = this->clients[i].mg_out =
+            this->clients[i].mg_forfeit = 0;
+    if (m->mode == rr_mg_mode_tdm)
+    {
+        // no flags, no farming: the fight starts now
+        m->phase = rr_ctf_phase_war;
+        m->phase_ticks = 0;
+    }
+    else if (m->mode == rr_mg_mode_has)
+    {
+        // everybody else is a hider; the seekers wait while they hide
+        m->team_count = 2;
+        m->teams[RR_HAS_HIDER_TEAM].active = 1;
+        m->teams[RR_HAS_HIDER_TEAM].squad = RR_CTF_NONE;
+        m->teams[RR_HAS_HIDER_TEAM].quadrant =
+            rr_ctf_team_quadrant(RR_HAS_HIDER_TEAM);
+        set_bubble_cooldown(1);
+        m->phase = rr_ctf_phase_farm;
+        m->phase_ticks = RR_CTF_TPS * seconds_from_env("RR_HAS_HIDE_SECONDS",
+                                                       RR_HAS_HIDE_SECONDS);
+    }
+    else
+    {
+        m->phase = rr_ctf_phase_placement;
+        m->phase_ticks = placement_ticks();
+    }
     for (uint8_t t = 0; t < m->team_count; ++t)
-        FOR_EACH_MEMBER(this, t, member) spawn_member(this, member);
+        FOR_EACH_MEMBER(this, t, member)
+        {
+            // the seekers come out when the hiding time is over
+            if (m->mode == rr_mg_mode_has && t == RR_HAS_SEEKER_TEAM)
+                member->mg_played = 1;
+            else
+                spawn_member(this, member);
+        }
 }
 
 // ---- flag points
@@ -557,6 +821,16 @@ void rr_ctf_on_respawn(struct rr_server *this, struct rr_server_client *client)
         &this->simulation, 1);
 }
 
+void rr_ctf_on_forfeit(struct rr_server *this, struct rr_server_client *client)
+{
+    struct rr_ctf_match *m = &this->ctf;
+    uint8_t team = rr_ctf_client_team(this, client);
+    if (team == RR_CTF_NONE || !running(m) || m->mode != rr_mg_mode_tdm)
+        return;
+    client->mg_forfeit = 1;
+    remove_from_game(this, client);
+}
+
 void rr_ctf_on_ready(struct rr_server *this, struct rr_server_client *client)
 {
     struct rr_ctf_match *m = &this->ctf;
@@ -571,10 +845,33 @@ void rr_ctf_on_ready(struct rr_server *this, struct rr_server_client *client)
         return;
     if (member->playing)
     {
+        // team deathmatch: you stay until your team is dead, or you forfeit
+        if (m->mode == rr_mg_mode_tdm && !client->mg_forfeit &&
+            team_alive_count(this, team) > 0)
+        {
+            say(client, rr_ctf_message_cant_leave, 0);
+            return;
+        }
+        // hide and seek: a hider who leaves does not come back
+        if (m->mode == rr_mg_mode_has && team == RR_HAS_HIDER_TEAM)
+            client->mg_out = 1;
         // leaving. A flag the player carries drops where they stand
         remove_from_game(this, client);
         return;
     }
+    if (client->mg_out)
+    {
+        say(client, rr_ctf_message_out, 0);
+        return;
+    }
+    if (m->mode == rr_mg_mode_has && m->phase != rr_ctf_phase_farm)
+    {
+        say(client, rr_ctf_message_locked, 0);
+        return;
+    }
+    if (m->mode == rr_mg_mode_has && team == RR_HAS_SEEKER_TEAM &&
+        m->phase == rr_ctf_phase_farm)
+        return; // not yet
     if (!m->teams[team].eliminated)
         spawn_member(this, client);
 }
@@ -640,6 +937,86 @@ static void drop_vanished_squads(struct rr_server *this)
     }
 }
 
+// team deathmatch and hide and seek. Nobody respawns here: a dead player stays
+// dead, until a squad mate seeds them (only squad mates can, the teams of the
+// flowers are the squads, and the hiders are one team)
+static void finish_match(struct rr_server *this, uint8_t winner)
+{
+    struct rr_ctf_match *m = &this->ctf;
+    m->winner = winner;
+    m->phase = rr_ctf_phase_ended;
+    m->phase_ticks = ended_ticks();
+    printf("[%s] over, winner %u\n", mode_name(m->mode), winner);
+    send_result(this);
+}
+
+static void tick_other_modes(struct rr_server *this)
+{
+    struct rr_ctf_match *m = &this->ctf;
+    if (m->mode == rr_mg_mode_has &&
+        this->squads[m->host_squad].member_count == 0)
+    {
+        printf("[has] the seekers left, the match is over\n");
+        end_match(this);
+        return;
+    }
+    if (m->mode == rr_mg_mode_tdm)
+    {
+        // the first second belongs to the spawning
+        if (m->phase == rr_ctf_phase_war && ++m->phase_ticks > RR_CTF_TPS)
+        {
+            uint8_t alive_teams = 0, last = RR_CTF_NONE;
+            for (uint8_t t = 0; t < m->team_count; ++t)
+            {
+                if (team_alive_count(this, t) > 0)
+                {
+                    ++alive_teams;
+                    last = t;
+                }
+                else
+                    m->teams[t].eliminated = 1;
+            }
+            if (alive_teams <= 1)
+                finish_match(this, last);
+        }
+        return;
+    }
+    // hide and seek
+    for (uint8_t t = 0; t < m->team_count; ++t)
+        FOR_EACH_MEMBER(this, t, client)
+        {
+            if (client->disconnected || client->player_info == NULL)
+                continue;
+            if (flower_alive(this, client))
+            {
+                client->ctf_respawn_ticks = 0;
+                continue;
+            }
+            if (t == RR_HAS_HIDER_TEAM)
+                client->mg_out = 1; // caught: no coming back
+            else if (m->phase == rr_ctf_phase_war &&
+                     ++client->ctf_respawn_ticks >= RR_CTF_RESPAWN_TICKS)
+                spawn_member(this, client);
+        }
+    if (m->phase != rr_ctf_phase_war)
+        return;
+    ++m->phase_ticks;
+    uint8_t hiders_left = 0;
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+    {
+        struct rr_server_client *client = team_client(this, RR_HAS_HIDER_TEAM, i);
+        if (client != NULL && client->mg_played && !client->mg_out &&
+            !client->disconnected)
+            ++hiders_left;
+    }
+    if (hiders_left == 0)
+        finish_match(this, RR_HAS_SEEKER_TEAM);
+    else if (m->phase_ticks >=
+             RR_CTF_TPS * seconds_from_env("RR_HAS_SEEK_SECONDS",
+                                           RR_HAS_SEEK_SECONDS))
+        finish_match(this, RR_HAS_HIDER_TEAM);
+}
+
 void rr_ctf_tick(struct rr_server *this)
 {
     struct rr_ctf_match *m = &this->ctf;
@@ -683,7 +1060,16 @@ void rr_ctf_tick(struct rr_server *this)
     case rr_ctf_phase_farm:
         if (m->phase_ticks > 0)
             --m->phase_ticks;
-        if (m->phase_ticks == 0)
+        if (m->phase_ticks == 0 && m->mode == rr_mg_mode_has)
+        {
+            // the hiding time is over: the seekers come out
+            m->phase = rr_ctf_phase_war;
+            m->phase_ticks = 0;
+            printf("[has] the seekers are out\n");
+            FOR_EACH_MEMBER(this, RR_HAS_SEEKER_TEAM, seeker)
+                spawn_member(this, seeker);
+        }
+        else if (m->phase_ticks == 0)
         {
             rr_ctf_drop_walls();
             rr_ctf_push_event(m, rr_ctf_event_walls, 0, 0, 0);
@@ -705,11 +1091,21 @@ void rr_ctf_tick(struct rr_server *this)
         }
         return;
     }
+    if (m->mode != rr_mg_mode_ctf)
+    {
+        tick_other_modes(this);
+        return;
+    }
     // a team whose players all left is out. When nobody is left the match is
     // over, or the server would stay in it for ever
     uint8_t anyone = 0;
     for (uint8_t t = 0; t < m->team_count; ++t)
     {
+        if (m->teams[t].squad == RR_CTF_NONE)
+        {
+            anyone = 1; // the hiders: whoever is on the server
+            continue;
+        }
         if (this->squads[m->teams[t].squad].member_count > 0)
             anyone = 1;
         else if (!m->teams[t].eliminated && m->flags_ready)
@@ -749,6 +1145,7 @@ void rr_ctf_tick(struct rr_server *this)
         printf("[ctf] team %s won\n", rr_ctf_team_name(m->winner));
         m->phase = rr_ctf_phase_ended;
         m->phase_ticks = ended_ticks();
+        send_result(this);
         return;
     }
     // players who died are back at their base after a moment
@@ -785,17 +1182,23 @@ void rr_ctf_send_state(struct rr_server *this, struct rr_server_client *client)
     proto_bug_init(&encoder, outgoing_message);
     proto_bug_write_uint8(&encoder, rr_clientbound_ctf_state, "header");
     proto_bug_write_uint8(&encoder, m->phase, "ctf phase");
+    proto_bug_write_uint8(&encoder, m->mode, "ctf mode");
     proto_bug_write_uint8(&encoder, m->team_count, "ctf teams");
     proto_bug_write_uint8(&encoder, team, "ctf my team");
     // bit 0 walls are down, 1 the client is the host, 2 the host can start, 3 the
     // rest of the packet follows, 4 the client leads their squad, 5 the flags
     // exist
     uint8_t can_start =
-        host && m->phase == rr_ctf_phase_lobby && m->team_count >= 2;
+        host && m->phase == rr_ctf_phase_lobby &&
+        (m->team_count >= 2 || (m->mode == rr_mg_mode_has && m->team_count >= 1));
+    // team deathmatch: the death screen's Continue is for when the team is dead
+    uint8_t can_leave = 1;
+    if (m->mode == rr_mg_mode_tdm && team != RR_CTF_NONE && running(m))
+        can_leave = client->mg_forfeit || team_alive_count(this, team) == 0;
     proto_bug_write_uint8(
         &encoder,
         rr_ctf_walls_dropped() | host << 1 | can_start << 2 | body << 3 |
-            is_leader(this, client) << 4 | m->flags_ready << 5,
+            is_leader(this, client) << 4 | m->flags_ready << 5 | can_leave << 6,
         "ctf flags");
     proto_bug_write_uint8(&encoder, m->winner, "ctf winner");
     proto_bug_write_uint8(&encoder, client->ctf_message, "ctf message");
@@ -818,9 +1221,13 @@ void rr_ctf_send_state(struct rr_server *this, struct rr_server_client *client)
                                   "ctf team out");
             proto_bug_write_uint8(&encoder, team_state->squad,
                                   "ctf team squad");
-            proto_bug_write_uint8(&encoder,
-                                  this->squads[team_state->squad].member_count,
-                                  "ctf team members");
+            uint8_t members = 0;
+            if (team_state->squad != RR_CTF_NONE)
+                members = this->squads[team_state->squad].member_count;
+            else
+                for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+                    members += team_client(this, t, i) != NULL;
+            proto_bug_write_uint8(&encoder, members, "ctf team members");
             proto_bug_write_uint8(&encoder, rr_ctf_held(m, t), "ctf held");
             proto_bug_write_uint8(&encoder, rr_ctf_banked(m, t), "ctf banked");
             for (uint8_t i = 0; i < RR_CTF_FLAGS_PER_TEAM; ++i)

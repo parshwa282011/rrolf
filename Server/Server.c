@@ -869,6 +869,11 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 break;
             if (member == NULL)
                 break;
+#ifdef CTF
+            // in team deathmatch and hide and seek the petals are fixed
+            if (rr_ctf_loadout_locked(this, client))
+                break;
+#endif
             uint64_t temp_inv[rr_petal_id_max][rr_rarity_id_max];
 
             memcpy(temp_inv, client->inventory, sizeof client->inventory);
@@ -1258,6 +1263,12 @@ static int handle_lws_event(struct rr_server *this, struct lws *ws,
                 break;
             client->ticks_to_next_squad_action = 10;
             rr_ctf_on_respawn(this, client);
+            break;
+        case rr_serverbound_ctf_forfeit:
+            if (client->ticks_to_next_squad_action > 0)
+                break;
+            client->ticks_to_next_squad_action = 10;
+            rr_ctf_on_forfeit(this, client);
             break;
 #endif
         case rr_serverbound_dev_cheat:
@@ -1699,6 +1710,17 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                 memcpy(client->mob_gallery, this->clients[j].mob_gallery,
                        sizeof client->mob_gallery);
                 client->experience = this->clients[j].experience;
+                client->mg_backup_valid = this->clients[j].mg_backup_valid;
+                client->mg_played = this->clients[j].mg_played;
+                client->mg_out = this->clients[j].mg_out;
+                client->mg_forfeit = this->clients[j].mg_forfeit;
+                client->mg_experience = this->clients[j].mg_experience;
+                memcpy(client->mg_inventory, this->clients[j].mg_inventory,
+                       sizeof client->mg_inventory);
+                memcpy(client->mg_craft_fails, this->clients[j].mg_craft_fails,
+                       sizeof client->mg_craft_fails);
+                memcpy(client->mg_mob_gallery, this->clients[j].mg_mob_gallery,
+                       sizeof client->mg_mob_gallery);
                 // the connection is new, so its world is
                 client->ctf_world_reset = 1;
 #endif

@@ -95,6 +95,16 @@ struct rr_server_client
     // capture the flag: ticks since the flower died, and what the host or
     // player was last told, see Server/Ctf.c
     uint16_t ctf_respawn_ticks;
+    // minigames: the real account while a match gives its own level and petals.
+    // Nothing a match does is saved; the real data comes back when it ends
+    uint8_t mg_backup_valid;
+    uint8_t mg_played;  // was in the match that is running (for the result)
+    uint8_t mg_out;     // hide and seek: died, can't enter again
+    uint8_t mg_forfeit; // team deathmatch: may leave before the team is dead
+    double mg_experience;
+    uint64_t mg_inventory[rr_petal_id_max][rr_rarity_id_max];
+    uint32_t mg_craft_fails[rr_petal_id_max][rr_rarity_id_max];
+    uint64_t mg_mob_gallery[rr_mob_id_max][rr_rarity_id_max];
     // the next update that puts the player in the game tells the client to throw
     // away the world it has first, see rr_server_client_broadcast_update
     uint8_t ctf_world_reset;
