@@ -72,11 +72,12 @@ int ms_email_send(char const *to, char const *subject, char const *text)
 {
     if (!ms_email_enabled())
         return -1;
-    char const *names[4] = {"from", "to", "subject", "text"};
-    char const *values[4] = {MS_CONFIG.email_from, to, subject, text};
+    char const *names[5] = {"from", "from_name", "to", "subject", "text"};
+    char const *values[5] = {MS_CONFIG.email_from, MS_CONFIG.email_from_name, to,
+                             subject, text};
     char body[4096], next[4096];
     snprintf(body, sizeof body, "%s", MS_CONFIG.email_api_body);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         char *json = json_string(values[i]);
         int ok = json != NULL && replace_all(next, sizeof next, body, names[i], json);
@@ -96,8 +97,20 @@ int ms_email_send(char const *to, char const *subject, char const *text)
     long status = ms_http_request("POST", MS_CONFIG.email_api_url, headers, body,
                                   &response);
     curl_slist_free_all(headers);
-    if (status < 200 || status > 299)
-        ms_log("email", "the email service answered http %ld", status);
+    int ok = status >= 200 && status <= 299;
+    // some services answer 200 with {"success": false, ...}
+    if (ok && response != NULL)
+    {
+        cJSON *json = cJSON_Parse(response);
+        cJSON *success = json ? cJSON_GetObjectItemCaseSensitive(json, "success")
+                              : NULL;
+        if (cJSON_IsFalse(success))
+            ok = 0;
+        cJSON_Delete(json);
+    }
+    if (!ok)
+        ms_log("email", "the email service refused it (http %ld): %.200s", status,
+               response ? response : "");
     free(response);
-    return status >= 200 && status <= 299 ? 0 : -1;
+    return ok ? 0 : -1;
 }

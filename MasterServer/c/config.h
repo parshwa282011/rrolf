@@ -61,6 +61,7 @@ struct ms_config
     char email_api_auth[128]; // header line, {key} is replaced
     char email_api_body[1024]; // JSON body, {from} {to} {subject} {text}
     char email_from[128];
+    char email_from_name[64];
     uint32_t flush_interval_ms;
     uint32_t db_pool_size;
     char trust_proxy_header[64]; // e.g. CF-Connecting-IP, "" = use peer ip

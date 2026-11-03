@@ -17,13 +17,16 @@
 
 // Outgoing email through an HTTPS API (the one of the SMTP service). Blocking:
 // call it from a worker thread. What it needs, all in the master's env:
-//   EMAIL_API_URL   where the request goes (POST)
+//   EMAIL_API_URL   where the request goes (POST). Default: SMTPMaster,
+//                   https://api.smtpmaster.com/api/send-email
 //   EMAIL_API_KEY   the key; it only ever goes to that URL
 //   EMAIL_API_AUTH  the header line that carries it, {key} is replaced
-//                   (default "Authorization: Bearer {key}")
-//   EMAIL_API_BODY  the JSON body, {from} {to} {subject} {text} are replaced by
-//                   JSON strings (default {"from":{from},"to":{to},...})
-//   EMAIL_FROM      the sender address
+//                   (default "X-API-Key: {key}", what SMTPMaster wants)
+//   EMAIL_API_BODY  the JSON body; {from} {from_name} {to} {subject} {text} are
+//                   replaced by JSON strings. Default is SMTPMaster's:
+//                   {"from_email":..,"from_name":..,"to_email":..,"subject":..,"body":..}
+//   EMAIL_FROM      the sender address, on a domain verified in the account
+//   EMAIL_FROM_NAME the sender's name (default Rysteria)
 // Any 2xx answer counts as sent.
 int ms_email_enabled();
 // 0 when the service accepted it

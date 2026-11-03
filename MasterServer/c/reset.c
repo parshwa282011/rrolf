@@ -213,7 +213,7 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
         reset->expires = ms_now() + OTP_TTL;
         char text[300];
         snprintf(text, sizeof text,
-                 "Your Rysteria %s code is %s\n\nIt expires in 10 minutes and "
+                 "Your Rysteria %s code is %s. It expires in 10 minutes and "
                  "works once. If you did not ask for it, ignore this email.",
                  strcmp(reset->s2, "username") == 0 ? "username change"
                                                     : "password reset",

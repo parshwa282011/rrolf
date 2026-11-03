@@ -146,12 +146,18 @@ int ms_config_from_env()
             "APPLE_PRIVATE_KEY_FILE", "");
     get_str(c->apple_redirect_uri, sizeof c->apple_redirect_uri,
             "APPLE_REDIRECT_URI", "");
-    get_str(c->email_api_url, sizeof c->email_api_url, "EMAIL_API_URL", "");
+    // the defaults are the ones of SMTPMaster's sending API; only the key and
+    // the sender address have to be set
+    get_str(c->email_api_url, sizeof c->email_api_url, "EMAIL_API_URL",
+            "https://api.smtpmaster.com/api/send-email");
     get_str(c->email_api_key, sizeof c->email_api_key, "EMAIL_API_KEY", "");
     get_str(c->email_api_auth, sizeof c->email_api_auth, "EMAIL_API_AUTH",
-            "Authorization: Bearer {key}");
+            "X-API-Key: {key}");
     get_str(c->email_api_body, sizeof c->email_api_body, "EMAIL_API_BODY",
-            "{\"from\":{from},\"to\":{to},\"subject\":{subject},\"text\":{text}}");
+            "{\"from_email\":{from},\"from_name\":{from_name},"
+            "\"to_email\":{to},\"subject\":{subject},\"body\":{text}}");
+    get_str(c->email_from_name, sizeof c->email_from_name, "EMAIL_FROM_NAME",
+            "Rysteria");
     get_str(c->email_from, sizeof c->email_from, "EMAIL_FROM", "");
     get_str(c->trust_proxy_header, sizeof c->trust_proxy_header,
             "TRUST_PROXY_HEADER", "");
