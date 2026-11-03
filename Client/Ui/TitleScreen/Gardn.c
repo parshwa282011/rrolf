@@ -28,6 +28,10 @@
 #include <Client/Renderer/Renderer.h>
 #include <Client/Ui/Engine.h>
 
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 #include <Shared/Utilities.h>
 
 struct rr_renderer flower_icon;
@@ -104,6 +108,41 @@ static void gardn_toggle_button_on_render(struct rr_ui_element *this,
     rr_renderer_draw_image(renderer, &flower_icon);
 }
 
+// On this site, not another: gardn reads the login the rrolf page saved in this
+// origin's localStorage. A browser that does not share it between the two pages
+// (tracking prevention, a private window) would leave gardn anonymous, so the login
+// also goes in the address, after the #, which no server sees: gardn's page keeps it
+// in memory and removes it from the address at once (gardn/Client/public/index.html)
+static void open_gardn()
+{
+#ifdef EMSCRIPTEN
+    EM_ASM({
+        let url = "/gardn/";
+        try
+        {
+            const u = window.localStorage["uuid"];
+            const p = window.localStorage["PL-P"];
+            if (u && p)
+                url += "#uuid=" + encodeURIComponent(u) + "&plp=" + encodeURIComponent(p);
+        }
+        catch (e)
+        {
+        }
+        try
+        {
+            const w = window.open(url, "_blank");
+            if (w)
+                w.focus();
+        }
+        catch (e)
+        {
+        }
+    });
+#else
+    rr_page_open("/gardn/", 0);
+#endif
+}
+
 static void gardn_toggle_button_on_event(struct rr_ui_element *this,
                                           struct rr_game *game)
 {
@@ -111,9 +150,7 @@ static void gardn_toggle_button_on_event(struct rr_ui_element *this,
     {
         if (game->pressed != this)
             return;
-        // on this site, not another: gardn reads the login the rrolf page saved in
-        // this origin's localStorage
-        rr_page_open("/gardn/", 0);
+        open_gardn();
     }
     rr_ui_render_tooltip_below(this, game->gardn_tooltip, game);
     game->cursor = rr_game_cursor_pointer;
