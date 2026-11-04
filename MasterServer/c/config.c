@@ -159,6 +159,14 @@ int ms_config_from_env()
     get_str(c->email_from_name, sizeof c->email_from_name, "EMAIL_FROM_NAME",
             "Rysteria");
     get_str(c->email_from, sizeof c->email_from, "EMAIL_FROM", "");
+    get_str(c->email_provider, sizeof c->email_provider, "EMAIL_PROVIDER", "");
+    ms_str_lower(c->email_provider, c->email_provider, sizeof c->email_provider);
+    get_str(c->aws_access_key_id, sizeof c->aws_access_key_id,
+            "AWS_ACCESS_KEY_ID", "");
+    get_str(c->aws_secret_access_key, sizeof c->aws_secret_access_key,
+            "AWS_SECRET_ACCESS_KEY", "");
+    get_str(c->aws_region, sizeof c->aws_region, "AWS_REGION", "us-east-1");
+    c->email_daily_limit = get_uint("EMAIL_DAILY_LIMIT", 50);
     get_str(c->trust_proxy_header, sizeof c->trust_proxy_header,
             "TRUST_PROXY_HEADER", "");
     c->flush_interval_ms = get_uint("FLUSH_INTERVAL_MS", 5000);

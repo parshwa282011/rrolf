@@ -62,6 +62,12 @@ struct ms_config
     char email_api_body[1024]; // JSON body, {from} {to} {subject} {text}
     char email_from[128];
     char email_from_name[64];
+    // EMAIL_PROVIDER=ses sends through Amazon SES instead (signed requests)
+    char email_provider[16];
+    char aws_access_key_id[64];
+    char aws_secret_access_key[128];
+    char aws_region[32];
+    uint32_t email_daily_limit; // emails sent per UTC day, 0 = no limit
     uint32_t flush_interval_ms;
     uint32_t db_pool_size;
     char trust_proxy_header[64]; // e.g. CF-Connecting-IP, "" = use peer ip

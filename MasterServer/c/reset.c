@@ -181,6 +181,13 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
                      "Too many codes requested, try again later");
         return;
     }
+    // checked before the account is looked at, so that it says nothing about it
+    if (ms_email_daily_full())
+    {
+        ms_res_error(res, 429, "daily_limit",
+                     "Too many requests today, try again tomorrow");
+        return;
+    }
     char lower[260], other[260];
     ms_str_lower(lower, address, sizeof lower);
     int match = 0;
@@ -219,12 +226,17 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
                                                     : "password reset",
                  code);
         sodium_memzero(code, sizeof code);
-        if (ms_email_send(address, "Your Rysteria code", text) != 0)
+        int sent = ms_email_send(address, "Your Rysteria code", text);
+        if (sent != 0)
         {
             reset->s1[0] = 0;
             ms_tmp_update(reset);
-            ms_res_error(res, 502, "email_failed",
-                         "The email could not be sent, try again later");
+            if (sent == -2)
+                ms_res_error(res, 429, "daily_limit",
+                             "Too many requests today, try again tomorrow");
+            else
+                ms_res_error(res, 502, "email_failed",
+                             "The email could not be sent, try again later");
             sodium_memzero(text, sizeof text);
             return;
         }

@@ -28,6 +28,13 @@
 //   EMAIL_FROM      the sender address, on a domain verified in the account
 //   EMAIL_FROM_NAME the sender's name (default Rysteria)
 // Any 2xx answer counts as sent.
+// Or Amazon SES: EMAIL_PROVIDER=ses with AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
+// AWS_REGION (default us-east-1) and EMAIL_FROM on a verified identity. The
+// IAM user only needs ses:SendEmail.
+// At most EMAIL_DAILY_LIMIT (default 50, 0 = no limit) emails go out per UTC
+// day, counted since the master started.
 int ms_email_enabled();
-// 0 when the service accepted it
+// 1 when today's emails are used up
+int ms_email_daily_full();
+// 0 when the service accepted it, -2 when the daily limit is used up
 int ms_email_send(char const *to, char const *subject, char const *text);

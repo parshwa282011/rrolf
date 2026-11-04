@@ -208,6 +208,8 @@ static char const *describe_error(char const *code, char const *message)
         return "Too many failed attempts, try again later";
     if (!strcmp(code, "rate_limited"))
         return "Too many requests, slow down";
+    if (!strcmp(code, "daily_limit"))
+        return "Too many requests today, try again tomorrow";
     if (!strcmp(code, "expired"))
         return "Your session expired, please log in again";
     if (!strcmp(code, "provider_unavailable"))
