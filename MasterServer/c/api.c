@@ -109,6 +109,16 @@ static struct route const ROUTES[] = {
      "oauth_link", 10, 600},
     {"GET", "/oauth/providers", 0, ms_h_providers, route_public, "providers",
      30, 60},
+    // an address for an account that signed up with Discord/Google/Apple
+    {"POST", "/auth/email/add", 0, ms_h_email_add, route_public, "email_add", 5,
+     3600},
+    // deleting the account: password first (start), then a code (reset/send) and the
+    // username typed back (reset/confirm)
+    {"POST", "/auth/delete/start", 0, ms_h_delete_start, route_public,
+     "delete_start", 5, 3600},
+    // Apple's server to server notices: a JWT that only Apple can have signed
+    {"POST", "/oauth/apple/notify", 0, ms_h_apple_notify, route_public,
+     "apple_notify", 30, 60},
     {"GET", "/.well-known/apple-developer-domain-association.txt", 0,
      ms_h_apple_domain_file, route_public, "wellknown", 30, 60},
     {"POST", "/auth/email/", 1, ms_h_provider_unavailable, route_public,

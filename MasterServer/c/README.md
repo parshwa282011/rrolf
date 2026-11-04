@@ -44,6 +44,18 @@ Public (browser, CORS allow-list, rate limited): `POST /auth/signup`, `/auth/log
 `/oauth/exchange`, `GET /oauth/providers`, `GET /health`. A provider that is not configured answers
 `503 provider_unavailable`.
 
+Account page (`Client/public/account.html`): `/auth/email/add` gives an account without an email (made with
+Discord/Google/Apple) one, to be confirmed with a code. **Deleting an account** takes five proofs: the session
+(uuid + PL-T + PL-P), the password (`/auth/delete/start`, locked out with the login's counter after 5 mistakes), a
+6 digit code mailed to a confirmed address or sent by Discord (`/auth/reset/send`), the code itself and the
+username typed back exactly (`/auth/reset/confirm`). It then revokes the Sign in with Apple token (kept sealed
+with libsodium in `accounts.links.provider_token` for that reason), throws the player out of the games and deletes
+every row of the account (`ms_account_delete_now`). `POST /oauth/apple/notify` is Apple's server to server
+endpoint: the body must be a JWT with Apple's RS256 signature, addressed to `APPLE_CLIENT_ID` or `APPLE_APP_ID`,
+recent and not seen before; anything else gets a bare 401. A genuine notice unlinks Apple from the account when
+the user revoked consent or deleted their Apple Account, and is mailed to `ADMIN_EMAIL` even when
+`EMAIL_DAILY_LIMIT` is used up.
+
 Email confirmation: an account with an email address nobody has confirmed gets no session. `/auth/signup`
 (201) and `/auth/login` (403) answer `{"error":"email_unverified","verify_id","email_hint"}` instead of the
 tokens; `/auth/verify/send` mails a 6 digit code (10 minutes, 5 tries, one a minute; an `email` member

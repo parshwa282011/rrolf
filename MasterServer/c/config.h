@@ -53,6 +53,8 @@ struct ms_config
     char apple_team_id[32];
     char apple_key_id[32];
     char apple_private_key_file[256]; // the .p8 file Apple gave
+    char apple_app_id[128];          // the iOS app's bundle id: Apple's notifications may be addressed to it
+    char admin_email[256];           // who is told when something needs a human (Apple notices)
     char apple_domain_file[256];      // the domain verification file Apple gave, served at /.well-known/
     char apple_redirect_uri[256];
     // outgoing email (codes for password and username changes): an HTTPS API

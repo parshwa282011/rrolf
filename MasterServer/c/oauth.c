@@ -51,6 +51,28 @@ static void redirect_client(struct ms_res *res, char const *key,
     ms_res_redirect(res, url);
 }
 
+// the account page is where linking ends, whatever the outcome
+static void redirect_account(struct ms_res *res, char const *key, char const *value)
+{
+    char encoded[512], base[512];
+    ms_url_encode(encoded, sizeof encoded, value);
+    size_t n = strlen(MS_CONFIG.client_url);
+    snprintf(base, sizeof base, "%s%saccount", MS_CONFIG.client_url,
+             n > 0 && MS_CONFIG.client_url[n - 1] == '/' ? "" : "/");
+    char url[768];
+    snprintf(url, sizeof url, "%s#%s=%s", base, key, encoded);
+    ms_res_redirect(res, url);
+}
+
+// the Apple refresh token of a sign in, sealed (empty for the other providers)
+static void seal_refresh(char const *provider, struct ms_discord_user const *user,
+                         char *out, size_t size)
+{
+    out[0] = 0;
+    if (strcmp(provider, "apple") == 0 && user->refresh[0])
+        ms_apple_seal(user->refresh, out, size);
+}
+
 static void sanitize_username(char *out, size_t size, char const *in)
 {
     size_t o = 0;
@@ -203,13 +225,14 @@ static void callback_for(struct provider const *P, char const *args,
         ms_strlcpy(link.provider_email, user.email, sizeof link.provider_email);
         ms_strlcpy(link.display_name, user.username, sizeof link.display_name);
         link.linked_at = ms_now();
+        seal_refresh(P->name, &user, link.token, sizeof link.token);
         int rc = MS_DB->link_put(MS_DB, state.uuid, &link);
         if (rc == MS_DB_OK)
-            redirect_client(res, "oauth", "linked");
+            redirect_account(res, "oauth", "linked");
         else if (rc == MS_DB_CONFLICT_LINK)
-            redirect_client(res, "oauth_error", "link_conflict");
+            redirect_account(res, "oauth_error", "link_conflict");
         else
-            redirect_client(res, "oauth_error", "server_error");
+            redirect_account(res, "oauth_error", "server_error");
         return;
     }
 
@@ -223,6 +246,20 @@ static void callback_for(struct provider const *P, char const *args,
     {
         ms_strlcpy(exchange.s1, "ok", sizeof exchange.s1);
         ms_strlcpy(exchange.uuid, existing.uuid, sizeof exchange.uuid);
+        // Apple: keep the newest token, it is the one that will be revoked at a deletion
+        char sealed[400];
+        seal_refresh(P->name, &user, sealed, sizeof sealed);
+        if (sealed[0])
+        {
+            struct ms_db_link links[8];
+            int n = MS_DB->links_get(MS_DB, existing.uuid, links, 8);
+            for (int i = 0; i < n; ++i)
+                if (strcmp(links[i].provider, P->name) == 0)
+                {
+                    ms_strlcpy(links[i].token, sealed, sizeof links[i].token);
+                    MS_DB->link_put(MS_DB, existing.uuid, &links[i]);
+                }
+        }
     }
     else if (rc == MS_DB_NOT_FOUND)
     {
@@ -233,6 +270,7 @@ static void callback_for(struct provider const *P, char const *args,
         ms_strlcpy(pending.s2, user.id, sizeof pending.s2);
         ms_strlcpy(pending.s3, user.email, sizeof pending.s3);
         ms_strlcpy(pending.s4, user.username, sizeof pending.s4);
+        seal_refresh(P->name, &user, pending.s5, sizeof pending.s5);
         if (ms_tmp_create(&pending, 900) != 0)
         {
             redirect_client(res, "oauth_error", "server_error");

@@ -440,6 +440,7 @@ void ms_h_complete_profile(struct ms_req *req, struct ms_res *res)
                            sizeof link.provider_email);
                 ms_strlcpy(link.display_name, pending.s4,
                            sizeof link.display_name);
+                ms_strlcpy(link.token, pending.s5, sizeof link.token);
                 link.linked_at = ms_now();
                 MS_DB->link_put(MS_DB, a.uuid, &link);
                 ms_tmp_delete(ms_tmp_pending, pending.id);

@@ -25,6 +25,7 @@ struct ms_discord_user
     char id[64];
     char username[128]; // global display name when set, else username
     char email[256];    // may be empty
+    char refresh[256];  // Apple: the refresh token (so it can be revoked later), "" otherwise
 };
 
 int ms_discord_oauth_enabled();

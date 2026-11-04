@@ -17,10 +17,14 @@
 
 #include <cJSON.h>
 #include <curl/curl.h>
+#define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/bn.h>
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <pthread.h>
+#include <sodium.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -328,6 +332,10 @@ int ms_apple_exchange_code(char const *code, struct ms_discord_user *out)
         cJSON_Delete(json);
         return -1;
     }
+    char refresh[256] = "";
+    cJSON *refresh_token = cJSON_GetObjectItemCaseSensitive(json, "refresh_token");
+    if (cJSON_IsString(refresh_token))
+        ms_strlcpy(refresh, refresh_token->valuestring, sizeof refresh);
     // header.payload.signature: the payload is the second part
     char const *dot = strchr(id_token->valuestring, '.');
     char const *end = dot ? strchr(dot + 1, '.') : NULL;
@@ -349,6 +357,8 @@ int ms_apple_exchange_code(char const *code, struct ms_discord_user *out)
     }
     memset(out, 0, sizeof *out);
     ms_strlcpy(out->id, sub->valuestring, sizeof out->id);
+    ms_strlcpy(out->refresh, refresh, sizeof out->refresh);
+    memset(refresh, 0, sizeof refresh);
     cJSON *email = cJSON_GetObjectItemCaseSensitive(claims, "email");
     if (cJSON_IsString(email))
     {
@@ -363,5 +373,236 @@ int ms_apple_exchange_code(char const *code, struct ms_discord_user *out)
         }
     }
     cJSON_Delete(claims);
+    return 0;
+}
+
+// ------------------------------------------------- Apple: keeping a token to revoke
+
+// The refresh token of an Apple sign in is kept (sealed with libsodium, the key made from
+// TOKEN_SECRET_1) for one reason: Apple requires an app to revoke it when the account is
+// deleted. hex(nonce || box); "" when it does not fit or sealing failed
+int ms_apple_seal(char const *plain, char *out, size_t size)
+{
+    out[0] = 0;
+    size_t len = strlen(plain);
+    size_t need = (crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES + len) * 2 + 1;
+    if (len == 0 || need > size)
+        return -1;
+    uint8_t key[crypto_secretbox_KEYBYTES];
+    crypto_generichash(key, sizeof key, (uint8_t const *)MS_CONFIG.token_secret_1,
+                       strlen(MS_CONFIG.token_secret_1),
+                       (uint8_t const *)"apple-refresh-token", 19);
+    uint8_t box[crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES + 256];
+    if (len > 256)
+        return -1;
+    randombytes_buf(box, crypto_secretbox_NONCEBYTES);
+    crypto_secretbox_easy(box + crypto_secretbox_NONCEBYTES, (uint8_t const *)plain,
+                          len, box, key);
+    sodium_memzero(key, sizeof key);
+    sodium_bin2hex(out, size, box,
+                   crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES + len);
+    return 0;
+}
+
+static int apple_unseal(char const *sealed, char *out, size_t size)
+{
+    uint8_t box[crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES + 256];
+    size_t box_len;
+    if (sodium_hex2bin(box, sizeof box, sealed, strlen(sealed), NULL, &box_len,
+                       NULL) != 0 ||
+        box_len <= crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES)
+        return -1;
+    uint8_t key[crypto_secretbox_KEYBYTES];
+    crypto_generichash(key, sizeof key, (uint8_t const *)MS_CONFIG.token_secret_1,
+                       strlen(MS_CONFIG.token_secret_1),
+                       (uint8_t const *)"apple-refresh-token", 19);
+    size_t plain_len = box_len - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES;
+    int rc = -1;
+    if (plain_len + 1 <= size &&
+        crypto_secretbox_open_easy((uint8_t *)out,
+                                   box + crypto_secretbox_NONCEBYTES,
+                                   box_len - crypto_secretbox_NONCEBYTES, box,
+                                   key) == 0)
+    {
+        out[plain_len] = 0;
+        rc = 0;
+    }
+    sodium_memzero(key, sizeof key);
+    return rc;
+}
+
+// tells Apple that the refresh token is no longer wanted (the user's consent to this app
+// ends). 0 when Apple accepted it
+int ms_apple_revoke(char const *sealed)
+{
+    if (!ms_apple_enabled() || sealed[0] == 0)
+        return -1;
+    char token[300], secret[1024];
+    if (apple_unseal(sealed, token, sizeof token) != 0 ||
+        apple_client_secret(secret, sizeof secret) != 0)
+        return -1;
+    char e_token[700], e_id[256], e_secret[1500], form[3000];
+    if (ms_url_encode(e_token, sizeof e_token, token) < 0 ||
+        ms_url_encode(e_id, sizeof e_id, MS_CONFIG.apple_client_id) < 0 ||
+        ms_url_encode(e_secret, sizeof e_secret, secret) < 0)
+        return -1;
+    snprintf(form, sizeof form,
+             "client_id=%s&client_secret=%s&token=%s&token_type_hint=refresh_token",
+             e_id, e_secret, e_token);
+    memset(token, 0, sizeof token);
+    memset(secret, 0, sizeof secret);
+    memset(e_token, 0, sizeof e_token);
+    memset(e_secret, 0, sizeof e_secret);
+    struct curl_slist *headers = curl_slist_append(
+        NULL, "Content-Type: application/x-www-form-urlencoded");
+    char *response = NULL;
+    long status = ms_http_request("POST", "https://appleid.apple.com/auth/revoke",
+                                  headers, form, &response);
+    curl_slist_free_all(headers);
+    memset(form, 0, sizeof form);
+    free(response);
+    if (status != 200)
+        ms_log("apple", "revoking a token failed (http %ld)", status);
+    return status == 200 ? 0 : -1;
+}
+
+// ------------------------------------------------- Apple: server to server notices
+
+// Apple's public keys, kept an hour. The address is a constant on purpose (it is not a
+// setting): only the unit test of this file is built with another one
+#ifndef MS_APPLE_KEYS_URL
+#define MS_APPLE_KEYS_URL "https://appleid.apple.com/auth/keys"
+#endif
+static pthread_mutex_t keys_lock = PTHREAD_MUTEX_INITIALIZER;
+static cJSON *keys_json;
+static int64_t keys_at;
+
+static EVP_PKEY *apple_public_key(char const *kid)
+{
+    pthread_mutex_lock(&keys_lock);
+    // a key id we do not know makes us look again, but not more than once a minute
+    int known = 0;
+    if (keys_json != NULL)
+    {
+        cJSON const *k;
+        cJSON_ArrayForEach(k, cJSON_GetObjectItemCaseSensitive(keys_json, "keys"))
+        {
+            cJSON const *id = cJSON_GetObjectItemCaseSensitive(k, "kid");
+            if (cJSON_IsString(id) && strcmp(id->valuestring, kid) == 0)
+                known = 1;
+        }
+    }
+    int64_t now = ms_now();
+    if ((keys_json == NULL || now - keys_at > 3600 || (!known && now - keys_at > 60)))
+    {
+        char *response = NULL;
+        long status = ms_http_request("GET", MS_APPLE_KEYS_URL, NULL, NULL, &response);
+        cJSON *fresh = status == 200 && response ? cJSON_Parse(response) : NULL;
+        free(response);
+        if (fresh != NULL)
+        {
+            cJSON_Delete(keys_json);
+            keys_json = fresh;
+            keys_at = now;
+        }
+    }
+    EVP_PKEY *pkey = NULL;
+    cJSON const *k;
+    cJSON const *key_list =
+        keys_json ? cJSON_GetObjectItemCaseSensitive(keys_json, "keys") : NULL;
+    cJSON_ArrayForEach(k, key_list)
+    {
+        cJSON const *id = cJSON_GetObjectItemCaseSensitive(k, "kid");
+        cJSON const *n = cJSON_GetObjectItemCaseSensitive(k, "n");
+        cJSON const *e = cJSON_GetObjectItemCaseSensitive(k, "e");
+        cJSON const *kty = cJSON_GetObjectItemCaseSensitive(k, "kty");
+        if (!cJSON_IsString(id) || strcmp(id->valuestring, kid) != 0 ||
+            !cJSON_IsString(n) || !cJSON_IsString(e) || !cJSON_IsString(kty) ||
+            strcmp(kty->valuestring, "RSA") != 0)
+            continue;
+        uint8_t nb[600], eb[16];
+        int nl = base64url_decode(nb, sizeof nb, n->valuestring, strlen(n->valuestring));
+        int el = base64url_decode(eb, sizeof eb, e->valuestring, strlen(e->valuestring));
+        if (nl <= 0 || el <= 0)
+            break;
+        BIGNUM *bn = BN_bin2bn(nb, nl, NULL), *be = BN_bin2bn(eb, el, NULL);
+        RSA *rsa = RSA_new();
+        pkey = EVP_PKEY_new();
+        if (bn == NULL || be == NULL || rsa == NULL || pkey == NULL ||
+            RSA_set0_key(rsa, bn, be, NULL) != 1)
+        {
+            BN_free(bn);
+            BN_free(be);
+            RSA_free(rsa);
+            EVP_PKEY_free(pkey);
+            pkey = NULL;
+        }
+        else if (EVP_PKEY_assign_RSA(pkey, rsa) != 1)
+        {
+            RSA_free(rsa);
+            EVP_PKEY_free(pkey);
+            pkey = NULL;
+        }
+        break;
+    }
+    pthread_mutex_unlock(&keys_lock);
+    return pkey;
+}
+
+// Checks a JWT that claims to come from Apple: RS256 with one of Apple's keys, issuer
+// Apple, addressed to this app (the Services ID or the app's bundle id), not older than two
+// days. On success *claims is the payload (free with cJSON_Delete). 0 on success, -1 for
+// anything else, which is all the caller learns
+int ms_apple_verify_jwt(char const *jwt, cJSON **claims)
+{
+    *claims = NULL;
+    char const *d1 = strchr(jwt, '.');
+    char const *d2 = d1 ? strchr(d1 + 1, '.') : NULL;
+    if (d1 == NULL || d2 == NULL || strchr(d2 + 1, '.') != NULL || strlen(jwt) > 6000)
+        return -1;
+    uint8_t header_raw[512], payload_raw[4096], sig[600];
+    int hl = base64url_decode(header_raw, sizeof header_raw, jwt, (size_t)(d1 - jwt));
+    int pl = base64url_decode(payload_raw, sizeof payload_raw, d1 + 1, (size_t)(d2 - d1 - 1));
+    int sl = base64url_decode(sig, sizeof sig, d2 + 1, strlen(d2 + 1));
+    if (hl <= 0 || pl <= 0 || sl <= 0)
+        return -1;
+    cJSON *header = cJSON_Parse((char *)header_raw);
+    cJSON const *alg = header ? cJSON_GetObjectItemCaseSensitive(header, "alg") : NULL;
+    cJSON const *kid = header ? cJSON_GetObjectItemCaseSensitive(header, "kid") : NULL;
+    int ok = cJSON_IsString(alg) && strcmp(alg->valuestring, "RS256") == 0 &&
+             cJSON_IsString(kid) && strlen(kid->valuestring) < 64;
+    EVP_PKEY *pkey = ok ? apple_public_key(kid->valuestring) : NULL;
+    cJSON_Delete(header);
+    if (pkey == NULL)
+        return -1;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    ok = ctx != NULL &&
+         EVP_DigestVerifyInit(ctx, NULL, EVP_sha256(), NULL, pkey) == 1 &&
+         EVP_DigestVerify(ctx, sig, (size_t)sl, (uint8_t const *)jwt,
+                          (size_t)(d2 - jwt)) == 1;
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+    if (!ok)
+        return -1;
+
+    cJSON *c = cJSON_Parse((char *)payload_raw);
+    cJSON const *iss = c ? cJSON_GetObjectItemCaseSensitive(c, "iss") : NULL;
+    cJSON const *aud = c ? cJSON_GetObjectItemCaseSensitive(c, "aud") : NULL;
+    cJSON const *iat = c ? cJSON_GetObjectItemCaseSensitive(c, "iat") : NULL;
+    int64_t now = (int64_t)time(NULL);
+    ok = cJSON_IsString(iss) && strcmp(iss->valuestring, "https://appleid.apple.com") == 0 &&
+         cJSON_IsString(aud) &&
+         ((MS_CONFIG.apple_client_id[0] &&
+           strcmp(aud->valuestring, MS_CONFIG.apple_client_id) == 0) ||
+          (MS_CONFIG.apple_app_id[0] &&
+           strcmp(aud->valuestring, MS_CONFIG.apple_app_id) == 0)) &&
+         cJSON_IsNumber(iat) && (int64_t)iat->valuedouble <= now + 300 &&
+         (int64_t)iat->valuedouble >= now - 2 * 24 * 3600;
+    if (!ok)
+    {
+        cJSON_Delete(c);
+        return -1;
+    }
+    *claims = c;
     return 0;
 }

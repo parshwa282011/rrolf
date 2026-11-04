@@ -18,7 +18,7 @@
 #include <libwebsockets.h>
 
 // rrolf game server link (binary websocket protocol "g"). Everything here
-// runs on the event loop thread except ms_games_kick_uuid().
+// runs on the event loop thread except ms_games_kick_uuid() and ms_games_drop_uuid().
 //
 // Opcodes, game server -> master (first byte):
 //   0   join   uuid\0 token\0 (the player's PL-P) code\0 (unused) nonce:varuint

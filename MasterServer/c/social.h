@@ -28,6 +28,14 @@ int ms_google_authorize_url(char const *state, char *out, size_t size);
 int ms_google_exchange_code(char const *code, struct ms_discord_user *out);
 
 int ms_apple_enabled();
+// the refresh token of an Apple sign in, sealed to be kept in the database (and the way
+// back), and Apple told that it is no longer wanted. See social.c
+int ms_apple_seal(char const *plain, char *out, size_t size);
+int ms_apple_revoke(char const *sealed);
+// is this JWT really from Apple, and for us? Used by /oauth/apple/notify. The payload
+// comes back in *claims on success (cJSON_Delete it)
+struct cJSON;
+int ms_apple_verify_jwt(char const *jwt, struct cJSON **claims);
 int ms_apple_authorize_url(char const *state, char *out, size_t size);
 // Apple's id_token comes straight from its token endpoint over TLS, so its
 // claims are read without checking the signature (as Apple's docs allow)

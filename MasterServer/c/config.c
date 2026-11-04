@@ -146,6 +146,9 @@ int ms_config_from_env()
             "APPLE_PRIVATE_KEY_FILE", "");
     get_str(c->apple_domain_file, sizeof c->apple_domain_file,
             "APPLE_DOMAIN_FILE", "");
+    get_str(c->apple_app_id, sizeof c->apple_app_id, "APPLE_APP_ID",
+            "blog.parshwa.rysteria");
+    get_str(c->admin_email, sizeof c->admin_email, "ADMIN_EMAIL", "");
     // "~/.rysteria-secrets/apple.p8" is the same file on every machine
     char const *home = getenv("HOME");
     char *paths[] = {c->apple_private_key_file, c->apple_domain_file};

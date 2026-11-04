@@ -390,6 +390,31 @@ static int mg_account_set_username(struct ms_db *db, char const *uuid,
     return result;
 }
 
+// everything of the account, collection by collection
+static int mg_account_delete(struct ms_db *db, char const *uuid)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    int result = MS_DB_OK;
+    bson_error_t error;
+    // collection, and the field that holds the account's uuid
+    static char const *const targets[][2] = {
+        {"rysteria", "_id"},  {"account_links", "uuid"}, {"gardn", "uuid"},
+        {"leaderboards", "uuid"}, {"accounts", "_id"}};
+    for (size_t i = 0; i < sizeof targets / sizeof *targets; ++i)
+    {
+        mongoc_collection_t *c = coll(mg, client, targets[i][0]);
+        bson_t *filter = bson_new();
+        BSON_APPEND_UTF8(filter, targets[i][1], uuid);
+        if (!mongoc_collection_delete_many(c, filter, NULL, NULL, &error))
+            result = log_error("account_delete", &error);
+        bson_destroy(filter);
+        mongoc_collection_destroy(c);
+    }
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_link_put(struct ms_db *db, char const *uuid,
                        struct ms_db_link const *l)
 {
@@ -431,6 +456,7 @@ static int mg_link_put(struct ms_db *db, char const *uuid,
         BSON_APPEND_UTF8(doc, "provider_email", l->provider_email);
         BSON_APPEND_UTF8(doc, "display_name", l->display_name);
         BSON_APPEND_INT64(doc, "linked_at", l->linked_at);
+        BSON_APPEND_UTF8(doc, "provider_token", l->token);
         bson_t *sel = BCON_NEW("_id", BCON_UTF8(link_id));
         bson_t *opts = BCON_NEW("upsert", BCON_BOOL(true));
         if (!mongoc_collection_replace_one(c, sel, doc, opts, NULL, &error))
@@ -486,6 +512,8 @@ static int mg_links_get(struct ms_db *db, char const *uuid,
         ms_strlcpy(out[n].display_name, str_field(doc, "display_name", ""),
                    sizeof out[n].display_name);
         out[n].linked_at = int_field(doc, "linked_at");
+        ms_strlcpy(out[n].token, str_field(doc, "provider_token", ""),
+                   sizeof out[n].token);
         ++n;
     }
     bson_error_t error;
@@ -1155,6 +1183,7 @@ struct ms_db *ms_db_mongo_open()
     db->account_set_username = mg_account_set_username;
     db->link_put = mg_link_put;
     db->link_delete = mg_link_delete;
+    db->account_delete = mg_account_delete;
     db->links_get = mg_links_get;
     db->rysteria_get = mg_rysteria_get;
     db->rysteria_put = mg_rysteria_put;

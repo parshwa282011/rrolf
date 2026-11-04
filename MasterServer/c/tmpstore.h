@@ -43,6 +43,7 @@ struct ms_tmp
     char s2[128];
     char s3[256];
     char s4[128];
+    char s5[400]; // a sealed Apple refresh token travelling with a pending sign up
     int64_t n1;
     int64_t n2;
     int64_t n3; // reset codes: when the last code was sent

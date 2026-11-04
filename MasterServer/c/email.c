@@ -231,3 +231,31 @@ int ms_email_send(char const *to, char const *subject, char const *text)
         daily_give_back();
     return rc;
 }
+
+int ms_email_send_admin(char const *subject, char const *text)
+{
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    static int64_t hour = -1;
+    static uint32_t count;
+    if (MS_CONFIG.admin_email[0] == 0 || !ms_email_enabled())
+    {
+        ms_log("email", "admin mail not sent (no ADMIN_EMAIL or no email service): %s",
+               subject);
+        return -1;
+    }
+    pthread_mutex_lock(&lock);
+    int64_t now_hour = ms_now() / 3600;
+    if (now_hour != hour)
+    {
+        hour = now_hour;
+        count = 0;
+    }
+    int allowed = count < 30;
+    if (allowed)
+        ++count;
+    pthread_mutex_unlock(&lock);
+    if (!allowed)
+        return -1;
+    return use_ses() ? send_ses(MS_CONFIG.admin_email, subject, text)
+                     : send_generic(MS_CONFIG.admin_email, subject, text);
+}

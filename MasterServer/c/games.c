@@ -104,6 +104,7 @@ struct player
     uint64_t version;       // bumped on every change
     uint64_t flushed_version;
     int flushing;
+    int deleted; // the account is gone: nothing of this player is written any more
     int64_t last_flush_ms;
     // leaderboards (leaderboard.c): what is on the boards for this player (-1 =
     // not known yet), the highest PvP score the game server saw, and the Ancient
@@ -170,6 +171,7 @@ struct kick
 {
     struct kick *next;
     char uuid[MS_UUID_SIZE];
+    int drop; // the account is deleted: forget the player, do not save them
 };
 static pthread_mutex_t kick_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct kick *kick_head;
@@ -377,7 +379,7 @@ static void snapshot(struct player const *p, struct ms_db_rysteria *r)
 
 static void start_flush(struct player *p)
 {
-    if (p->flushing || p->version == p->flushed_version)
+    if (p->deleted || p->flushing || p->version == p->flushed_version)
         return;
     struct flush *f = calloc(1, sizeof *f);
     ms_strlcpy(f->uuid, p->uuid, sizeof f->uuid);
@@ -523,7 +525,7 @@ static void player_left(struct player *p)
     if (p->conn != NULL)
         p->conn->uuids[p->pos][0] = 0;
     p->conn = NULL;
-    if (p->version == p->flushed_version && !p->flushing)
+    if (p->deleted || (p->version == p->flushed_version && !p->flushing))
         free_player(p);
     else
         start_flush(p);
@@ -1160,6 +1162,20 @@ void ms_games_kick_uuid(char const *uuid)
 {
     struct kick *k = malloc(sizeof *k);
     ms_strlcpy(k->uuid, uuid, sizeof k->uuid);
+    k->drop = 0;
+    pthread_mutex_lock(&kick_lock);
+    k->next = kick_head;
+    kick_head = k;
+    pthread_mutex_unlock(&kick_lock);
+    if (context != NULL)
+        lws_cancel_service(context);
+}
+
+void ms_games_drop_uuid(char const *uuid)
+{
+    struct kick *k = malloc(sizeof *k);
+    ms_strlcpy(k->uuid, uuid, sizeof k->uuid);
+    k->drop = 1;
     pthread_mutex_lock(&kick_lock);
     k->next = kick_head;
     kick_head = k;
@@ -1181,7 +1197,16 @@ void ms_games_tick()
         if (k == NULL)
             break;
         struct player *p = find_player(k->uuid);
-        if (p != NULL && p->conn != NULL)
+        if (p != NULL && k->drop)
+        {
+            p->deleted = 1;
+            p->flushed_version = p->version; // nothing left to save
+            if (p->conn != NULL)
+                send_kick(p->conn, p->pos, p->nonce);
+            else if (!p->flushing)
+                free_player(p);
+        }
+        else if (p != NULL && p->conn != NULL)
             send_kick(p->conn, p->pos, p->nonce);
         free(k);
     }

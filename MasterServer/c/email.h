@@ -34,6 +34,9 @@
 // At most EMAIL_DAILY_LIMIT (default 50, 0 = no limit) emails go out per UTC
 // day, counted since the master started.
 int ms_email_enabled();
+// A mail to ADMIN_EMAIL that goes out even when today's emails are used up (something that
+// needs a human, like a notice from Apple). At most 30 an hour. 0 when sent
+int ms_email_send_admin(char const *subject, char const *text);
 // 1 when today's emails are used up
 int ms_email_daily_full();
 // 0 when the service accepted it, -2 when the daily limit is used up

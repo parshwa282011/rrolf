@@ -151,6 +151,10 @@ static int apply_change(cJSON const *change)
         return -1;
     cJSON const *add = cJSON_GetObjectItemCaseSensitive(change, "add");
     cJSON const *remove = cJSON_GetObjectItemCaseSensitive(change, "remove");
+    // an account that was deleted while its player was still in gardn: nothing is written
+    struct ms_db_account existing;
+    if (MS_DB->account_get(MS_DB, ms_db_by_uuid, uuid, NULL, &existing) != MS_DB_OK)
+        return 0;
     int add_count = cJSON_IsArray(add) ? cJSON_GetArraySize(add) : 0;
     int remove_count = cJSON_IsArray(remove) ? cJSON_GetArraySize(remove) : 0;
     if (add_count > MS_GARDN_MAX_SAVES || remove_count > MS_GARDN_MAX_SAVES * 2)
@@ -362,7 +366,10 @@ void ms_h_srv_gardn_take(struct ms_req *req, struct ms_res *res)
         return;
     }
     struct ms_db_gsave save;
-    int rc = MS_DB->gardn_take(MS_DB, uuid, save_id, &save);
+    struct ms_db_account existing;
+    int rc = MS_DB->account_get(MS_DB, ms_db_by_uuid, uuid, NULL, &existing) == MS_DB_OK
+                 ? MS_DB->gardn_take(MS_DB, uuid, save_id, &save)
+                 : MS_DB_NOT_FOUND;
     if (rc == MS_DB_NOT_FOUND)
         ms_res_error(res, 404, "not_found", "That save is gone");
     else if (rc != MS_DB_OK)

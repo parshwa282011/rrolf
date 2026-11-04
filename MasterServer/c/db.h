@@ -57,6 +57,9 @@ struct ms_db_link
     char provider_email[256];
     char display_name[128];
     int64_t linked_at;
+    // Apple only: the refresh token, sealed with the master's secret, kept so that it can
+    // be revoked when the account is deleted (Apple requires that). "" otherwise
+    char token[400];
 };
 
 // Maps are stored exactly as the old node master did: json objects keyed by
@@ -150,6 +153,9 @@ struct ms_db
     int (*link_put)(struct ms_db *, char const *uuid,
                     struct ms_db_link const *);
     int (*link_delete)(struct ms_db *, char const *uuid, char const *provider);
+    // Removes the account and everything of it: logins, links, progress, gardn
+    // saves, leaderboard entries. MS_DB_OK (also when it was already gone), MS_DB_ERROR
+    int (*account_delete)(struct ms_db *, char const *uuid);
     // returns the number of links written to out, or MS_DB_ERROR
     int (*links_get)(struct ms_db *, char const *uuid, struct ms_db_link *out,
                      int max);

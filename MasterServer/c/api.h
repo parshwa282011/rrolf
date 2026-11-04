@@ -98,6 +98,12 @@ void ms_h_providers(struct ms_req *, struct ms_res *);
 // GET /.well-known/apple-developer-domain-association.txt: the file Apple
 // wants to see on the domain of the Sign in with Apple return URL
 void ms_h_apple_domain_file(struct ms_req *, struct ms_res *);
+// account.c
+void ms_h_email_add(struct ms_req *, struct ms_res *);
+void ms_h_delete_start(struct ms_req *, struct ms_res *); // reset.c
+void ms_h_apple_notify(struct ms_req *, struct ms_res *);
+// 0 when the account and everything of it is gone
+int ms_account_delete_now(char const *uuid);
 void ms_h_oauth_exchange(struct ms_req *, struct ms_res *);
 void ms_h_unlink(struct ms_req *, struct ms_res *);
 void ms_h_account_info(struct ms_req *, struct ms_res *);
@@ -153,3 +159,6 @@ void ms_auth_res_failure(struct ms_res *, enum ms_auth_result);
 
 // provided by games.c: disconnect any live game session of this account
 void ms_games_kick_uuid(char const *uuid);
+// the account is being deleted: the player is kicked and whatever the master still holds
+// for them in memory is thrown away instead of being written to the database
+void ms_games_drop_uuid(char const *uuid);

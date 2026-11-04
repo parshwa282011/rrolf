@@ -57,6 +57,7 @@ set(MS_SOURCES
     proto.c
     ratelimit.c
     reset.c
+    account.c
     server.c
     social.c
     srv.c

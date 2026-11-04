@@ -125,6 +125,7 @@ static char const SCHEMA_SQL[] =
     " linked_at bigint NOT NULL,"
     " PRIMARY KEY (uuid, provider),"
     " CONSTRAINT links_provider_user_unique UNIQUE (provider, provider_user_id));"
+    "ALTER TABLE accounts.links ADD COLUMN IF NOT EXISTS provider_token text NOT NULL DEFAULT '';"
     "CREATE TABLE IF NOT EXISTS rysteria.players ("
     " uuid text PRIMARY KEY REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
     " xp double precision NOT NULL DEFAULT 0,"
@@ -411,17 +412,19 @@ static int pg_link_put(struct ms_db *db, char const *uuid,
     char linked[32];
     fmt_i64(linked, sizeof linked, l->linked_at);
     char const *params[] = {uuid,           l->provider,     l->provider_user_id,
-                            l->provider_email, l->display_name, linked};
+                            l->provider_email, l->display_name, linked,
+                            l->token};
     PGresult *r = run(c,
                       "INSERT INTO accounts.links (uuid, provider,"
                       " provider_user_id, provider_email, display_name,"
-                      " linked_at) VALUES ($1,$2,$3,$4,$5,$6)"
+                      " linked_at, provider_token) VALUES ($1,$2,$3,$4,$5,$6,$7)"
                       " ON CONFLICT (uuid, provider) DO UPDATE SET"
                       " provider_user_id = EXCLUDED.provider_user_id,"
                       " provider_email = EXCLUDED.provider_email,"
                       " display_name = EXCLUDED.display_name,"
-                      " linked_at = EXCLUDED.linked_at",
-                      6, params);
+                      " linked_at = EXCLUDED.linked_at,"
+                      " provider_token = EXCLUDED.provider_token",
+                      7, params);
     int result;
     if (PQresultStatus(r) == PGRES_COMMAND_OK)
         result = MS_DB_OK;
@@ -432,6 +435,14 @@ static int pg_link_put(struct ms_db *db, char const *uuid,
     PQclear(r);
     release(pg, slot);
     return result;
+}
+
+// the rows of the other tables go with it (ON DELETE CASCADE)
+static int pg_account_delete(struct ms_db *db, char const *uuid)
+{
+    char const *params[] = {uuid};
+    return pg_simple(db, "account_delete",
+                     "DELETE FROM accounts.accounts WHERE uuid = $1", 1, params);
 }
 
 static int pg_link_delete(struct ms_db *db, char const *uuid,
@@ -453,7 +464,7 @@ static int pg_links_get(struct ms_db *db, char const *uuid,
     char const *params[] = {uuid};
     PGresult *r = run(c,
                       "SELECT provider, provider_user_id, provider_email,"
-                      " display_name, linked_at FROM accounts.links"
+                      " display_name, linked_at, provider_token FROM accounts.links"
                       " WHERE uuid = $1 ORDER BY provider",
                       1, params);
     int result;
@@ -476,6 +487,7 @@ static int pg_links_get(struct ms_db *db, char const *uuid,
             ms_strlcpy(out[i].display_name, PQgetvalue(r, i, 3),
                        sizeof out[i].display_name);
             out[i].linked_at = atoll(PQgetvalue(r, i, 4));
+            ms_strlcpy(out[i].token, PQgetvalue(r, i, 5), sizeof out[i].token);
         }
         result = n;
     }
@@ -1301,6 +1313,7 @@ struct ms_db *ms_db_postgres_open()
     db->account_set_username = pg_account_set_username;
     db->link_put = pg_link_put;
     db->link_delete = pg_link_delete;
+    db->account_delete = pg_account_delete;
     db->links_get = pg_links_get;
     db->rysteria_get = pg_rysteria_get;
     db->rysteria_put = pg_rysteria_put;

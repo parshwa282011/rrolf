@@ -81,6 +81,26 @@ static void mask(char *out, size_t size, char const *in)
     snprintf(out, size, "%.*s***", (int)keep, in);
 }
 
+static void mask_email(char *out, size_t size, char const *email);
+
+// what a code is for, in the words of the message that carries it
+static char const *purpose_label(char const *purpose)
+{
+    if (strcmp(purpose, "username") == 0)
+        return "username change";
+    if (strcmp(purpose, "delete") == 0)
+        return "ACCOUNT DELETION";
+    return "password reset";
+}
+
+static char const *purpose_warning(char const *purpose)
+{
+    if (strcmp(purpose, "delete") == 0)
+        return " Someone asked to DELETE your account and everything in it. If that was not "
+               "you, do not give the code to anyone and change your password now.";
+    return "";
+}
+
 void ms_h_reset_start(struct ms_req *req, struct ms_res *res)
 {
     cJSON *body = ms_req_json(req);
@@ -204,7 +224,9 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
             MS_DB_OK)
         {
             ms_str_lower(other, a.email, sizeof other);
-            match = other[0] && strcmp(other, lower) == 0;
+            // an address nobody confirmed does not prove who is asking to delete
+            match = other[0] && strcmp(other, lower) == 0 &&
+                    (a.email_verified || strcmp(reset->s2, "delete") != 0);
             struct ms_db_link links[8];
             int n = MS_DB->links_get(MS_DB, a.uuid, links, 8);
             for (int i = 0; i < n && !match; ++i)
@@ -224,13 +246,11 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
         otp_hash(reset->s1, reset->id, code);
         reset->n2 = 0;
         reset->expires = ms_now() + OTP_TTL;
-        char text[300];
+        char text[500];
         snprintf(text, sizeof text,
                  "Your Rysteria %s code is %s. It expires in 10 minutes and "
-                 "works once. If you did not ask for it, ignore this email.",
-                 strcmp(reset->s2, "username") == 0 ? "username change"
-                                                    : "password reset",
-                 code);
+                 "works once. If you did not ask for it, ignore this email.%s",
+                 purpose_label(reset->s2), code, purpose_warning(reset->s2));
         sodium_memzero(code, sizeof code);
         int sent = ms_email_send(address, "Your Rysteria code", text);
         if (sent != 0)
@@ -256,6 +276,107 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
                             "If an account has that address, a code is on its way");
     cJSON_AddNumberToObject(o, "expires_in", OTP_TTL);
     ms_res_json(res, 200, o);
+}
+
+// Deleting an account, step 1 of 3. Needs the session (uuid, PL-T, PL-P: the tokens a
+// thief of the page would not have) AND the password, then hands out a reset_id that
+// /auth/reset/send turns into a code (email or Discord) and /auth/reset/confirm turns into
+// the deletion, when the username is typed back as well.
+void ms_h_delete_start(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *body = ms_req_json(req);
+    struct ms_db_account a;
+    enum ms_auth_result r =
+        ms_auth_verify(ms_json_str(body, "uuid"), ms_json_str(body, "pl_t"),
+                       ms_json_str(body, "pl_p"), &a);
+    if (ms_json_str(body, "pl_t") == NULL)
+        r = ms_auth_invalid;
+    char const *password = ms_json_str(body, "password");
+    if (r != ms_auth_ok)
+    {
+        ms_auth_res_failure(res, r);
+        cJSON_Delete(body);
+        return;
+    }
+    if (password == NULL || strlen(password) > 128)
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        cJSON_Delete(body);
+        return;
+    }
+    // the same lock as the log in: guessing the password here is guessing it there
+    char lower[260], lock_key[300];
+    ms_str_lower(lower, a.username, sizeof lower);
+    snprintf(lock_key, sizeof lock_key, "lock:%s", lower);
+    if (ms_rl_blocked(lock_key, 5, 900))
+    {
+        ms_res_error(res, 429, "locked", "Too many failed attempts, try again in 15 minutes");
+        cJSON_Delete(body);
+        return;
+    }
+    if (crypto_pwhash_str_verify(a.pw_hash, password, strlen(password)) != 0)
+    {
+        ms_rl_add(lock_key, 900);
+        ms_res_error(res, 401, "invalid_credentials", "Wrong password");
+        cJSON_Delete(body);
+        return;
+    }
+    ms_rl_reset(lock_key);
+
+    // where a code can go: a confirmed email address, an address a provider vouches for,
+    // or Discord. Without any of them nothing proves the owner is the one asking
+    struct ms_db_link links[8];
+    int n = MS_DB->links_get(MS_DB, a.uuid, links, 8);
+    cJSON *hints = cJSON_CreateArray();
+    int email_ok = ms_email_enabled() && a.email[0] && a.email_verified;
+    char hint[300];
+    if (email_ok)
+    {
+        mask_email(hint, sizeof hint, a.email);
+        cJSON_AddItemToArray(hints, cJSON_CreateString(hint));
+    }
+    int discord = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        if (strcmp(links[i].provider, "discord") == 0 && ms_discord_dm_enabled())
+            discord = 1;
+        if (ms_email_enabled() && links[i].provider_email[0])
+        {
+            email_ok = 1;
+            mask_email(hint, sizeof hint, links[i].provider_email);
+            cJSON_AddItemToArray(hints, cJSON_CreateString(hint));
+        }
+    }
+    if (!email_ok && !discord)
+    {
+        cJSON_Delete(hints);
+        ms_res_error(res, 409, "no_code_channel",
+                     "To delete the account we have to send you a code, and there is no "
+                     "confirmed email or Discord on it. Add and confirm an email address "
+                     "first.");
+        cJSON_Delete(body);
+        return;
+    }
+    struct ms_tmp reset;
+    memset(&reset, 0, sizeof reset);
+    reset.kind = ms_tmp_reset;
+    ms_strlcpy(reset.s2, "delete", sizeof reset.s2);
+    ms_strlcpy(reset.uuid, a.uuid, sizeof reset.uuid);
+    if (ms_tmp_create(&reset, 900) != 0)
+    {
+        cJSON_Delete(hints);
+        ms_res_error(res, 503, "busy", NULL);
+        cJSON_Delete(body);
+        return;
+    }
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", 1);
+    cJSON_AddStringToObject(o, "reset_id", reset.id);
+    cJSON_AddBoolToObject(o, "email", email_ok);
+    cJSON_AddBoolToObject(o, "discord", discord);
+    cJSON_AddItemToObject(o, "email_hints", hints);
+    ms_res_json(res, 200, o);
+    cJSON_Delete(body);
 }
 
 void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
@@ -322,13 +443,11 @@ void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
         reset.expires = ms_now() + OTP_TTL;
         ms_tmp_update(&reset);
 
-        char message[200];
+        char message[500];
         snprintf(message, sizeof message,
                  "Your Rysteria %s code is **%s**. It expires in "
-                 "10 minutes. If you did not ask for this, ignore it.",
-                 strcmp(reset.s2, "username") == 0 ? "username change"
-                                                   : "password reset",
-                 code);
+                 "10 minutes. If you did not ask for this, ignore it.%s",
+                 purpose_label(reset.s2), code, purpose_warning(reset.s2));
         sodium_memzero(code, sizeof code);
         if (ms_discord_send_dm(discord->provider_user_id, message) != 0)
         {
@@ -352,6 +471,15 @@ void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
     cJSON_Delete(body);
 }
 
+// the username typed back to confirm a deletion has to be the account's, letter for letter
+static int delete_confirmed(char const *uuid, char const *typed)
+{
+    struct ms_db_account a;
+    return typed != NULL && uuid[0] &&
+           MS_DB->account_get(MS_DB, ms_db_by_uuid, uuid, NULL, &a) == MS_DB_OK &&
+           strcmp(typed, a.username) == 0;
+}
+
 void ms_h_reset_confirm(struct ms_req *req, struct ms_res *res)
 {
     cJSON *body = ms_req_json(req);
@@ -364,9 +492,14 @@ void ms_h_reset_confirm(struct ms_req *req, struct ms_res *res)
         !ms_tmp_get(ms_tmp_reset, reset_id, &reset) ||
         strcmp(reset.s2, "verify") == 0)
         ms_res_error(res, 400, "expired", "Reset expired, please start again");
-    else if (strcmp(reset.s2, "username") == 0
-                 ? !ms_auth_valid_username(new_username)
-                 : !ms_auth_valid_password(password))
+    else if (strcmp(reset.s2, "delete") == 0 &&
+             !delete_confirmed(reset.uuid, ms_json_str(body, "confirm_username")))
+        ms_res_error(res, 400, "confirm_mismatch",
+                     "Type your username exactly as it is to confirm");
+    else if (strcmp(reset.s2, "delete") != 0 &&
+             (strcmp(reset.s2, "username") == 0
+                  ? !ms_auth_valid_username(new_username)
+                  : !ms_auth_valid_password(password)))
         ms_res_error(res, strcmp(reset.s2, "username") == 0 ? 400 : 400,
                      strcmp(reset.s2, "username") == 0 ? "invalid_username"
                                                        : "invalid_password",
@@ -407,7 +540,21 @@ void ms_h_reset_confirm(struct ms_req *req, struct ms_res *res)
             char pw_hash[MS_PW_HASH_SIZE];
             uint8_t key[32];
             randombytes_buf(key, sizeof key);
-            if (strcmp(reset.s2, "username") == 0)
+            if (strcmp(reset.s2, "delete") == 0)
+            {
+                // the code was right, the username typed back: the last point of no return
+                ms_tmp_delete(ms_tmp_reset, reset.id);
+                if (ms_account_delete_now(reset.uuid) != 0)
+                    ms_res_error(res, 500, "server_error", "The account could not be deleted");
+                else
+                {
+                    cJSON *o = cJSON_CreateObject();
+                    cJSON_AddBoolToObject(o, "ok", 1);
+                    cJSON_AddBoolToObject(o, "deleted", 1);
+                    ms_res_json(res, 200, o);
+                }
+            }
+            else if (strcmp(reset.s2, "username") == 0)
             {
                 // usernames stay unique, like the uuid
                 int rc = MS_DB->account_set_username(MS_DB, reset.uuid,
