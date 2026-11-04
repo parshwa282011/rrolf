@@ -1,0 +1,587 @@
+<!--
+Copyright (C) 2024 Paul Johnson
+Copyright (C) 2024-2025 Maxim Nesterov
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rysteria: log in</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="/logo.png" rel="icon" type="image/png">
+<style>
+@font-face {
+    font-family: "Ubuntu";
+    font-weight: 700;
+    src: url("/fonts/Ubuntu-Bold.ttf") format("truetype");
+}
+:root { --grass: #1ea761; --ink: #222; --blue: #3377cc; --green: #3aa84a; --grey: #666; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body {
+    font-family: "Ubuntu", system-ui, sans-serif;
+    font-weight: 700;
+    color: #fff;
+    background:
+        radial-gradient(1200px 700px at 15% -10%, #3cc97d 0%, transparent 60%),
+        radial-gradient(900px 600px at 100% 10%, #14803f 0%, transparent 55%),
+        var(--grass);
+    background-attachment: fixed;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 12px;
+}
+.outline { text-shadow: -2px 0 var(--ink), 2px 0 var(--ink), 0 -2px var(--ink), 0 2px var(--ink),
+    -1.5px -1.5px var(--ink), 1.5px -1.5px var(--ink), -1.5px 1.5px var(--ink), 1.5px 1.5px var(--ink); }
+main { width: 100%; max-width: 400px; }
+h1 { font-size: 36px; text-align: center; margin-bottom: 14px; }
+.panel { background: rgba(32, 32, 32, 0.88); border-radius: 10px; padding: 20px; }
+h2 { font-size: 22px; margin-bottom: 12px; }
+p.hint { font-size: 14px; color: #ccc; margin-bottom: 10px; line-height: 1.35; }
+label { display: block; font-size: 14px; margin: 10px 0 4px; }
+input[type=text], input[type=email], input[type=password] {
+    width: 100%; padding: 8px 10px; border-radius: 6px; border: 2px solid #111;
+    font: inherit; font-size: 16px; background: #fff; color: #222;
+}
+.row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.row > * { flex: 1 1 auto; }
+button {
+    font: inherit; font-size: 16px; color: #fff; border: 2px solid #111; border-radius: 6px;
+    padding: 9px 12px; cursor: pointer; background: var(--grey);
+    text-shadow: -1px 0 var(--ink), 1px 0 var(--ink), 0 -1px var(--ink), 0 1px var(--ink);
+}
+button.go { background: var(--green); }
+button.alt { background: var(--blue); }
+button:disabled { opacity: 0.5; cursor: default; }
+a.link, button.link {
+    background: none; border: 0; padding: 0; color: #9fd8ff; text-decoration: underline;
+    cursor: pointer; font-size: 14px; text-shadow: none;
+}
+#msg { min-height: 22px; margin-top: 12px; font-size: 14px; color: #ffe066; line-height: 1.35; }
+#msg.ok { color: #8cf0a0; }
+.social { margin-top: 16px; display: none; }
+.social .row { margin-top: 6px; }
+.social small { display: block; font-size: 13px; color: #ccc; text-align: center; }
+.social button.discord { background: #5865f2; }
+.social button.google { background: #db4437; }
+.social button.apple { background: #222; }
+.view { display: none; }
+.view.on { display: block; }
+.radios { display: flex; gap: 14px; margin: 6px 0; font-size: 14px; }
+.radios label { display: flex; align-items: center; gap: 6px; margin: 0; }
+.foot { margin-top: 14px; text-align: center; font-size: 13px; }
+.foot a { color: #fff; }
+</style>
+</head>
+<body>
+<main>
+<h1 class="outline">Rysteria</h1>
+<div class="panel">
+
+<section class="view" id="v-checking">
+    <h2>Signing you in...</h2>
+</section>
+
+<section class="view" id="v-login">
+    <h2>Log in</h2>
+    <form id="f-login" autocomplete="on">
+        <label for="l-id">Username or email</label>
+        <input type="text" id="l-id" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="254">
+        <label for="l-pw">Password</label>
+        <input type="password" id="l-pw" autocomplete="current-password" maxlength="128">
+        <div class="row">
+            <button type="submit" class="go">Log in</button>
+            <button type="button" class="alt" data-go="signup">Sign up</button>
+        </div>
+    </form>
+    <div class="foot"><button type="button" class="link" data-go="forgot">Forgot your password or username?</button></div>
+</section>
+
+<section class="view" id="v-signup">
+    <h2>Create an account</h2>
+    <form id="f-signup" autocomplete="on">
+        <label for="s-email">Email (we send you a code to confirm it)</label>
+        <input type="email" id="s-email" autocomplete="email" maxlength="254">
+        <label for="s-user">Username (3-64 characters)</label>
+        <input type="text" id="s-user" autocomplete="username" maxlength="64">
+        <label for="s-pw">Password (8 or more characters)</label>
+        <input type="password" id="s-pw" autocomplete="new-password" maxlength="128">
+        <div class="row">
+            <button type="submit" class="go">Create account</button>
+            <button type="button" data-go="login">I have an account</button>
+        </div>
+    </form>
+</section>
+
+<section class="view" id="v-verify">
+    <h2>Confirm your email</h2>
+    <p class="hint" id="verify-hint">We sent a 6 digit code to your address. It works for 10 minutes.</p>
+    <form id="f-verify" autocomplete="off">
+        <label for="v-code">Code</label>
+        <input type="text" id="v-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+        <div id="v-change" style="display:none">
+            <label for="v-email">Correct email address</label>
+            <input type="email" id="v-email" autocomplete="email" maxlength="254">
+        </div>
+        <div class="row">
+            <button type="submit" class="go">Confirm</button>
+            <button type="button" id="v-resend">Send a new code</button>
+        </div>
+    </form>
+    <div class="foot">
+        <button type="button" class="link" id="v-wrong">Wrong address?</button> &middot;
+        <button type="button" class="link" data-go="login">Back to log in</button>
+    </div>
+</section>
+
+<section class="view" id="v-forgot">
+    <h2>Forgot something?</h2>
+    <form id="f-forgot" autocomplete="off">
+        <div class="radios">
+            <label><input type="radio" name="purpose" value="password" checked> New password</label>
+            <label><input type="radio" name="purpose" value="username"> New username</label>
+        </div>
+        <label for="f-id">Your username or email</label>
+        <input type="text" id="f-id" autocapitalize="none" spellcheck="false" maxlength="254">
+        <div class="row">
+            <button type="submit" class="go">Continue</button>
+            <button type="button" data-go="login">Back</button>
+        </div>
+    </form>
+</section>
+
+<section class="view" id="v-reset">
+    <h2 id="reset-title">Reset your password</h2>
+    <p class="hint">Where should we send your code? It works for 10 minutes.</p>
+    <div class="row" id="r-discord-row" style="display:none">
+        <button type="button" class="social-btn" id="r-discord" style="background:#5865f2">Send it to my Discord</button>
+    </div>
+    <div id="r-email-box">
+        <label for="r-email">The email of the account</label>
+        <input type="email" id="r-email" autocomplete="email" maxlength="254">
+        <div class="row"><button type="button" class="alt" id="r-email-send">Send it to my email</button></div>
+    </div>
+    <form id="f-reset" autocomplete="off">
+        <label for="r-code">Code</label>
+        <input type="text" id="r-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+        <label for="r-new" id="r-new-label">New password (8 or more characters)</label>
+        <input type="password" id="r-new" autocomplete="new-password" maxlength="128">
+        <div class="row">
+            <button type="submit" class="go" id="r-confirm">Reset password</button>
+            <button type="button" data-go="login">Back</button>
+        </div>
+    </form>
+</section>
+
+<section class="view" id="v-profile">
+    <h2>Finish your account</h2>
+    <p class="hint">Pick the username and password you will use here.</p>
+    <form id="f-profile" autocomplete="on">
+        <label for="p-user">Username (3-64 characters)</label>
+        <input type="text" id="p-user" autocomplete="username" maxlength="64">
+        <label for="p-pw">Password (8 or more characters)</label>
+        <input type="password" id="p-pw" autocomplete="new-password" maxlength="128">
+        <div class="row">
+            <button type="submit" class="go">Finish</button>
+            <button type="button" data-go="login">Cancel</button>
+        </div>
+    </form>
+</section>
+
+<div id="msg" role="status" aria-live="polite"></div>
+
+<div class="social" id="social">
+    <small>or sign in with</small>
+    <div class="row">
+        <button type="button" class="discord" data-provider="discord" style="display:none">Discord</button>
+        <button type="button" class="google" data-provider="google" style="display:none">Google</button>
+        <button type="button" class="apple" data-provider="apple" style="display:none">Apple</button>
+    </div>
+</div>
+
+</div>
+</main>
+<script>
+"use strict";
+// The log in, sign up, email confirmation and reset pages of the game. The games send
+// everybody here who has no valid login and take them back to ?next=... afterwards.
+// A login is three values in localStorage (uuid, PL-T, PL-P), the same ones both games read.
+const qs = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+
+function apiBase() {
+    if (qs.get("api")) return qs.get("api").replace(/\/+$/, "");
+    if (/^game\./.test(location.hostname)) return location.protocol + "//" + location.host.replace(/^game\./, "api-game.");
+    return location.protocol + "//" + location.hostname + ":55554";
+}
+const API = apiBase();
+
+// only a path on this site: never an address that sends the player somewhere else
+function nextPath() {
+    const n = qs.get("next") || "/";
+    return /^\/(?![\/\\])[^\\\s]*$/.test(n) && !/^\/(login|signup)(\/|\?|#|$)/.test(n) ? n : "/";
+}
+
+const MESSAGES = {
+    invalid_credentials: "Wrong username or password",
+    locked: "Too many failed attempts, try again in 15 minutes",
+    rate_limited: "Too many requests, slow down",
+    daily_limit: "Too many requests today, try again tomorrow",
+    expired: "That took too long, please start again",
+    email_taken: "That email is already in use",
+    username_taken: "That username is taken",
+    provider_unavailable: "Unavailable: the email service is not working right now",
+    invalid_code: "That code is wrong",
+    too_many_attempts: "Too many wrong codes, ask for a new one",
+    no_code: "Ask for a code first",
+    email_failed: "The email could not be sent, try again later",
+    method_unavailable: "That way is not available for this account",
+    wait: "Wait a minute before asking for another code",
+};
+
+async function call(path, body) {
+    try {
+        const res = await fetch(API + path, {
+            method: body === undefined ? "GET" : "POST",
+            headers: { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+            cache: "no-store",
+        });
+        const j = await res.json().catch(() => ({}));
+        return { status: res.status, j };
+    } catch (e) {
+        return { status: 0, j: {} };
+    }
+}
+
+function describe(r) {
+    if (r.status === 0) return "Could not reach the account server";
+    const j = r.j || {};
+    if (j.error === "invalid_code" && typeof j.attempts_left === "number")
+        return "That code is wrong (" + j.attempts_left + " tries left)";
+    return j.message || MESSAGES[j.error] || j.error || "Something went wrong (" + r.status + ")";
+}
+
+function msg(text, ok) {
+    $("msg").textContent = text || "";
+    $("msg").className = ok ? "ok" : "";
+}
+
+function show(name, keepMessage) {
+    for (const v of document.querySelectorAll(".view")) v.classList.toggle("on", v.id === "v-" + name);
+    if (!keepMessage) msg("");
+    $("social").style.display = (name === "login" || name === "signup") && socialAny ? "block" : "none";
+    document.title = "Rysteria: " + ({ login: "log in", signup: "sign up", verify: "confirm your email", forgot: "forgot", reset: "reset", profile: "finish your account", checking: "signing in" }[name] || "log in");
+    const first = document.querySelector("#v-" + name + " input:not([type=radio])");
+    if (first && name !== "checking") try { first.focus(); } catch (e) {}
+}
+
+// disables every button while a request is out
+async function guard(fn) {
+    for (const b of document.querySelectorAll("button")) b.disabled = true;
+    try { return await fn(); }
+    finally {
+        for (const b of document.querySelectorAll("button")) b.disabled = false;
+        $("v-resend").disabled = resendLocked;
+    }
+}
+
+// ---------------------------------------------------------------- the session
+
+function store(j) {
+    const owner = localStorage["rrolf_cache_owner"];
+    localStorage["PL-T"] = j.pl_t;
+    localStorage["PL-P"] = j.pl_p;
+    localStorage["uuid"] = j.uuid;
+    localStorage["rrolf_cache_owner"] = j.uuid;
+    // another account used this browser before: its cached loadout must not carry over
+    if (owner && owner !== j.uuid) delete localStorage["rrolf_account_data"];
+}
+
+function done(j) {
+    store(j);
+    location.replace(nextPath());
+}
+
+function gotLogin(r) {
+    return r.status >= 200 && r.status < 300 && r.j.uuid && r.j.pl_t && r.j.pl_p;
+}
+
+// ------------------------------------------------------------- email confirmation
+
+let verifyId = "";
+let resendLocked = false;
+let resendTimer = 0;
+
+function lockResend(seconds) {
+    clearInterval(resendTimer);
+    const button = $("v-resend");
+    let left = seconds;
+    resendLocked = true;
+    button.disabled = true;
+    const tick = () => {
+        if (left <= 0) {
+            clearInterval(resendTimer);
+            resendLocked = false;
+            button.disabled = false;
+            button.textContent = "Send a new code";
+            return;
+        }
+        button.textContent = "Send a new code (" + left + ")";
+        --left;
+    };
+    tick();
+    resendTimer = setInterval(tick, 1000);
+}
+
+async function sendVerifyCode() {
+    const typed = $("v-change").style.display === "none" ? "" : $("v-email").value.trim();
+    const r = await call("/auth/verify/send", typed ? { verify_id: verifyId, email: typed } : { verify_id: verifyId });
+    if (gotLogin(r)) { done(r.j); return; }
+    if (r.status >= 200 && r.status < 300) {
+        $("verify-hint").textContent = "We sent a 6 digit code to " + (r.j.email_hint || "your address") + ". It works for 10 minutes.";
+        $("v-change").style.display = "none";
+        msg("Code sent. Check your spam folder too.", true);
+        lockResend(60);
+    } else {
+        msg(describe(r));
+        if (r.j.error === "wait") lockResend(Math.ceil(r.j.retry_after || 60));
+        if (r.j.error === "expired") show("login", true), msg(describe(r));
+    }
+}
+
+async function startVerify(j) {
+    verifyId = j.verify_id;
+    $("verify-hint").textContent = "We are sending a 6 digit code to " + (j.email_hint || "your address") + "...";
+    $("v-code").value = "";
+    $("v-change").style.display = "none";
+    show("verify");
+    await guard(sendVerifyCode);
+}
+
+$("f-verify").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const otp = $("v-code").value.trim();
+    if (!otp) return msg("Type the code from the email");
+    guard(async () => {
+        const r = await call("/auth/verify/confirm", { verify_id: verifyId, otp });
+        if (gotLogin(r)) done(r.j);
+        else {
+            msg(describe(r));
+            if (r.j.error === "expired") show("login", true), msg(describe(r));
+        }
+    });
+});
+$("v-resend").addEventListener("click", () => guard(sendVerifyCode));
+$("v-wrong").addEventListener("click", () => {
+    $("v-change").style.display = "block";
+    $("v-email").focus();
+    msg("Type the right address, then ask for a new code");
+});
+
+// ------------------------------------------------------------------ log in / up
+
+$("f-login").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const identifier = $("l-id").value.trim(), password = $("l-pw").value;
+    if (!identifier || !password) return msg("Enter your username (or email) and password");
+    guard(async () => {
+        const r = await call("/auth/login", { identifier, password });
+        if (gotLogin(r)) { $("l-pw").value = ""; done(r.j); }
+        else if (r.j.error === "email_unverified" && r.j.verify_id) { $("l-pw").value = ""; await startVerify(r.j); }
+        else msg(describe(r));
+    });
+});
+
+$("f-signup").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = $("s-email").value.trim(), username = $("s-user").value.trim(), password = $("s-pw").value;
+    if (!email || !username || !password) return msg("Fill in your email, username and password");
+    guard(async () => {
+        const r = await call("/auth/signup", { email, username, password });
+        $("s-pw").value = "";
+        if (gotLogin(r)) done(r.j);
+        else if (r.j.error === "email_unverified" && r.j.verify_id) await startVerify(r.j);
+        else msg(describe(r));
+    });
+});
+
+// ------------------------------------------------------- password / username reset
+
+let resetId = "", resetPurpose = "password", resetCodeSent = false;
+
+$("f-forgot").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const identifier = $("f-id").value.trim();
+    const purpose = document.querySelector("input[name=purpose]:checked").value;
+    if (!identifier) return msg("Enter your username or email");
+    guard(async () => {
+        const r = await call("/auth/reset/start", { identifier, purpose });
+        if (!(r.status >= 200 && r.status < 300)) return msg(describe(r));
+        resetId = r.j.reset_id;
+        resetPurpose = r.j.purpose === "username" ? "username" : "password";
+        resetCodeSent = false;
+        const discord = (r.j.methods || []).some((m) => m.method === "discord" && m.available);
+        $("r-discord-row").style.display = discord ? "flex" : "none";
+        $("reset-title").textContent = resetPurpose === "username" ? "Change your username" : "Reset your password";
+        $("r-new-label").textContent = resetPurpose === "username" ? "New username (3-64 characters)" : "New password (8 or more characters)";
+        const field = $("r-new");
+        field.type = resetPurpose === "username" ? "text" : "password";
+        field.autocomplete = resetPurpose === "username" ? "username" : "new-password";
+        field.value = "";
+        $("r-code").value = "";
+        $("r-confirm").textContent = resetPurpose === "username" ? "Change username" : "Reset password";
+        show("reset");
+    });
+});
+
+async function sendResetCode(body) {
+    const r = await call("/auth/reset/send", Object.assign({ reset_id: resetId }, body));
+    if (r.status >= 200 && r.status < 300) {
+        resetCodeSent = true;
+        msg(body.method === "discord"
+            ? "Code sent as a Discord message. It works for 10 minutes."
+            : "If an account has that address, a code is on its way. It works for 10 minutes.", true);
+    } else {
+        msg(describe(r));
+        if (r.j.error === "expired") show("forgot", true), msg(describe(r));
+    }
+}
+$("r-discord").addEventListener("click", () => guard(() => sendResetCode({ method: "discord" })));
+$("r-email-send").addEventListener("click", () => {
+    const email = $("r-email").value.trim();
+    if (!email) return msg("Type the email address of the account");
+    guard(() => sendResetCode({ method: "email", email }));
+});
+
+$("f-reset").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const otp = $("r-code").value.trim(), value = $("r-new").value;
+    if (!otp || !value) return msg(resetPurpose === "username" ? "Enter the code and your new username" : "Enter the code and your new password");
+    if (!resetCodeSent && !confirm("You have not asked for a code on this page yet. Use one you already have?")) return;
+    guard(async () => {
+        const body = { reset_id: resetId, otp };
+        if (resetPurpose === "username") body.new_username = value; else body.new_password = value;
+        const r = await call("/auth/reset/confirm", body);
+        if (r.status >= 200 && r.status < 300) {
+            $("r-new").value = "";
+            show("login");
+            msg(resetPurpose === "username" ? "Username changed. Log in with the new one." : "Password changed. Log in with your new password.", true);
+        } else {
+            msg(describe(r));
+            if (r.j.error === "expired") show("forgot", true), msg(describe(r));
+        }
+    });
+});
+
+// ------------------------------------------------ Discord / Google / Apple return
+
+let pendingId = "";
+
+$("f-profile").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const username = $("p-user").value.trim(), password = $("p-pw").value;
+    if (!username || !password) return msg("Choose a username and a password");
+    guard(async () => {
+        const r = await call("/auth/complete-profile", { pending_id: pendingId, username, password });
+        $("p-pw").value = "";
+        if (gotLogin(r)) done(r.j); else msg(describe(r));
+    });
+});
+
+let socialAny = false;
+async function loadProviders() {
+    const r = await call("/oauth/providers");
+    if (r.status !== 200) return;
+    for (const b of document.querySelectorAll("[data-provider]")) {
+        const on = !!r.j[b.dataset.provider];
+        b.style.display = on ? "" : "none";
+        socialAny = socialAny || on;
+    }
+    // the first view may already be showing
+    const open = document.querySelector(".view.on");
+    if (open && (open.id === "v-login" || open.id === "v-signup")) $("social").style.display = socialAny ? "block" : "none";
+}
+for (const b of document.querySelectorAll("[data-provider]"))
+    b.addEventListener("click", () => { location.href = API + "/oauth/" + b.dataset.provider + "/start"; });
+
+// ------------------------------------------------------------------- navigation
+
+for (const b of document.querySelectorAll("[data-go]"))
+    b.addEventListener("click", () => {
+        const to = b.dataset.go;
+        if (to === "forgot" && $("l-id").value) $("f-id").value = $("l-id").value;
+        show(to);
+    });
+
+function hashValue(key) {
+    const m = new RegExp("[#&]" + key + "=([^&]*)").exec(location.hash || "");
+    if (!m) return "";
+    try { return decodeURIComponent(m[1]).slice(0, 200); } catch (e) { return ""; }
+}
+
+async function start() {
+    const initial = location.pathname.replace(/\/+$/, "") === "/signup" ? "signup" : "login";
+    const code = hashValue("oauth_code"), problem = hashValue("oauth_error");
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+    loadProviders();
+
+    if (code) {
+        show("checking");
+        const r = await call("/oauth/exchange", { code });
+        if (gotLogin(r)) return done(r.j);
+        if (r.status === 200 && r.j.status === "profile_required") {
+            pendingId = r.j.pending_id;
+            $("p-user").value = r.j.suggested_username || "";
+            show("profile");
+            return msg("Choose a username and password for your account");
+        }
+        show("login");
+        return msg(describe(r));
+    }
+    if (problem) {
+        show(initial);
+        return msg(problem === "unavailable" ? "That sign-in is not set up on this server" : "Sign-in did not work, try again");
+    }
+
+    // a game that said no to the login it had: forget it (also the copy gardn keeps for a reload)
+    if (qs.get("relogin")) {
+        try { delete localStorage["PL-T"]; delete localStorage["PL-P"]; delete localStorage["uuid"]; } catch (e) {}
+        try { sessionStorage.removeItem("gardn_uuid"); sessionStorage.removeItem("gardn_PL-P"); } catch (e) {}
+        show(initial);
+        return msg("Please log in again");
+    }
+
+    // somebody who is logged in already goes straight back to the game
+    if (localStorage["uuid"] && localStorage["PL-T"] && localStorage["PL-P"]) {
+        show("checking");
+        const r = await call("/auth/session", { uuid: localStorage["uuid"], pl_t: localStorage["PL-T"], pl_p: localStorage["PL-P"] });
+        if (r.status === 200) return location.replace(nextPath());
+        if (r.status === 401 || r.status === 403) {
+            delete localStorage["PL-T"]; delete localStorage["PL-P"];
+            show("login");
+            return msg(r.j.error === "email_unverified"
+                ? "Log in to confirm your email address first"
+                : r.j.error === "expired" ? "Your session expired, please log in again" : "Please log in");
+        }
+        show("login");
+        return msg("Could not reach the account server");
+    }
+    show(initial);
+}
+start();
+</script>
+</body>
+</html>

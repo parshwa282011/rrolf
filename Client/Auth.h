@@ -17,67 +17,38 @@
 
 #include <stdint.h>
 
-// Account login against the master server (see MasterServer/c).
+// Account login against the master server (see MasterServer/c). Logging in,
+// signing up, confirming the email and resetting a password are NOT done here:
+// they are the static page Client/public/login.html. The game only checks that
+// the browser holds a working login and sends it to /login when it does not.
 //
 // localStorage keys (shared with the gardn client on the same origin):
 //   uuid  PL-T  PL-P
 // PL-T never expires and is only ever sent to the master. PL-P lasts a week:
 // it is what the game server receives together with the uuid. When PL-P has
-// expired the player must log in again (password or Discord).
+// expired the player is sent to the log in page again.
 
 struct rr_game;
 
 enum rr_auth_screen
 {
-    rr_auth_screen_none,           // logged in (or game not asking yet)
-    rr_auth_screen_checking,       // validating the stored session
-    rr_auth_screen_login,
-    rr_auth_screen_signup,
-    rr_auth_screen_reset_identify, // "which account?"
-    rr_auth_screen_reset_code,     // pick a method, enter the OTP, new password
-    rr_auth_screen_profile         // after Discord: choose username + password
+    rr_auth_screen_none,    // logged in (or game not asking yet)
+    rr_auth_screen_checking // validating the stored session / on the way to /login
 };
 
 struct rr_auth_state
 {
     uint8_t screen;
-    uint8_t busy;
-    uint8_t reset_discord_available;
-    uint8_t reset_code_sent;
-    // text fields (kept in sync with the DOM inputs by Ui/TextInput.c)
-    char identifier[255];
-    char email[255];
-    char username[65];
-    char password[129];
-    char otp[16];
-    char new_password[129];
-    // shown under the form
     char message[256];
-    char notice[256];
-    char reset_id[64];
-    char pending_id[64];
 };
 
-// call once at startup: handles a Discord return (#oauth_code=...), else
-// validates the stored session, else shows the login screen
+// call once at startup: validates the stored session, or sends the browser to
+// /login (also when a social sign in returned with #oauth_code=...)
 void rr_auth_start(struct rr_game *);
 
-void rr_auth_login(struct rr_game *);
-void rr_auth_signup(struct rr_game *);
-void rr_auth_discord(struct rr_game *);
-void rr_auth_google(struct rr_game *);
-void rr_auth_apple(struct rr_game *);
 void rr_auth_link_discord(struct rr_game *);
-void rr_auth_reset_start(struct rr_game *);
-void rr_auth_reset_send(struct rr_game *);
-// the code goes to the address typed in auth.email, if it is the account's
-void rr_auth_reset_send_email(struct rr_game *);
-void rr_auth_reset_confirm(struct rr_game *);
-void rr_auth_complete_profile(struct rr_game *);
+// forgets the login and goes to /login
 void rr_auth_logout(struct rr_game *);
-void rr_auth_show(struct rr_game *, enum rr_auth_screen);
 
-// called from JavaScript when a request to the master finished (exported)
-void rr_auth_on_response(int kind, int status, char *error, char *message,
-                         char *uuid, char *pl_t, char *pl_p, char *username,
-                         char *extra1, char *extra2, char *extra3);
+// called from JavaScript when the session check finished (exported)
+void rr_auth_on_response(int status, char *uuid, char *pl_p, char *username);
