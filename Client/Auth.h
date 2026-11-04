@@ -46,6 +46,7 @@ struct rr_auth_state
 // /login (also when a social sign in returned with #oauth_code=...)
 void rr_auth_start(struct rr_game *);
 
+// opens the account page (/account): link Discord/Google/Apple, add an email, delete the account
 void rr_auth_link_discord(struct rr_game *);
 // forgets the login and goes to /login
 void rr_auth_logout(struct rr_game *);

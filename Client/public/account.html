@@ -1,0 +1,396 @@
+<!--
+Copyright (C) 2024 Paul Johnson
+Copyright (C) 2024-2025 Maxim Nesterov
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rysteria: your account</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="/favicon.ico" rel="icon" sizes="any">
+<link href="/logo.png" rel="icon" type="image/png">
+<link href="/apple-touch-icon.png" rel="apple-touch-icon">
+<style>
+@font-face {
+    font-family: "Ubuntu";
+    font-weight: 700;
+    src: url("/fonts/Ubuntu-Bold.ttf") format("truetype");
+}
+:root { --grass: #1ea761; --ink: #222; --blue: #3377cc; --green: #3aa84a; --grey: #666; --red: #c0392b; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: "Ubuntu", system-ui, sans-serif;
+    font-weight: 700;
+    color: #fff;
+    background:
+        radial-gradient(1200px 700px at 15% -10%, #3cc97d 0%, transparent 60%),
+        radial-gradient(900px 600px at 100% 10%, #14803f 0%, transparent 55%),
+        var(--grass);
+    background-attachment: fixed;
+    min-height: 100vh;
+    padding: 24px 12px;
+}
+.outline { text-shadow: -2px 0 var(--ink), 2px 0 var(--ink), 0 -2px var(--ink), 0 2px var(--ink),
+    -1.5px -1.5px var(--ink), 1.5px -1.5px var(--ink), -1.5px 1.5px var(--ink), 1.5px 1.5px var(--ink); }
+main { width: 100%; max-width: 520px; margin: 0 auto; }
+h1 { font-size: 36px; text-align: center; margin-bottom: 14px; }
+.card { background: rgba(32, 32, 32, 0.88); border-radius: 10px; padding: 18px; margin-bottom: 14px; }
+.card.danger { border: 2px solid var(--red); }
+h2 { font-size: 20px; margin-bottom: 10px; }
+p.hint { font-size: 14px; color: #ccc; margin: 6px 0 10px; line-height: 1.4; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.12); font-size: 15px; }
+.row:first-of-type { border-top: 0; }
+.row .what { min-width: 0; overflow-wrap: anywhere; }
+.row small { display: block; color: #ccc; font-size: 13px; }
+label { display: block; font-size: 14px; margin: 10px 0 4px; }
+input[type=text], input[type=email], input[type=password] {
+    width: 100%; padding: 8px 10px; border-radius: 6px; border: 2px solid #111;
+    font: inherit; font-size: 16px; background: #fff; color: #222;
+}
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 12px 0 0; }
+.check input { margin-top: 3px; }
+.btns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+button {
+    font: inherit; font-size: 15px; color: #fff; border: 2px solid #111; border-radius: 6px;
+    padding: 8px 12px; cursor: pointer; background: var(--grey);
+    text-shadow: -1px 0 var(--ink), 1px 0 var(--ink), 0 -1px var(--ink), 0 1px var(--ink);
+}
+button.go { background: var(--green); }
+button.alt { background: var(--blue); }
+button.bad { background: var(--red); }
+button:disabled { opacity: 0.5; cursor: default; }
+#msg { min-height: 22px; margin: 4px 2px 12px; font-size: 14px; color: #ffe066; line-height: 1.35; text-align: center; }
+#msg.ok { color: #8cf0a0; }
+.hidden { display: none; }
+.top { display: flex; justify-content: center; gap: 14px; font-size: 14px; margin-bottom: 12px; }
+.top a, .foot a { color: #fff; }
+.foot { text-align: center; font-size: 13px; margin-top: 6px; color: #e6f5ea; }
+</style>
+</head>
+<body>
+<main>
+<h1 class="outline">Your account</h1>
+<div class="top"><a href="/">Back to the game</a> <a href="/status">Your stats</a> <a href="#" id="logout">Log out</a></div>
+<div id="msg" role="status" aria-live="polite"></div>
+
+<section class="card hidden" id="c-profile">
+    <h2>You</h2>
+    <div class="row"><div class="what">Username<small id="p-user"></small></div></div>
+    <div class="row">
+        <div class="what">Email<small id="p-email"></small></div>
+    </div>
+    <form id="f-email" class="hidden" autocomplete="off">
+        <p class="hint">Your account has no email address (you signed up with Discord, Google or Apple). Add one so we can send you codes to confirm your address, reset your password and delete your account. We send a code to it right away.</p>
+        <label for="e-email">Email</label>
+        <input type="email" id="e-email" autocomplete="email" maxlength="254">
+        <div class="btns"><button type="submit" class="go">Add email</button></div>
+    </form>
+    <form id="f-confirm" class="hidden" autocomplete="off">
+        <p class="hint" id="confirm-hint">We sent a 6 digit code. It works for 10 minutes.</p>
+        <label for="e-code">Code</label>
+        <input type="text" id="e-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+        <div class="btns"><button type="submit" class="go">Confirm email</button> <button type="button" id="e-resend">Send a new code</button></div>
+    </form>
+</section>
+
+<section class="card hidden" id="c-links">
+    <h2>Sign in with</h2>
+    <p class="hint">Link more ways to get into this same account. Your username and password keep working.</p>
+    <div id="link-rows"></div>
+</section>
+
+<section class="card danger hidden" id="c-delete">
+    <h2>Delete my account</h2>
+    <p class="hint">This removes your account for good: your username, email, linked sign-ins, progress, items, saved runs and leaderboard places. It can not be undone, and we can not bring it back. Nobody else can do it for you: it needs your password and a code we send to your email (or Discord).</p>
+
+    <form id="f-del1" autocomplete="off">
+        <label for="d-pw">Your password</label>
+        <input type="password" id="d-pw" autocomplete="current-password" maxlength="128">
+        <label class="check"><input type="checkbox" id="d-sure"> <span>I understand that my account and everything in it will be deleted for good.</span></label>
+        <div class="btns"><button type="submit" class="bad">Continue</button></div>
+    </form>
+
+    <div id="d-step2" class="hidden">
+        <p class="hint" id="d-where"></p>
+        <div id="d-email-box">
+            <label for="d-email">Email address to send the code to</label>
+            <input type="email" id="d-email" autocomplete="email" maxlength="254">
+            <div class="btns"><button type="button" class="alt" id="d-send-email">Send code by email</button></div>
+        </div>
+        <div class="btns hidden" id="d-discord-box"><button type="button" id="d-send-discord" style="background:#5865f2">Send code to my Discord</button></div>
+        <form id="f-del2" autocomplete="off">
+            <label for="d-code">The code</label>
+            <input type="text" id="d-code" inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+            <label for="d-name">Type your username <b id="d-name-is"></b> to confirm</label>
+            <input type="text" id="d-name" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="64">
+            <div class="btns"><button type="submit" class="bad">Delete my account forever</button> <button type="button" id="d-cancel">Cancel</button></div>
+        </form>
+    </div>
+</section>
+
+<section class="card hidden" id="c-done">
+    <h2>Your account was deleted</h2>
+    <p class="hint">Everything of it is gone and you are logged out. We sent a short note to your email. Thank you for playing.</p>
+    <div class="btns"><button type="button" class="go" onclick="location.href='/'">Done</button></div>
+</section>
+
+<p class="foot"><a href="/privacy">Privacy Policy</a> &middot; <a href="/terms">Terms of Service</a></p>
+</main>
+<script>
+"use strict";
+// The account page: who you are, an email for accounts that came from Discord/Google/Apple,
+// the sign-ins linked to it, and deleting it. Everything is asked of the master (the api-game
+// host) with the three values of the login (uuid, PL-T, PL-P) from localStorage.
+const qs = new URLSearchParams(location.search);
+const $ = (id) => document.getElementById(id);
+function apiBase() {
+    if (qs.get("api")) return qs.get("api").replace(/\/+$/, "");
+    if (/^game\./.test(location.hostname)) return location.protocol + "//" + location.host.replace(/^game\./, "api-game.");
+    return location.protocol + "//" + location.hostname + ":55554";
+}
+const API = apiBase();
+const NAMES = { discord: "Discord", google: "Google", apple: "Apple" };
+const MESSAGES = {
+    invalid_credentials: "Wrong password",
+    locked: "Too many failed attempts, try again in 15 minutes",
+    rate_limited: "Too many requests, slow down",
+    daily_limit: "Too many requests today, try again tomorrow",
+    expired: "That took too long, please start again",
+    email_taken: "That email is already in use",
+    invalid_email: "Enter a valid email address",
+    invalid_code: "That code is wrong",
+    too_many_attempts: "Too many wrong codes, ask for a new one",
+    no_code: "Ask for a code first",
+    email_failed: "The email could not be sent, try again later",
+    confirm_mismatch: "Type your username exactly as it is shown",
+    no_code_channel: "There is no confirmed email or Discord on this account to send a code to. Add and confirm an email first.",
+    wait: "Wait a minute before asking for another code",
+    link_conflict: "That account is already linked to another Rysteria account",
+    denied: "The sign in was cancelled",
+    provider_failed: "The sign in did not work, try again",
+    server_error: "Something went wrong on our side, try again",
+};
+
+function creds() {
+    try { return { uuid: localStorage["uuid"], pl_t: localStorage["PL-T"], pl_p: localStorage["PL-P"] }; }
+    catch (e) { return {}; }
+}
+async function call(path, body) {
+    try {
+        const res = await fetch(API + path, {
+            method: body === undefined ? "GET" : "POST",
+            headers: { "content-type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+            cache: "no-store",
+        });
+        return { status: res.status, j: await res.json().catch(() => ({})) };
+    } catch (e) { return { status: 0, j: {} }; }
+}
+function describe(r) {
+    if (r.status === 0) return "Could not reach the account server";
+    const j = r.j || {};
+    if (j.error === "invalid_code" && typeof j.attempts_left === "number") return "That code is wrong (" + j.attempts_left + " tries left)";
+    return j.message || MESSAGES[j.error] || j.error || "Something went wrong (" + r.status + ")";
+}
+function msg(text, ok) { $("msg").textContent = text || ""; $("msg").className = ok ? "ok" : ""; }
+async function guard(fn) {
+    for (const b of document.querySelectorAll("button")) b.disabled = true;
+    try { return await fn(); } finally { for (const b of document.querySelectorAll("button")) b.disabled = false; }
+}
+function toLogin(relogin) {
+    location.replace("/login?" + (relogin ? "relogin=1&" : "") + "next=" + encodeURIComponent("/account"));
+}
+function store(j) {
+    localStorage["PL-T"] = j.pl_t; localStorage["PL-P"] = j.pl_p; localStorage["uuid"] = j.uuid;
+}
+
+let me = null, providers = {};
+
+async function load() {
+    const c = creds();
+    if (!c.uuid || !c.pl_t || !c.pl_p) return toLogin(false);
+    const [info, prov] = await Promise.all([call("/auth/account", c), call("/oauth/providers")]);
+    if (info.status === 401 || info.status === 403) {
+        try { delete localStorage["PL-T"]; delete localStorage["PL-P"]; } catch (e) {}
+        return toLogin(false);
+    }
+    if (info.status !== 200) return msg(describe(info));
+    me = info.j;
+    providers = prov.status === 200 ? prov.j : {};
+    render();
+}
+
+function render() {
+    $("p-user").textContent = me.username;
+    $("p-email").textContent = me.email ? me.email + (me.email_verified ? " (confirmed)" : " (not confirmed yet)") : "none";
+    $("f-email").classList.toggle("hidden", !!me.email);
+    $("c-profile").classList.remove("hidden");
+
+    const rows = $("link-rows");
+    rows.textContent = "";
+    let any = false;
+    for (const p of ["discord", "google", "apple"]) {
+        const link = (me.links || []).find((l) => l.provider === p);
+        if (!link && !providers[p]) continue;
+        any = true;
+        const row = document.createElement("div"); row.className = "row";
+        const what = document.createElement("div"); what.className = "what";
+        what.textContent = NAMES[p];
+        const small = document.createElement("small");
+        small.textContent = link ? "Linked" + (link.display_name ? ": " + link.display_name : "") : "Not linked";
+        what.appendChild(small);
+        const button = document.createElement("button");
+        button.textContent = link ? "Unlink" : "Link";
+        button.className = link ? "" : "alt";
+        button.addEventListener("click", () => guard(() => (link ? unlink(p) : startLink(p))));
+        row.append(what, button);
+        rows.appendChild(row);
+    }
+    $("c-links").classList.toggle("hidden", !any);
+    $("c-delete").classList.remove("hidden");
+}
+
+async function startLink(p) {
+    const r = await call("/oauth/" + p + "/link-start", creds());
+    if (r.j.url) location.href = r.j.url; else msg(describe(r));
+}
+async function unlink(p) {
+    if (!confirm("Unlink " + NAMES[p] + " from this account?")) return;
+    const r = await call("/auth/unlink/" + p, creds());
+    if (r.status === 200) { msg(NAMES[p] + " unlinked", true); await load(); } else msg(describe(r));
+}
+
+// ---------------------------------------------------------------- an email for the account
+
+let verifyId = "";
+$("f-email").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = $("e-email").value.trim();
+    if (!email) return msg("Enter an email address");
+    guard(async () => {
+        const r = await call("/auth/email/add", Object.assign({ email }, creds()));
+        if (r.j.error === "email_unverified" && r.j.verify_id) {
+            verifyId = r.j.verify_id;
+            $("f-email").classList.add("hidden");
+            $("f-confirm").classList.remove("hidden");
+            $("p-email").textContent = email + " (not confirmed yet)";
+            await sendCode();
+        } else if (r.status === 200) { msg("Email added", true); await load(); }
+        else msg(describe(r));
+    });
+});
+async function sendCode() {
+    const r = await call("/auth/verify/send", { verify_id: verifyId });
+    if (r.status === 200 && r.j.pl_p) { store(r.j); await load(); return; }
+    if (r.status === 200) { $("confirm-hint").textContent = "We sent a 6 digit code to " + (r.j.email_hint || "your address") + ". It works for 10 minutes."; msg("Code sent. Check your spam folder too.", true); }
+    else msg(describe(r));
+}
+$("e-resend").addEventListener("click", () => guard(sendCode));
+$("f-confirm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const otp = $("e-code").value.trim();
+    if (!otp) return msg("Type the code from the email");
+    guard(async () => {
+        const r = await call("/auth/verify/confirm", { verify_id: verifyId, otp });
+        if (r.status === 200 && r.j.pl_p) { store(r.j); $("f-confirm").classList.add("hidden"); msg("Email confirmed", true); await load(); }
+        else msg(describe(r));
+    });
+});
+
+// ------------------------------------------------------------------ deleting the account
+
+let resetId = "";
+$("f-del1").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const password = $("d-pw").value;
+    if (!password) return msg("Type your password");
+    if (!$("d-sure").checked) return msg("Tick the box to say you understand");
+    guard(async () => {
+        const r = await call("/auth/delete/start", Object.assign({ password }, creds()));
+        $("d-pw").value = "";
+        if (r.status !== 200) {
+            if (r.status === 401 && r.j.error !== "invalid_credentials") return toLogin(true);
+            return msg(describe(r));
+        }
+        resetId = r.j.reset_id;
+        $("f-del1").classList.add("hidden");
+        $("d-step2").classList.remove("hidden");
+        $("d-email-box").classList.toggle("hidden", !r.j.email);
+        $("d-discord-box").classList.toggle("hidden", !r.j.discord);
+        $("d-name-is").textContent = "(" + me.username + ")";
+        const hints = (r.j.email_hints || []).join(", ");
+        $("d-where").textContent = "Password accepted. We have to send you a code now." +
+            (r.j.email ? " Type the full email address (we show only the start of it: " + hints + ")." : "") +
+            (r.j.discord ? " Your Discord is linked too: you can get the code there." : "");
+        msg("");
+    });
+});
+async function sendDeleteCode(body) {
+    const r = await call("/auth/reset/send", Object.assign({ reset_id: resetId }, body));
+    if (r.status === 200) msg(body.method === "discord" ? "Code sent as a Discord message." : "If that is one of your addresses, a code is on its way. It works for 10 minutes.", true);
+    else { msg(describe(r)); if (r.j.error === "expired") resetDelete(); }
+}
+$("d-send-email").addEventListener("click", () => {
+    const email = $("d-email").value.trim();
+    if (!email) return msg("Type the email address");
+    guard(() => sendDeleteCode({ method: "email", email }));
+});
+$("d-send-discord").addEventListener("click", () => guard(() => sendDeleteCode({ method: "discord" })));
+function resetDelete() {
+    resetId = "";
+    $("d-step2").classList.add("hidden");
+    $("f-del1").classList.remove("hidden");
+    $("d-code").value = ""; $("d-name").value = ""; $("d-sure").checked = false;
+}
+$("d-cancel").addEventListener("click", () => { resetDelete(); msg("Nothing was deleted", true); });
+$("f-del2").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const otp = $("d-code").value.trim(), typed = $("d-name").value;
+    if (!otp) return msg("Type the code we sent you");
+    if (typed !== me.username) return msg("Type your username exactly as it is shown: " + me.username);
+    if (!confirm("Delete the account " + me.username + " and everything in it for good?\n\nThis can not be undone.")) return;
+    guard(async () => {
+        const r = await call("/auth/reset/confirm", { reset_id: resetId, otp, confirm_username: typed });
+        if (r.status === 200 && r.j.deleted) {
+            try { for (const k of ["PL-T", "PL-P", "uuid", "rrolf_cache_owner", "rrolf_account_data"]) delete localStorage[k]; } catch (e) {}
+            for (const c of document.querySelectorAll(".card")) c.classList.add("hidden");
+            $("c-done").classList.remove("hidden");
+            document.querySelector(".top").classList.add("hidden");
+            msg("");
+        } else { msg(describe(r)); if (r.j.error === "expired") resetDelete(); }
+    });
+});
+
+$("logout").addEventListener("click", (e) => {
+    e.preventDefault();
+    try { delete localStorage["PL-T"]; delete localStorage["PL-P"]; delete localStorage["uuid"]; } catch (x) {}
+    location.replace("/login");
+});
+
+// the way back from linking Discord / Google / Apple (the master sends the browser here)
+(function () {
+    const h = location.hash || "";
+    const find = (key) => { const m = new RegExp("[#&]" + key + "=([^&]*)").exec(h); try { return m ? decodeURIComponent(m[1]) : ""; } catch (e) { return ""; } };
+    if (h) history.replaceState(null, "", location.pathname + location.search);
+    if (find("oauth") === "linked") msg("Linked", true);
+    else if (find("oauth_error")) msg(MESSAGES[find("oauth_error")] || "The sign in did not work, try again");
+})();
+const first = $("msg").textContent, firstOk = $("msg").className;
+load().then(() => { if (first) msg(first, firstOk === "ok"); });
+</script>
+</body>
+</html>

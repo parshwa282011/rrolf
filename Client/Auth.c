@@ -190,26 +190,8 @@ void rr_auth_start(struct rr_game *game)
 void rr_auth_link_discord(struct rr_game *game)
 {
 #ifdef EMSCRIPTEN
-    // the master answers with the Discord URL for this account
-    EM_ASM(
-        {
-            const base = UTF8ToString($0);
-            fetch(base + "oauth/discord/link-start", {
-                "method" : "POST",
-                "headers" : {"content-type" : "application/json"},
-                "body" : JSON.stringify({
-                    "uuid" : window.localStorage["uuid"],
-                    "pl_t" : window.localStorage["PL-T"],
-                    "pl_p" : window.localStorage["PL-P"]
-                })
-            })
-                .then(function(r) { return r.json(); })
-                .then(function(j) {
-                    if (j["url"])
-                        window.location.href = j["url"];
-                });
-        },
-        RR_BASE_API_URL);
+    // linking Discord, Google or Apple, an email, deleting the account: the account page
+    EM_ASM({ window.location.href = "/account"; });
 #endif
 }
 
