@@ -587,6 +587,36 @@ static int pg_gardn_list(struct ms_db *db, char const *uuid,
     return result;
 }
 
+static int pg_gardn_take(struct ms_db *db, char const *uuid, char const *save_id,
+                         struct ms_db_gsave *out)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char const *params[] = {uuid, save_id};
+    PGresult *r = run(c,
+                      "DELETE FROM gardn.saves WHERE uuid = $1 AND save_id = $2"
+                      " RETURNING save_id, score, loadout::text, created_at",
+                      2, params);
+    int result;
+    if (PQresultStatus(r) != PGRES_TUPLES_OK)
+        result = log_failure("gardn_take", r);
+    else if (PQntuples(r) == 0)
+        result = MS_DB_NOT_FOUND;
+    else
+    {
+        memset(out, 0, sizeof *out);
+        ms_strlcpy(out->save_id, PQgetvalue(r, 0, 0), sizeof out->save_id);
+        out->score = (uint32_t)atoll(PQgetvalue(r, 0, 1));
+        out->loadout = strdup(PQgetvalue(r, 0, 2));
+        out->created_at = atoll(PQgetvalue(r, 0, 3));
+        result = MS_DB_OK;
+    }
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
 static int pg_gardn_apply(struct ms_db *db, char const *uuid,
                           struct ms_db_gsave const *add, int add_count,
                           char const (*remove)[40], int remove_count)
@@ -1276,6 +1306,7 @@ struct ms_db *ms_db_postgres_open()
     db->rysteria_put = pg_rysteria_put;
     db->gardn_list = pg_gardn_list;
     db->gardn_apply = pg_gardn_apply;
+    db->gardn_take = pg_gardn_take;
     db->lb_submit = pg_lb_submit;
     db->lb_top = pg_lb_top;
     db->lb_apply = pg_lb_apply;

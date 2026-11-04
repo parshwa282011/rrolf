@@ -103,6 +103,7 @@ void ms_h_provider_unavailable(struct ms_req *, struct ms_res *);
 void ms_h_srv_verify(struct ms_req *, struct ms_res *);
 void ms_h_srv_gardn_load(struct ms_req *, struct ms_res *);
 void ms_h_srv_gardn_flush(struct ms_req *, struct ms_res *);
+void ms_h_srv_gardn_take(struct ms_req *, struct ms_res *);
 void ms_h_srv_lb_submit(struct ms_req *, struct ms_res *);
 void ms_h_srv_lb_top(struct ms_req *, struct ms_res *);
 

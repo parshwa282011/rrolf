@@ -167,6 +167,12 @@ struct ms_db
                        struct ms_db_gsave const *add, int add_count,
                        char const (*remove)[40], int remove_count);
 
+    // Removes ONE save and hands it back, in one step (a save can only be
+    // restored once, however many servers ask). MS_DB_OK (*out is filled, its
+    // loadout is malloc'd), MS_DB_NOT_FOUND, MS_DB_ERROR
+    int (*gardn_take)(struct ms_db *, char const *uuid, char const *save_id,
+                      struct ms_db_gsave *out);
+
     int (*lb_submit)(struct ms_db *, char const *board, char const *uuid,
                      double score, char const *extra_json);
     // best first, equal scores in the order they were reached, players with a

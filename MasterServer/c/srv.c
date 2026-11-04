@@ -107,6 +107,42 @@ static int valid_save_id(char const *s)
     return 1;
 }
 
+// What the player's saves add up to now, read from the database (gardn keeps
+// no list of them): the Mythic petals in all of them and the best score.
+// `ids` are the petal ids gardn calls Mythic. 0 on success
+static int account_stats(char const *uuid, cJSON const *ids, uint64_t *mythics,
+                         uint64_t *best)
+{
+    struct ms_db_gsave *saves = calloc(MS_GARDN_MAX_SAVES, sizeof *saves);
+    int n = MS_DB->gardn_list(MS_DB, uuid, saves, MS_GARDN_MAX_SAVES);
+    *mythics = 0;
+    *best = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        if (saves[i].score > *best)
+            *best = saves[i].score;
+        cJSON *loadout = cJSON_Parse(saves[i].loadout);
+        cJSON const *slot;
+        cJSON_ArrayForEach(slot, loadout)
+        {
+            cJSON const *id;
+            if (!cJSON_IsNumber(slot))
+                continue;
+            cJSON_ArrayForEach(id, ids)
+                if (cJSON_IsNumber(id) && id->valuedouble == slot->valuedouble)
+                {
+                    ++*mythics;
+                    break;
+                }
+        }
+        cJSON_Delete(loadout);
+    }
+    if (n > 0)
+        ms_db_gsave_free(saves, n);
+    free(saves);
+    return n < 0 ? -1 : 0;
+}
+
 // Applies one {uuid, add:[...], remove:[...]} entry; returns 0 on success
 static int apply_change(cJSON const *change)
 {
@@ -190,10 +226,16 @@ static int apply_change(cJSON const *change)
         int have = cJSON_IsNumber(mythics) && cJSON_IsNumber(best) &&
                    mythics->valuedouble >= 0 && best->valuedouble >= 0 &&
                    mythics->valuedouble < 1e9 && best->valuedouble < 4294967296.0;
+        uint64_t m = have ? (uint64_t)mythics->valuedouble : 0;
+        uint64_t b = have ? (uint64_t)best->valuedouble : 0;
+        // gardn sends the Mythic petal ids instead of keeping all the saves in
+        // memory to add them up: the totals come from the database
+        cJSON const *ids = cJSON_GetObjectItemCaseSensitive(change, "mythic_ids");
+        if ((add_count > 0 || remove_count > 0) && cJSON_IsArray(ids) &&
+            account_stats(uuid, ids, &m, &b) == 0)
+            have = 1;
         if (k > 0 || have)
-            ms_lb_push_gardn(uuid, k, have,
-                             have ? (uint64_t)mythics->valuedouble : 0,
-                             have ? (uint64_t)best->valuedouble : 0);
+            ms_lb_push_gardn(uuid, k, have, m, b);
     }
     return result;
 }
@@ -304,4 +346,44 @@ void ms_h_srv_lb_top(struct ms_req *req, struct ms_res *res)
     if (n > 0)
         ms_db_lb_free(entries, n);
     free(entries);
+}
+
+// gardn restores a save: it is removed and handed back in one step, so that
+// it can only ever be restored once. { uuid, save_id, mythic_ids }
+void ms_h_srv_gardn_take(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *body = ms_req_json(req);
+    char const *uuid = ms_json_str(body, "uuid");
+    char const *save_id = ms_json_str(body, "save_id");
+    if (!ms_uuid_valid(uuid) || !valid_save_id(save_id))
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        cJSON_Delete(body);
+        return;
+    }
+    struct ms_db_gsave save;
+    int rc = MS_DB->gardn_take(MS_DB, uuid, save_id, &save);
+    if (rc == MS_DB_NOT_FOUND)
+        ms_res_error(res, 404, "not_found", "That save is gone");
+    else if (rc != MS_DB_OK)
+        ms_res_error(res, 500, "server_error", NULL);
+    else
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddBoolToObject(o, "ok", 1);
+        cJSON *s = cJSON_AddObjectToObject(o, "save");
+        cJSON_AddStringToObject(s, "save_id", save.save_id);
+        cJSON_AddNumberToObject(s, "score", save.score);
+        cJSON_AddNumberToObject(s, "created_at", (double)save.created_at);
+        cJSON *loadout = cJSON_Parse(save.loadout);
+        cJSON_AddItemToObject(s, "loadout", loadout ? loadout : cJSON_CreateArray());
+        ms_db_gsave_free(&save, 1);
+        ms_res_json(res, 200, o);
+        // the Mythic petals of the saves that are left
+        cJSON const *ids = cJSON_GetObjectItemCaseSensitive(body, "mythic_ids");
+        uint64_t m, b;
+        if (cJSON_IsArray(ids) && account_stats(uuid, ids, &m, &b) == 0)
+            ms_lb_push_gardn(uuid, 0, 1, m, b);
+    }
+    cJSON_Delete(body);
 }

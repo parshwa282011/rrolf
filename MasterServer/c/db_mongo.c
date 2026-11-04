@@ -596,6 +596,55 @@ static int mg_gardn_list(struct ms_db *db, char const *uuid,
     return result;
 }
 
+static int mg_gardn_take(struct ms_db *db, char const *uuid, char const *save_id,
+                         struct ms_db_gsave *out)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "gardn");
+    char id[128];
+    snprintf(id, sizeof id, "%s:%s", uuid, save_id);
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(id));
+    bson_t reply;
+    bson_error_t error;
+    // find and delete in one step
+    int result;
+    if (!mongoc_collection_find_and_modify(c, filter, NULL, NULL, NULL, true,
+                                           false, false, &reply, &error))
+        result = log_error("gardn_take", &error);
+    else
+    {
+        bson_iter_t it;
+        if (bson_iter_init_find(&it, &reply, "value") &&
+            BSON_ITER_HOLDS_DOCUMENT(&it))
+        {
+            uint32_t len;
+            uint8_t const *data;
+            bson_iter_document(&it, &len, &data);
+            bson_t doc;
+            if (bson_init_static(&doc, data, len))
+            {
+                memset(out, 0, sizeof *out);
+                ms_strlcpy(out->save_id, str_field(&doc, "save_id", ""),
+                           sizeof out->save_id);
+                out->score = (uint32_t)int_field(&doc, "score");
+                out->loadout = json_of_field(&doc, "loadout", 1);
+                out->created_at = int_field(&doc, "created_at");
+                result = MS_DB_OK;
+            }
+            else
+                result = MS_DB_ERROR;
+        }
+        else
+            result = MS_DB_NOT_FOUND; // "value" is null: nothing matched
+        bson_destroy(&reply);
+    }
+    bson_destroy(filter);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_gardn_apply(struct ms_db *db, char const *uuid,
                           struct ms_db_gsave const *add, int add_count,
                           char const (*remove)[40], int remove_count)
@@ -1111,6 +1160,7 @@ struct ms_db *ms_db_mongo_open()
     db->rysteria_put = mg_rysteria_put;
     db->gardn_list = mg_gardn_list;
     db->gardn_apply = mg_gardn_apply;
+    db->gardn_take = mg_gardn_take;
     db->lb_submit = mg_lb_submit;
     db->lb_top = mg_lb_top;
     db->lb_apply = mg_lb_apply;

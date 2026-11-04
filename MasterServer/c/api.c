@@ -117,6 +117,8 @@ static struct route const ROUTES[] = {
      0},
     {"POST", "/srv/gardn/flush", 0, ms_h_srv_gardn_flush, route_server, NULL, 0,
      0},
+    {"POST", "/srv/gardn/take", 0, ms_h_srv_gardn_take, route_server, NULL, 0,
+     0},
     {"POST", "/srv/leaderboard/submit", 0, ms_h_srv_lb_submit, route_server,
      NULL, 0, 0},
     {"GET", "/srv/leaderboard/top", 0, ms_h_srv_lb_top, route_server, NULL, 0,

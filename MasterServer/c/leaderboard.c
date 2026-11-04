@@ -19,6 +19,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 
 #include "config.h"
@@ -279,6 +280,9 @@ static void verify_run(void *arg)
         }
         if (n < PAGE)
             break;
+        // a page at a time with a rest in between: the scan is a background
+        // job, the database has players to serve (nothing is kept in memory)
+        usleep(50 * 1000);
     }
     free(page);
 }
