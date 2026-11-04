@@ -102,6 +102,35 @@ static int is_loopback(char const *ip)
            strcmp(ip, "::ffff:127.0.0.1") == 0;
 }
 
+// The query string ("game=gardn&me=..."). libwebsockets keeps the arguments in fragments, one
+// per "&"; lws_hdr_copy() joins them with the "&" in newer versions but WITHOUT it in 4.1 (what
+// Debian's Raspberry Pi ships): "game=gardn&me=x" arrived as "game=gardnme=x" and every request
+// with two parameters broke (leaderboards of a logged in player, the Discord/Google sign in
+// callback). So the fragments are put together here, with the "&" between them.
+static void copy_query(struct lws *wsi, char *out, size_t size)
+{
+    size_t o = 0;
+    out[0] = 0;
+    for (int frag = 0; o + 2 < size; ++frag)
+    {
+        size_t at = o;
+        if (frag > 0)
+            out[o++] = '&';
+        int n = lws_hdr_copy_fragment(wsi, out + o, (int)(size - o),
+                                      WSI_TOKEN_HTTP_URI_ARGS, frag);
+        if (n < 0)
+        {
+            o = at;
+            break;
+        }
+        o += (size_t)n;
+    }
+    out[o] = 0;
+    // no fragments at all: whatever the library gives
+    if (o == 0)
+        lws_hdr_copy(wsi, out, (int)size, WSI_TOKEN_HTTP_URI_ARGS);
+}
+
 static void fill_request(struct lws *wsi, struct http_job *job,
                          char const *path)
 {
@@ -111,7 +140,7 @@ static void fill_request(struct lws *wsi, struct http_job *job,
     size_t len = strlen(req->path);
     if (len > 1 && req->path[len - 1] == '/')
         req->path[len - 1] = 0;
-    lws_hdr_copy(wsi, req->query, sizeof req->query, WSI_TOKEN_HTTP_URI_ARGS);
+    copy_query(wsi, req->query, sizeof req->query);
     lws_hdr_copy(wsi, req->origin, sizeof req->origin, WSI_TOKEN_ORIGIN);
     lws_hdr_custom_copy(wsi, req->server_secret, sizeof req->server_secret,
                         "x-server-secret:", 16);
