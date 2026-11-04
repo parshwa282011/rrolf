@@ -151,7 +151,7 @@ struct rr_ui_element *rr_ui_account_container_init(struct rr_game *game)
     struct rr_ui_element *uuid = rr_ui_text_init(game->rivet_account.uuid, 15, 0xffffffff);
     uuid->on_event = copy_uuid;
     struct rr_ui_element *link_discord =
-        rr_ui_labeled_button_init("Link Discord", 24, NULL);
+        rr_ui_labeled_button_init("Manage account", 24, NULL);
     link_discord->fill = 0xff5865f2;
     link_discord->on_event = link_discord_on_event;
     struct rr_ui_element *logout = rr_ui_labeled_button_init("Log out", 24, NULL);
