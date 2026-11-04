@@ -386,3 +386,24 @@ void ms_h_providers(struct ms_req *req, struct ms_res *res)
     cJSON_AddBoolToObject(o, "apple", ms_apple_enabled());
     ms_res_json(res, 200, o);
 }
+
+void ms_h_apple_domain_file(struct ms_req *req, struct ms_res *res)
+{
+    FILE *f = MS_CONFIG.apple_domain_file[0]
+                  ? fopen(MS_CONFIG.apple_domain_file, "r")
+                  : NULL;
+    if (f == NULL)
+    {
+        ms_res_error(res, 404, "not_found", NULL);
+        return;
+    }
+    char buf[4096];
+    size_t n = fread(buf, 1, sizeof buf, f);
+    fclose(f);
+    res->status = 200;
+    res->body = malloc(n + 1);
+    memcpy(res->body, buf, n);
+    res->body[n] = 0;
+    res->body_len = n;
+    ms_strlcpy(res->content_type, "text/plain", sizeof res->content_type);
+}

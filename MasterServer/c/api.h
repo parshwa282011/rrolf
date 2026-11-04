@@ -95,6 +95,9 @@ void ms_h_apple_callback(struct ms_req *, struct ms_res *);
 void ms_h_apple_link_start(struct ms_req *, struct ms_res *);
 // GET /oauth/providers: which ways to sign in are on
 void ms_h_providers(struct ms_req *, struct ms_res *);
+// GET /.well-known/apple-developer-domain-association.txt: the file Apple
+// wants to see on the domain of the Sign in with Apple return URL
+void ms_h_apple_domain_file(struct ms_req *, struct ms_res *);
 void ms_h_oauth_exchange(struct ms_req *, struct ms_res *);
 void ms_h_unlink(struct ms_req *, struct ms_res *);
 void ms_h_account_info(struct ms_req *, struct ms_res *);

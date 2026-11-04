@@ -144,15 +144,18 @@ int ms_config_from_env()
     get_str(c->apple_key_id, sizeof c->apple_key_id, "APPLE_KEY_ID", "");
     get_str(c->apple_private_key_file, sizeof c->apple_private_key_file,
             "APPLE_PRIVATE_KEY_FILE", "");
+    get_str(c->apple_domain_file, sizeof c->apple_domain_file,
+            "APPLE_DOMAIN_FILE", "");
     // "~/.rysteria-secrets/apple.p8" is the same file on every machine
     char const *home = getenv("HOME");
-    if (strncmp(c->apple_private_key_file, "~/", 2) == 0 && home != NULL)
-    {
-        char path[sizeof c->apple_private_key_file];
-        snprintf(path, sizeof path, "%s/%s", home, c->apple_private_key_file + 2);
-        ms_strlcpy(c->apple_private_key_file, path,
-                   sizeof c->apple_private_key_file);
-    }
+    char *paths[] = {c->apple_private_key_file, c->apple_domain_file};
+    for (size_t i = 0; i < 2; ++i)
+        if (strncmp(paths[i], "~/", 2) == 0 && home != NULL)
+        {
+            char path[256];
+            snprintf(path, sizeof path, "%s/%s", home, paths[i] + 2);
+            ms_strlcpy(paths[i], path, 256);
+        }
     get_str(c->apple_redirect_uri, sizeof c->apple_redirect_uri,
             "APPLE_REDIRECT_URI", "");
     // the defaults are the ones of SMTPMaster's sending API; only the key and

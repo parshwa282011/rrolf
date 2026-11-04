@@ -109,6 +109,8 @@ static struct route const ROUTES[] = {
      "oauth_link", 10, 600},
     {"GET", "/oauth/providers", 0, ms_h_providers, route_public, "providers",
      30, 60},
+    {"GET", "/.well-known/apple-developer-domain-association.txt", 0,
+     ms_h_apple_domain_file, route_public, "wellknown", 30, 60},
     {"POST", "/auth/email/", 1, ms_h_provider_unavailable, route_public,
      "unavailable", 30, 60},
 
