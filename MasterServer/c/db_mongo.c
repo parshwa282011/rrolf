@@ -327,6 +327,43 @@ static int mg_account_set_last_login(struct ms_db *db, char const *uuid,
     return r;
 }
 
+static int mg_account_set_email_verified(struct ms_db *db, char const *uuid)
+{
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(uuid));
+    bson_t *update = BCON_NEW("$set", "{", "email_verified", BCON_BOOL(true), "}");
+    int r = mg_update_one(db, "accounts", filter, update, "set_email_verified", 0);
+    bson_destroy(filter);
+    bson_destroy(update);
+    return r;
+}
+
+static int mg_account_set_email(struct ms_db *db, char const *uuid,
+                                char const *email)
+{
+    struct mg *mg = db->ctx;
+    mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
+    mongoc_collection_t *c = coll(mg, client, "accounts");
+    char lower[256];
+    ms_str_lower(lower, email, sizeof lower);
+    bson_t *filter = BCON_NEW("_id", BCON_UTF8(uuid));
+    bson_t *update = BCON_NEW("$set", "{", "email", BCON_UTF8(email),
+                              "email_lower", BCON_UTF8(lower), "email_verified",
+                              BCON_BOOL(false), "}");
+    bson_error_t error;
+    int result;
+    if (mongoc_collection_update_one(c, filter, update, NULL, NULL, &error))
+        result = MS_DB_OK;
+    else if (error.code == DUPLICATE_KEY)
+        result = MS_DB_CONFLICT_EMAIL;
+    else
+        result = log_error("account_set_email", &error);
+    bson_destroy(filter);
+    bson_destroy(update);
+    mongoc_collection_destroy(c);
+    mongoc_client_pool_push(mg->pool, client);
+    return result;
+}
+
 static int mg_account_set_username(struct ms_db *db, char const *uuid,
                                    char const *username)
 {
@@ -1064,6 +1101,8 @@ struct ms_db *ms_db_mongo_open()
     db->account_get = mg_account_get;
     db->account_set_credentials = mg_account_set_credentials;
     db->account_set_last_login = mg_account_set_last_login;
+    db->account_set_email_verified = mg_account_set_email_verified;
+    db->account_set_email = mg_account_set_email;
     db->account_set_username = mg_account_set_username;
     db->link_put = mg_link_put;
     db->link_delete = mg_link_delete;

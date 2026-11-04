@@ -78,6 +78,12 @@ static struct route const ROUTES[] = {
     {"POST", "/auth/reset/confirm", 0, ms_h_reset_confirm, route_public,
      "reset_confirm", 10, 600},
 
+    // the code that proves an address; no session exists for the account before
+    {"POST", "/auth/verify/send", 0, ms_h_verify_send, route_public,
+     "verify_send", 10, 600},
+    {"POST", "/auth/verify/confirm", 0, ms_h_verify_confirm, route_public,
+     "verify_confirm", 15, 600},
+
     {"GET", "/oauth/discord/start", 0, ms_h_discord_start, route_public,
      "oauth_start", 20, 600},
     {"GET", "/oauth/discord/callback", 0, ms_h_discord_callback, route_public,

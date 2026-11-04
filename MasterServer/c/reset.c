@@ -13,6 +13,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+// Email verification (at the end of this file) uses the same records and codes:
+// an account whose address nobody proved gets a verify_id when it logs in or
+// signs up (ms_verify_required), asks for a code to its address
+// (/auth/verify/send) and types it back (/auth/verify/confirm), which answers
+// with the session. Until then no session exists for it.
+//
 // Password reset and username change, the same three steps: start (list the ways
 // this account can receive a code; "purpose" is "password" or "username") ->
 // send (the player picks ONE way, we deliver a 6 digit code; for email they type
@@ -259,7 +265,8 @@ void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
     char const *method = ms_json_str(body, "method");
     struct ms_tmp reset;
     if (reset_id == NULL || method == NULL ||
-        !ms_tmp_get(ms_tmp_reset, reset_id, &reset))
+        !ms_tmp_get(ms_tmp_reset, reset_id, &reset) ||
+        strcmp(reset.s2, "verify") == 0)
     {
         ms_res_error(res, 400, "expired", "Reset expired, please start again");
         cJSON_Delete(body);
@@ -354,7 +361,8 @@ void ms_h_reset_confirm(struct ms_req *req, struct ms_res *res)
     char const *new_username = ms_json_str(body, "new_username");
     struct ms_tmp reset;
     if (reset_id == NULL || otp == NULL ||
-        !ms_tmp_get(ms_tmp_reset, reset_id, &reset))
+        !ms_tmp_get(ms_tmp_reset, reset_id, &reset) ||
+        strcmp(reset.s2, "verify") == 0)
         ms_res_error(res, 400, "expired", "Reset expired, please start again");
     else if (strcmp(reset.s2, "username") == 0
                  ? !ms_auth_valid_username(new_username)
@@ -440,6 +448,231 @@ void ms_h_reset_confirm(struct ms_req *req, struct ms_res *res)
                 ms_res_json(res, 200, o);
             }
             sodium_memzero(pw_hash, sizeof pw_hash);
+        }
+    }
+    cJSON_Delete(body);
+}
+
+// ---------------------------------------------------------- email verification
+
+// "someone@example.com" -> "so***@example.com"
+static void mask_email(char *out, size_t size, char const *email)
+{
+    char const *at = strchr(email, '@');
+    size_t local = at ? (size_t)(at - email) : strlen(email);
+    size_t keep = local < 2 ? local : 2;
+    snprintf(out, size, "%.*s***%s", (int)keep, email, at ? at : "");
+}
+
+void ms_verify_required(struct ms_res *res, int status,
+                        struct ms_db_account const *a)
+{
+    struct ms_tmp v;
+    memset(&v, 0, sizeof v);
+    v.kind = ms_tmp_reset;
+    ms_strlcpy(v.s2, "verify", sizeof v.s2);
+    ms_strlcpy(v.uuid, a->uuid, sizeof v.uuid);
+    if (ms_tmp_create(&v, 1800) != 0)
+    {
+        ms_res_error(res, 503, "busy", NULL);
+        return;
+    }
+    char hint[300];
+    mask_email(hint, sizeof hint, a->email);
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddBoolToObject(o, "ok", status < 300);
+    cJSON_AddStringToObject(o, "error", "email_unverified");
+    cJSON_AddStringToObject(o, "message", "Verify your email address to continue");
+    cJSON_AddStringToObject(o, "verify_id", v.id);
+    cJSON_AddStringToObject(o, "email_hint", hint);
+    ms_res_json(res, status, o);
+}
+
+static int verify_record(cJSON *body, struct ms_tmp *v, struct ms_db_account *a,
+                         struct ms_res *res)
+{
+    char const *id = ms_json_str(body, "verify_id");
+    if (id == NULL || !ms_tmp_get(ms_tmp_reset, id, v) ||
+        strcmp(v->s2, "verify") != 0)
+    {
+        ms_res_error(res, 400, "expired", "That took too long, please log in again");
+        return 0;
+    }
+    int rc = MS_DB->account_get(MS_DB, ms_db_by_uuid, v->uuid, NULL, a);
+    if (rc != MS_DB_OK)
+    {
+        ms_res_error(res, rc == MS_DB_NOT_FOUND ? 400 : 500,
+                     rc == MS_DB_NOT_FOUND ? "expired" : "server_error", NULL);
+        return 0;
+    }
+    return 1;
+}
+
+void ms_h_verify_send(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *body = ms_req_json(req);
+    struct ms_tmp v;
+    struct ms_db_account a;
+    if (!verify_record(body, &v, &a, res))
+    {
+        cJSON_Delete(body);
+        return;
+    }
+    if (!ms_auth_needs_verification(&a) && a.email_verified)
+    {
+        // proven in the meantime (the verify_id came from a correct password)
+        ms_tmp_delete(ms_tmp_reset, v.id);
+        ms_res_json(res, 200, ms_auth_login_json(&a));
+        cJSON_Delete(body);
+        return;
+    }
+    int64_t now = ms_now();
+    if (v.n3 != 0 && now - v.n3 < OTP_MIN_GAP)
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddBoolToObject(o, "ok", 0);
+        cJSON_AddStringToObject(o, "error", "wait");
+        cJSON_AddStringToObject(o, "message",
+                                "Wait a minute before asking for another code");
+        cJSON_AddNumberToObject(o, "retry_after",
+                                (double)(OTP_MIN_GAP - (now - v.n3)));
+        ms_res_json(res, 429, o);
+        cJSON_Delete(body);
+        return;
+    }
+    // a mistyped address can be corrected here: the player has just proven the
+    // password, and the new one has to be proven too
+    char const *typed = ms_json_str(body, "email");
+    if (typed != NULL && typed[0])
+    {
+        char lower_new[260], lower_old[260];
+        ms_str_lower(lower_new, typed, sizeof lower_new);
+        ms_str_lower(lower_old, a.email, sizeof lower_old);
+        if (strcmp(lower_new, lower_old) != 0)
+        {
+            if (!ms_auth_valid_email(typed))
+            {
+                ms_res_error(res, 400, "invalid_email",
+                             "Enter a valid email address");
+                cJSON_Delete(body);
+                return;
+            }
+            int rc = MS_DB->account_set_email(MS_DB, a.uuid, typed);
+            if (rc == MS_DB_CONFLICT_EMAIL)
+            {
+                ms_res_error(res, 409, "email_taken",
+                             "That email is already in use");
+                cJSON_Delete(body);
+                return;
+            }
+            if (rc != MS_DB_OK)
+            {
+                ms_res_error(res, 500, "server_error", NULL);
+                cJSON_Delete(body);
+                return;
+            }
+            ms_strlcpy(a.email, typed, sizeof a.email);
+        }
+    }
+    char acct_key[80];
+    snprintf(acct_key, sizeof acct_key, "otp:%s", a.uuid);
+    if (ms_email_daily_full())
+        ms_res_error(res, 429, "daily_limit",
+                     "Too many requests today, try again tomorrow");
+    else if (v.n1 >= OTP_MAX_SENDS || !ms_rl_hit(acct_key, OTP_MAX_SENDS, 600))
+        ms_res_error(res, 429, "rate_limited",
+                     "Too many codes requested, try again later");
+    else
+    {
+        char code[8];
+        snprintf(code, sizeof code, "%06u", randombytes_uniform(1000000));
+        otp_hash(v.s1, v.id, code);
+        v.n1 += 1;
+        v.n2 = 0;
+        v.n3 = now;
+        v.expires = now + OTP_TTL;
+        char text[300];
+        snprintf(text, sizeof text,
+                 "Your Rysteria email verification code is %s. It expires in 10 "
+                 "minutes and works once. If you did not sign up, ignore this "
+                 "email.",
+                 code);
+        sodium_memzero(code, sizeof code);
+        int sent = ms_email_send(a.email, "Verify your Rysteria email", text);
+        sodium_memzero(text, sizeof text);
+        if (sent != 0)
+        {
+            v.s1[0] = 0;
+            ms_tmp_update(&v);
+            if (sent == -2)
+                ms_res_error(res, 429, "daily_limit",
+                             "Too many requests today, try again tomorrow");
+            else
+                ms_res_error(res, 502, "email_failed",
+                             "The email could not be sent, try again later");
+        }
+        else
+        {
+            ms_tmp_update(&v);
+            char hint[300];
+            mask_email(hint, sizeof hint, a.email);
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddBoolToObject(o, "ok", 1);
+            cJSON_AddStringToObject(o, "email_hint", hint);
+            cJSON_AddNumberToObject(o, "expires_in", OTP_TTL);
+            ms_res_json(res, 200, o);
+        }
+    }
+    cJSON_Delete(body);
+}
+
+void ms_h_verify_confirm(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *body = ms_req_json(req);
+    struct ms_tmp v;
+    struct ms_db_account a;
+    char const *otp = ms_json_str(body, "otp");
+    if (!verify_record(body, &v, &a, res))
+        ;
+    else if (otp == NULL)
+        ms_res_error(res, 400, "bad_request", NULL);
+    else if (v.s1[0] == 0)
+        ms_res_error(res, 400, "no_code", "Request a code first");
+    else if (v.n2 >= OTP_MAX_ATTEMPTS)
+    {
+        // five wrong tries: this code is dead, a new one has to be asked for
+        v.s1[0] = 0;
+        v.n2 = 0;
+        ms_tmp_update(&v);
+        ms_res_error(res, 429, "too_many_attempts",
+                     "Too many wrong codes, ask for a new one");
+    }
+    else
+    {
+        v.n2 += 1;
+        ms_tmp_update(&v);
+        char expected[65], trimmed[16];
+        ms_strlcpy(trimmed, otp, sizeof trimmed);
+        otp_hash(expected, v.id, trimmed);
+        if (!ms_ct_str_equal(expected, v.s1))
+        {
+            cJSON *o = cJSON_CreateObject();
+            cJSON_AddBoolToObject(o, "ok", 0);
+            cJSON_AddStringToObject(o, "error", "invalid_code");
+            cJSON_AddNumberToObject(o, "attempts_left",
+                                    OTP_MAX_ATTEMPTS - (double)v.n2);
+            ms_res_json(res, 400, o);
+        }
+        else if (MS_DB->account_set_email_verified(MS_DB, a.uuid) != MS_DB_OK)
+            ms_res_error(res, 500, "server_error", NULL);
+        else
+        {
+            ms_tmp_delete(ms_tmp_reset, v.id);
+            a.email_verified = 1;
+            a.last_login_at = ms_now();
+            MS_DB->account_set_last_login(MS_DB, a.uuid, a.last_login_at);
+            ms_log("account", "email verified for %s", a.uuid);
+            ms_res_json(res, 200, ms_auth_login_json(&a));
         }
     }
     cJSON_Delete(body);

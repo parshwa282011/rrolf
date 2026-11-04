@@ -22,6 +22,7 @@
 
 #include "api.h"
 #include "config.h"
+#include "email.h"
 #include "ratelimit.h"
 #include "tmpstore.h"
 #include "tokens.h"
@@ -116,13 +117,19 @@ int ms_auth_create_account(struct ms_db_account *a, char const *username,
     ms_uuid_generate(a->uuid);
     ms_strlcpy(a->username, username, sizeof a->username);
     ms_strlcpy(a->email, email ? email : "", sizeof a->email);
-    a->email_verified = 0; // the email service is not available yet
+    a->email_verified = 0; // proven later with a code, see ms_h_verify_confirm
     if (ms_auth_hash_password(a->pw_hash, password) != 0)
         return MS_DB_ERROR;
     randombytes_buf(a->token_key, sizeof a->token_key);
     a->created_at = ms_now();
     a->last_login_at = a->created_at;
     return MS_DB->account_create(MS_DB, a);
+}
+
+int ms_auth_needs_verification(struct ms_db_account const *a)
+{
+    return MS_CONFIG.require_email_verified && a->email[0] && !a->email_verified &&
+           ms_email_enabled();
 }
 
 enum ms_auth_result ms_auth_verify(char const *uuid, char const *pl_t,
@@ -144,7 +151,9 @@ enum ms_auth_result ms_auth_verify(char const *uuid, char const *pl_t,
                                 MS_CONFIG.pl_p_lifetime_seconds, &issued))
     {
     case ms_token_ok:
-        return ms_auth_ok;
+        // every way in (the website, the game servers) comes through here
+        return ms_auth_needs_verification(out) ? ms_auth_unverified
+                                               : ms_auth_ok;
     case ms_token_expired:
         return ms_auth_expired;
     default:
@@ -162,6 +171,10 @@ void ms_auth_res_failure(struct ms_res *res, enum ms_auth_result r)
         break;
     case ms_auth_invalid:
         ms_res_error(res, 401, "invalid", "Invalid session");
+        break;
+    case ms_auth_unverified:
+        ms_res_error(res, 403, "email_unverified",
+                     "Verify your email address: log in again to get a code");
         break;
     default:
         ms_res_error(res, 500, "server_error", NULL);
@@ -223,7 +236,11 @@ void ms_h_signup(struct ms_req *req, struct ms_res *res)
         if (rc == MS_DB_OK)
         {
             ms_log("account", "created %s", a.uuid);
-            ms_res_json(res, 201, ms_auth_login_json(&a));
+            // no session until the address is proven
+            if (ms_auth_needs_verification(&a))
+                ms_verify_required(res, 201, &a);
+            else
+                ms_res_json(res, 201, ms_auth_login_json(&a));
         }
         else
             conflict_response(res, rc);
@@ -276,9 +293,14 @@ void ms_h_login(struct ms_req *req, struct ms_res *res)
         else
         {
             ms_rl_reset(lock_key);
-            a.last_login_at = ms_now();
-            MS_DB->account_set_last_login(MS_DB, a.uuid, a.last_login_at);
-            ms_res_json(res, 200, ms_auth_login_json(&a));
+            if (ms_auth_needs_verification(&a))
+                ms_verify_required(res, 403, &a);
+            else
+            {
+                a.last_login_at = ms_now();
+                MS_DB->account_set_last_login(MS_DB, a.uuid, a.last_login_at);
+                ms_res_json(res, 200, ms_auth_login_json(&a));
+            }
         }
     }
     cJSON_Delete(body);

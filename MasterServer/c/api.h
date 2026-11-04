@@ -116,13 +116,23 @@ enum ms_auth_result
     ms_auth_ok,
     ms_auth_invalid,
     ms_auth_expired,
-    ms_auth_error
+    ms_auth_error,
+    ms_auth_unverified // the account's email address has not been proven yet
 };
 
 // Looks up `uuid` and verifies PL-P (and PL-T when `pl_t` is non-NULL).
 enum ms_auth_result ms_auth_verify(char const *uuid, char const *pl_t,
                                    char const *pl_p,
                                    struct ms_db_account *out);
+// 1 when this account has to prove its email address before it can be used: it
+// has one, nobody proved it, codes can be mailed and REQUIRE_EMAIL_VERIFICATION
+// is on. Accounts made with Discord/Google/Apple have no address and never wait.
+int ms_auth_needs_verification(struct ms_db_account const *);
+// answers { error: "email_unverified", verify_id, email_hint } (reset.c): the
+// verify_id is what /auth/verify/send and /auth/verify/confirm take
+void ms_verify_required(struct ms_res *, int status, struct ms_db_account const *);
+void ms_h_verify_send(struct ms_req *, struct ms_res *);
+void ms_h_verify_confirm(struct ms_req *, struct ms_res *);
 // builds { ok, uuid, username, is_dev, pl_t, pl_p, expires_at }
 cJSON *ms_auth_login_json(struct ms_db_account const *);
 int ms_auth_hash_password(char out[MS_PW_HASH_SIZE], char const *password);

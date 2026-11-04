@@ -144,6 +144,15 @@ int ms_config_from_env()
     get_str(c->apple_key_id, sizeof c->apple_key_id, "APPLE_KEY_ID", "");
     get_str(c->apple_private_key_file, sizeof c->apple_private_key_file,
             "APPLE_PRIVATE_KEY_FILE", "");
+    // "~/.rysteria-secrets/apple.p8" is the same file on every machine
+    char const *home = getenv("HOME");
+    if (strncmp(c->apple_private_key_file, "~/", 2) == 0 && home != NULL)
+    {
+        char path[sizeof c->apple_private_key_file];
+        snprintf(path, sizeof path, "%s/%s", home, c->apple_private_key_file + 2);
+        ms_strlcpy(c->apple_private_key_file, path,
+                   sizeof c->apple_private_key_file);
+    }
     get_str(c->apple_redirect_uri, sizeof c->apple_redirect_uri,
             "APPLE_REDIRECT_URI", "");
     // the defaults are the ones of SMTPMaster's sending API; only the key and
@@ -167,6 +176,7 @@ int ms_config_from_env()
             "AWS_SECRET_ACCESS_KEY", "");
     get_str(c->aws_region, sizeof c->aws_region, "AWS_REGION", "us-east-1");
     c->email_daily_limit = get_uint("EMAIL_DAILY_LIMIT", 50);
+    c->require_email_verified = get_uint("REQUIRE_EMAIL_VERIFICATION", 1);
     get_str(c->trust_proxy_header, sizeof c->trust_proxy_header,
             "TRUST_PROXY_HEADER", "");
     c->flush_interval_ms = get_uint("FLUSH_INTERVAL_MS", 5000);

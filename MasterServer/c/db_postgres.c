@@ -342,6 +342,41 @@ static int pg_account_set_last_login(struct ms_db *db, char const *uuid,
                      2, params);
 }
 
+static int pg_account_set_email_verified(struct ms_db *db, char const *uuid)
+{
+    char const *params[] = {uuid};
+    return pg_simple(db, "set_email_verified",
+                     "UPDATE accounts.accounts SET email_verified = true"
+                     " WHERE uuid = $1",
+                     1, params);
+}
+
+static int pg_account_set_email(struct ms_db *db, char const *uuid,
+                                char const *email)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    char lower[sizeof((struct ms_db_account *)0)->email];
+    ms_str_lower(lower, email, sizeof lower);
+    char const *params[] = {uuid, email, lower};
+    PGresult *r = run(c,
+                      "UPDATE accounts.accounts SET email = $2,"
+                      " email_lower = $3, email_verified = false"
+                      " WHERE uuid = $1",
+                      3, params);
+    int result;
+    if (PQresultStatus(r) == PGRES_COMMAND_OK)
+        result = MS_DB_OK;
+    else if (sqlstate_is(r, "23505"))
+        result = MS_DB_CONFLICT_EMAIL;
+    else
+        result = log_failure("account_set_email", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
 static int pg_account_set_username(struct ms_db *db, char const *uuid,
                                    char const *username)
 {
@@ -1231,6 +1266,8 @@ struct ms_db *ms_db_postgres_open()
     db->account_get = pg_account_get;
     db->account_set_credentials = pg_account_set_credentials;
     db->account_set_last_login = pg_account_set_last_login;
+    db->account_set_email_verified = pg_account_set_email_verified;
+    db->account_set_email = pg_account_set_email;
     db->account_set_username = pg_account_set_username;
     db->link_put = pg_link_put;
     db->link_delete = pg_link_delete;

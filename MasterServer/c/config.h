@@ -67,6 +67,7 @@ struct ms_config
     char aws_access_key_id[64];
     char aws_secret_access_key[128];
     char aws_region[32];
+    uint32_t require_email_verified; // 1: an address has to be proven before use
     uint32_t email_daily_limit; // emails sent per UTC day, 0 = no limit
     uint32_t flush_interval_ms;
     uint32_t db_pool_size;

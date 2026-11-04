@@ -140,6 +140,11 @@ struct ms_db
                                 char const *username);
     int (*account_set_last_login)(struct ms_db *, char const *uuid,
                                   int64_t when);
+    // the account's email address has been proven (a code typed back)
+    int (*account_set_email_verified)(struct ms_db *, char const *uuid);
+    // another address, not verified yet. MS_DB_OK, MS_DB_CONFLICT_EMAIL, MS_DB_ERROR
+    int (*account_set_email)(struct ms_db *, char const *uuid,
+                             char const *email);
 
     // MS_DB_OK, MS_DB_CONFLICT_LINK (provider id belongs to another uuid)
     int (*link_put)(struct ms_db *, char const *uuid,

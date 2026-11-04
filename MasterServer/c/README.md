@@ -39,10 +39,19 @@ plus a `case` in `db.c`.
 
 Public (browser, CORS allow-list, rate limited): `POST /auth/signup`, `/auth/login`,
 `/auth/session`, `/auth/logout-all`, `/auth/account`, `/auth/complete-profile`,
-`/auth/reset/{start,send,confirm}`, `/auth/unlink/<provider>`,
-`GET /oauth/discord/{start,callback}`, `POST /oauth/discord/link-start`,
-`/oauth/exchange`, `GET /health`. Google, Apple and email answer
-`503 provider_unavailable` (the email service is not working yet).
+`/auth/reset/{start,send,confirm}`, `/auth/verify/{send,confirm}`, `/auth/unlink/<provider>`,
+`GET /oauth/{discord,google,apple}/{start,callback}`, `POST /oauth/<provider>/link-start`,
+`/oauth/exchange`, `GET /oauth/providers`, `GET /health`. A provider that is not configured answers
+`503 provider_unavailable`.
+
+Email confirmation: an account with an email address nobody has confirmed gets no session. `/auth/signup`
+(201) and `/auth/login` (403) answer `{"error":"email_unverified","verify_id","email_hint"}` instead of the
+tokens; `/auth/verify/send` mails a 6 digit code (10 minutes, 5 tries, one a minute; an `email` member
+corrects a mistyped address) and `/auth/verify/confirm` answers with the session. `/auth/session`, the game
+servers (`/srv/verify`) and everything else refuse such an account with `403 email_unverified`, so accounts
+that were made before also have to confirm at their next login. Accounts made with Discord/Google/Apple
+have no address and never wait. It only applies while the email service works
+(`REQUIRE_EMAIL_VERIFICATION=1`, the default). The pages for all of this are `Client/public/login.html`.
 
 `GET /health` answers `{"ok","db","node","backup"}` (503 when the database is down).
 Backup servers only (`X-Clone-Secret` = `CLONE_SECRET`): `GET /backup?since=&source=&node=`,
