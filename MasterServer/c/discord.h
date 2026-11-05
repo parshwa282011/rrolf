@@ -50,9 +50,3 @@ struct curl_slist;
 long ms_http_request(char const *method, char const *url,
                      struct curl_slist *headers, char const *body,
                      char **response);
-// the same, signed with AWS Signature V4 by libcurl (7.75+; 0 without it).
-// sigv4 is "aws:amz:<region>:<service>", userpwd "<access key id>:<secret>"
-long ms_http_request_sigv4(char const *method, char const *url,
-                           struct curl_slist *headers, char const *body,
-                           char **response, char const *sigv4,
-                           char const *userpwd);

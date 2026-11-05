@@ -26,16 +26,9 @@
 #include "discord.h"
 #include "util.h"
 
-static int use_ses() { return strcmp(MS_CONFIG.email_provider, "ses") == 0; }
-
 int ms_email_enabled()
 {
-    if (use_ses())
-        return MS_CONFIG.aws_access_key_id[0] &&
-               MS_CONFIG.aws_secret_access_key[0] && MS_CONFIG.aws_region[0] &&
-               MS_CONFIG.email_from[0];
-    return MS_CONFIG.email_api_url[0] && MS_CONFIG.email_api_key[0] &&
-           MS_CONFIG.email_from[0];
+    return MS_CONFIG.resend_api_key[0] && MS_CONFIG.resend_event[0];
 }
 
 // emails sent today (UTC); it starts again from 0 when the master restarts
@@ -85,137 +78,44 @@ static void daily_give_back()
     pthread_mutex_unlock(&daily_lock);
 }
 
-// replaces every {name} in `in` by `value`; false when `out` is too small
-static int replace_all(char *out, size_t size, char const *in,
-                       char const *name, char const *value)
+// Resend's events API: POST /events/send {event, email, payload}. The email itself
+// (sender, layout) is the automation Resend runs for that event; it gets the payload
+static int send_event(char const *to, char const *subject, char const *text,
+                      char const *otp)
 {
-    char token[32];
-    snprintf(token, sizeof token, "{%s}", name);
-    size_t tlen = strlen(token), vlen = strlen(value), o = 0;
-    while (*in)
-    {
-        if (strncmp(in, token, tlen) == 0)
-        {
-            if (o + vlen + 1 > size)
-                return 0;
-            memcpy(out + o, value, vlen);
-            o += vlen;
-            in += tlen;
-        }
-        else
-        {
-            if (o + 2 > size)
-                return 0;
-            out[o++] = *in++;
-        }
-    }
-    out[o] = 0;
-    return 1;
-}
-
-// the value as a JSON string with its quotes
-static char *json_string(char const *value)
-{
-    cJSON *item = cJSON_CreateString(value);
-    char *text = cJSON_PrintUnformatted(item);
-    cJSON_Delete(item);
-    return text;
-}
-
-static int send_generic(char const *to, char const *subject, char const *text)
-{
-    char const *names[5] = {"from", "from_name", "to", "subject", "text"};
-    char const *values[5] = {MS_CONFIG.email_from, MS_CONFIG.email_from_name, to,
-                             subject, text};
-    char body[4096], next[4096];
-    snprintf(body, sizeof body, "%s", MS_CONFIG.email_api_body);
-    for (int i = 0; i < 5; ++i)
-    {
-        char *json = json_string(values[i]);
-        int ok = json != NULL && replace_all(next, sizeof next, body, names[i], json);
-        free(json);
-        if (!ok)
-            return -1;
-        memcpy(body, next, sizeof body);
-    }
-    char header[512];
-    if (!replace_all(header, sizeof header, MS_CONFIG.email_api_auth, "key",
-                     MS_CONFIG.email_api_key))
-        return -1;
-    struct curl_slist *headers = curl_slist_append(NULL, header);
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    memset(header, 0, sizeof header);
-    char *response = NULL;
-    long status = ms_http_request("POST", MS_CONFIG.email_api_url, headers, body,
-                                  &response);
-    curl_slist_free_all(headers);
-    int ok = status >= 200 && status <= 299;
-    // some services answer 200 with {"success": false, ...}
-    if (ok && response != NULL)
-    {
-        cJSON *json = cJSON_Parse(response);
-        cJSON *success = json ? cJSON_GetObjectItemCaseSensitive(json, "success")
-                              : NULL;
-        if (cJSON_IsFalse(success))
-            ok = 0;
-        cJSON_Delete(json);
-    }
-    if (!ok)
-        ms_log("email", "the email service refused it (http %ld): %.200s", status,
-               response ? response : "");
-    free(response);
-    return ok ? 0 : -1;
-}
-
-// Amazon SES v2 (SendEmail); libcurl signs the request with the AWS keys
-static int send_ses(char const *to, char const *subject, char const *text)
-{
-    char from[256];
-    snprintf(from, sizeof from, "%s <%s>", MS_CONFIG.email_from_name,
-             MS_CONFIG.email_from);
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddStringToObject(root, "FromEmailAddress", from);
-    cJSON *dest = cJSON_AddObjectToObject(root, "Destination");
-    cJSON *list = cJSON_AddArrayToObject(dest, "ToAddresses");
-    cJSON_AddItemToArray(list, cJSON_CreateString(to));
-    cJSON *simple = cJSON_AddObjectToObject(cJSON_AddObjectToObject(root, "Content"),
-                                            "Simple");
-    cJSON *subj = cJSON_AddObjectToObject(simple, "Subject");
-    cJSON_AddStringToObject(subj, "Data", subject);
-    cJSON_AddStringToObject(subj, "Charset", "UTF-8");
-    cJSON *txt = cJSON_AddObjectToObject(cJSON_AddObjectToObject(simple, "Body"),
-                                         "Text");
-    cJSON_AddStringToObject(txt, "Data", text);
-    cJSON_AddStringToObject(txt, "Charset", "UTF-8");
+    cJSON_AddStringToObject(root, "event", MS_CONFIG.resend_event);
+    cJSON_AddStringToObject(root, "email", to);
+    cJSON *payload = cJSON_AddObjectToObject(root, "payload");
+    cJSON_AddStringToObject(payload, "subject", subject);
+    cJSON_AddStringToObject(payload, "text", text);
+    cJSON_AddStringToObject(payload, "OTP", otp != NULL ? otp : "");
     char *body = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
     if (body == NULL)
         return -1;
 
-    char url[160], sigv4[96], userpwd[256];
-    char const *region = MS_CONFIG.aws_region;
-    snprintf(url, sizeof url,
-             "https://email.%s.amazonaws.com/v2/email/outbound-emails", region);
-    snprintf(sigv4, sizeof sigv4, "aws:amz:%s:ses", region);
-    snprintf(userpwd, sizeof userpwd, "%s:%s", MS_CONFIG.aws_access_key_id,
-             MS_CONFIG.aws_secret_access_key);
-    struct curl_slist *headers =
-        curl_slist_append(NULL, "Content-Type: application/json");
+    char header[320];
+    snprintf(header, sizeof header, "Authorization: Bearer %s",
+             MS_CONFIG.resend_api_key);
+    struct curl_slist *headers = curl_slist_append(NULL, header);
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    memset(header, 0, sizeof header);
     char *response = NULL;
-    long status =
-        ms_http_request_sigv4("POST", url, headers, body, &response, sigv4, userpwd);
+    long status = ms_http_request("POST", "https://api.resend.com/events/send",
+                                  headers, body, &response);
     curl_slist_free_all(headers);
-    memset(userpwd, 0, sizeof userpwd);
     free(body);
     int ok = status >= 200 && status <= 299;
     if (!ok)
-        ms_log("email", "SES refused it (http %ld): %.200s", status,
+        ms_log("email", "Resend refused it (http %ld): %.400s", status,
                response ? response : "");
     free(response);
     return ok ? 0 : -1;
 }
 
-int ms_email_send(char const *to, char const *subject, char const *text)
+int ms_email_send(char const *to, char const *subject, char const *text,
+                  char const *otp)
 {
     if (!ms_email_enabled())
         return -1;
@@ -225,8 +125,7 @@ int ms_email_send(char const *to, char const *subject, char const *text)
                MS_CONFIG.email_daily_limit);
         return -2;
     }
-    int rc = use_ses() ? send_ses(to, subject, text)
-                       : send_generic(to, subject, text);
+    int rc = send_event(to, subject, text, otp);
     if (rc != 0)
         daily_give_back();
     return rc;
@@ -256,6 +155,5 @@ int ms_email_send_admin(char const *subject, char const *text)
     pthread_mutex_unlock(&lock);
     if (!allowed)
         return -1;
-    return use_ses() ? send_ses(MS_CONFIG.admin_email, subject, text)
-                     : send_generic(MS_CONFIG.admin_email, subject, text);
+    return send_event(MS_CONFIG.admin_email, subject, text, NULL);
 }

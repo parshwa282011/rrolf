@@ -82,11 +82,9 @@ static size_t on_data(char *chunk, size_t size, size_t n, void *userp)
 }
 
 // Returns the http status (0 on transport failure); *response is malloc'd.
-// sigv4 ("aws:amz:region:service") and userpwd ("id:secret") sign it for AWS
-static long request_signed(char const *method, char const *url,
-                           struct curl_slist *headers, char const *body,
-                           char **response, char const *sigv4,
-                           char const *userpwd)
+static long request(char const *method, char const *url,
+                    struct curl_slist *headers, char const *body,
+                    char **response)
 {
     *response = NULL;
     CURL *curl = curl_easy_init();
@@ -100,19 +98,6 @@ static long request_signed(char const *method, char const *url,
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, on_data);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
-#if LIBCURL_VERSION_NUM >= 0x074B00
-    if (sigv4 != NULL)
-    {
-        curl_easy_setopt(curl, CURLOPT_AWS_SIGV4, sigv4);
-        curl_easy_setopt(curl, CURLOPT_USERPWD, userpwd);
-    }
-#else
-    if (sigv4 != NULL)
-    {
-        curl_easy_cleanup(curl);
-        return 0;
-    }
-#endif
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
@@ -128,26 +113,11 @@ static long request_signed(char const *method, char const *url,
     return status;
 }
 
-static long request(char const *method, char const *url,
-                    struct curl_slist *headers, char const *body,
-                    char **response)
-{
-    return request_signed(method, url, headers, body, response, NULL, NULL);
-}
-
 long ms_http_request(char const *method, char const *url,
                      struct curl_slist *headers, char const *body,
                      char **response)
 {
     return request(method, url, headers, body, response);
-}
-
-long ms_http_request_sigv4(char const *method, char const *url,
-                           struct curl_slist *headers, char const *body,
-                           char **response, char const *sigv4,
-                           char const *userpwd)
-{
-    return request_signed(method, url, headers, body, response, sigv4, userpwd);
 }
 
 int ms_discord_oauth_enabled()

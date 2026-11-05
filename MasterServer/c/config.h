@@ -59,17 +59,8 @@ struct ms_config
     char apple_redirect_uri[256];
     // outgoing email (codes for password and username changes): an HTTPS API
     // that takes a JSON body, see email.c
-    char email_api_url[256];
-    char email_api_key[256];
-    char email_api_auth[128]; // header line, {key} is replaced
-    char email_api_body[1024]; // JSON body, {from} {to} {subject} {text}
-    char email_from[128];
-    char email_from_name[64];
-    // EMAIL_PROVIDER=ses sends through Amazon SES instead (signed requests)
-    char email_provider[16];
-    char aws_access_key_id[64];
-    char aws_secret_access_key[128];
-    char aws_region[32];
+    char resend_api_key[256];
+    char resend_event[64];
     uint32_t require_email_verified; // 1: an address has to be proven before use
     uint32_t email_daily_limit; // emails sent per UTC day, 0 = no limit
     uint32_t flush_interval_ms;

@@ -15,29 +15,21 @@
 
 #pragma once
 
-// Outgoing email through an HTTPS API (the one of the SMTP service). Blocking:
-// call it from a worker thread. What it needs, all in the master's env:
-//   EMAIL_API_URL   where the request goes (POST). Default: SMTPMaster,
-//                   https://api.smtpmaster.com/api/send-email
-//   EMAIL_API_KEY   the key; it only ever goes to that URL
-//   EMAIL_API_AUTH  the header line that carries it, {key} is replaced
-//                   (default "X-API-Key: {key}", what SMTPMaster wants)
-//   EMAIL_API_BODY  the JSON body; {from} {from_name} {to} {subject} {text} are
-//                   replaced by JSON strings. Default is SMTPMaster's:
-//                   {"from_email":..,"from_name":..,"to_email":..,"subject":..,"body":..}
-//   EMAIL_FROM      the sender address, on a domain verified in the account
-//   EMAIL_FROM_NAME the sender's name (default Rysteria)
-// Any 2xx answer counts as sent.
-// Or Amazon SES: EMAIL_PROVIDER=ses with AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
-// AWS_REGION (default us-east-1) and EMAIL_FROM on a verified identity. The
-// IAM user only needs ses:SendEmail.
-// At most EMAIL_DAILY_LIMIT (default 50, 0 = no limit) emails go out per UTC
-// day, counted since the master started.
+// Outgoing email through Resend's events API (https://resend.com/docs/api-reference/events/send-event).
+// Blocking: call it from a worker thread. It needs, in the master's env:
+//   RESEND_API_KEY  the key (Authorization: Bearer ...); it only ever goes to api.resend.com
+//   RESEND_EVENT    the name of the event the automation in Resend listens to (default "OTP SEND")
+// Each mail is POST /events/send {"event":..,"email":to,"payload":{"subject":..,"text":..,"OTP":..}};
+// the sender and the layout belong to the automation in the Resend dashboard.
+// Any 2xx answer counts as sent. At most EMAIL_DAILY_LIMIT (default 50, 0 = no limit)
+// emails go out per UTC day, counted since the master started.
 int ms_email_enabled();
 // A mail to ADMIN_EMAIL that goes out even when today's emails are used up (something that
 // needs a human, like a notice from Apple). At most 30 an hour. 0 when sent
 int ms_email_send_admin(char const *subject, char const *text);
 // 1 when today's emails are used up
 int ms_email_daily_full();
-// 0 when the service accepted it, -2 when the daily limit is used up
-int ms_email_send(char const *to, char const *subject, char const *text);
+// `otp` is the one-time code in `text` (NULL when there is none). 0 when the service
+// accepted it, -2 when the daily limit is used up
+int ms_email_send(char const *to, char const *subject, char const *text,
+                  char const *otp);

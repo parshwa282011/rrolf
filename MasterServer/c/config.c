@@ -161,26 +161,8 @@ int ms_config_from_env()
         }
     get_str(c->apple_redirect_uri, sizeof c->apple_redirect_uri,
             "APPLE_REDIRECT_URI", "");
-    // the defaults are the ones of SMTPMaster's sending API; only the key and
-    // the sender address have to be set
-    get_str(c->email_api_url, sizeof c->email_api_url, "EMAIL_API_URL",
-            "https://api.smtpmaster.com/api/send-email");
-    get_str(c->email_api_key, sizeof c->email_api_key, "EMAIL_API_KEY", "");
-    get_str(c->email_api_auth, sizeof c->email_api_auth, "EMAIL_API_AUTH",
-            "X-API-Key: {key}");
-    get_str(c->email_api_body, sizeof c->email_api_body, "EMAIL_API_BODY",
-            "{\"from_email\":{from},\"from_name\":{from_name},"
-            "\"to_email\":{to},\"subject\":{subject},\"body\":{text}}");
-    get_str(c->email_from_name, sizeof c->email_from_name, "EMAIL_FROM_NAME",
-            "Rysteria");
-    get_str(c->email_from, sizeof c->email_from, "EMAIL_FROM", "");
-    get_str(c->email_provider, sizeof c->email_provider, "EMAIL_PROVIDER", "");
-    ms_str_lower(c->email_provider, c->email_provider, sizeof c->email_provider);
-    get_str(c->aws_access_key_id, sizeof c->aws_access_key_id,
-            "AWS_ACCESS_KEY_ID", "");
-    get_str(c->aws_secret_access_key, sizeof c->aws_secret_access_key,
-            "AWS_SECRET_ACCESS_KEY", "");
-    get_str(c->aws_region, sizeof c->aws_region, "AWS_REGION", "us-east-1");
+    get_str(c->resend_api_key, sizeof c->resend_api_key, "RESEND_API_KEY", "");
+    get_str(c->resend_event, sizeof c->resend_event, "RESEND_EVENT", "OTP SEND");
     c->email_daily_limit = get_uint("EMAIL_DAILY_LIMIT", 50);
     c->require_email_verified = get_uint("REQUIRE_EMAIL_VERIFICATION", 1);
     get_str(c->trust_proxy_header, sizeof c->trust_proxy_header,

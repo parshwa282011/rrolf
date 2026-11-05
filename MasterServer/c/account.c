@@ -120,7 +120,7 @@ int ms_account_delete_now(char const *uuid)
                  "The Rysteria account \"%s\" and its progress were deleted at your "
                  "request. If this was not you, write to %s right away.",
                  a.username, MS_CONFIG.admin_email[0] ? MS_CONFIG.admin_email : "the address in our privacy policy");
-        ms_email_send(notice_to, "Your Rysteria account was deleted", text);
+        ms_email_send(notice_to, "Your Rysteria account was deleted", text, NULL);
     }
     return 0;
 }

@@ -251,8 +251,8 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
                  "Your Rysteria %s code is %s. It expires in 10 minutes and "
                  "works once. If you did not ask for it, ignore this email.%s",
                  purpose_label(reset->s2), code, purpose_warning(reset->s2));
+        int sent = ms_email_send(address, "Your Rysteria code", text, code);
         sodium_memzero(code, sizeof code);
-        int sent = ms_email_send(address, "Your Rysteria code", text);
         if (sent != 0)
         {
             reset->s1[0] = 0;
@@ -744,8 +744,8 @@ void ms_h_verify_send(struct ms_req *req, struct ms_res *res)
                  "minutes and works once. If you did not sign up, ignore this "
                  "email.",
                  code);
+        int sent = ms_email_send(a.email, "Verify your Rysteria email", text, code);
         sodium_memzero(code, sizeof code);
-        int sent = ms_email_send(a.email, "Verify your Rysteria email", text);
         sodium_memzero(text, sizeof text);
         if (sent != 0)
         {
