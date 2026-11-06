@@ -69,6 +69,8 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);
 
+    // what the gardn server last reported becomes saves before anything is served
+    ms_gardn_backup_restore_at_start();
     int rc = ms_server_run();
     if (rc != 0)
         ms_jobs_shutdown();

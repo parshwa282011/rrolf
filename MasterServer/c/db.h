@@ -86,6 +86,15 @@ struct ms_db_gsave
     int64_t created_at;
 };
 
+// One signed-in player of the gardn server as it last reported them
+// (gardn.crash_backups): what they would get back if the server died now.
+struct ms_db_backup
+{
+    char uuid[MS_UUID_SIZE];
+    uint32_t score;
+    char *loadout; // malloc'd json array (NULL in what gardn_backup_restore returns)
+};
+
 // how often a petal id is in the loadouts of the gardn saves (stats page)
 struct ms_db_petal_stat
 {
@@ -178,6 +187,20 @@ struct ms_db
     // loadout is malloc'd), MS_DB_NOT_FOUND, MS_DB_ERROR
     int (*gardn_take)(struct ms_db *, char const *uuid, char const *save_id,
                       struct ms_db_gsave *out);
+
+    // Crash backups. The gardn server reports every signed-in player it has
+    // every 30 seconds; the table then holds EXACTLY these players (rows of
+    // players that left or were not reported are removed). Nothing else ever
+    // removes a row, so after the gardn server died the rows are what its
+    // players held. NULL when the backend has no such table.
+    int (*gardn_backup_replace)(struct ms_db *, struct ms_db_backup const *in,
+                                int count);
+    // Moves every crash backup into the owner's gardn saves (a new save each,
+    // players with a score of 0 are dropped) and empties the table. Writes the
+    // accounts and scores to `out` (at most `max`). Returns how many were moved
+    // or MS_DB_ERROR
+    int (*gardn_backup_restore)(struct ms_db *, struct ms_db_backup *out,
+                                int max);
 
     int (*lb_submit)(struct ms_db *, char const *board, char const *uuid,
                      double score, char const *extra_json);

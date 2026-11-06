@@ -146,6 +146,11 @@ static char const SCHEMA_SQL[] =
     " loadout jsonb NOT NULL,"
     " created_at bigint NOT NULL,"
     " PRIMARY KEY (uuid, save_id));"
+    "CREATE TABLE IF NOT EXISTS gardn.crash_backups ("
+    " uuid text PRIMARY KEY REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
+    " score bigint NOT NULL,"
+    " loadout jsonb NOT NULL,"
+    " updated_at bigint NOT NULL);"
     "CREATE TABLE IF NOT EXISTS leaderboards.entries ("
     " board text NOT NULL,"
     " uuid text NOT NULL REFERENCES accounts.accounts (uuid) ON DELETE CASCADE,"
@@ -689,6 +694,141 @@ static int pg_gardn_apply(struct ms_db *db, char const *uuid,
     PQclear(r);
     release(pg, slot);
     return result;
+}
+
+static int pg_gardn_backup_replace(struct ms_db *db,
+                                   struct ms_db_backup const *in, int count)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    int result = MS_DB_OK;
+    PGresult *r = PQexec(c, "BEGIN");
+    if (!is_command_ok(r))
+        result = log_failure("gardn_backup begin", r);
+    PQclear(r);
+    char now[32];
+    fmt_i64(now, sizeof now, ms_now());
+    for (int i = 0; result == MS_DB_OK && i < count; ++i)
+    {
+        char score[32];
+        fmt_i64(score, sizeof score, in[i].score);
+        char const *params[] = {in[i].uuid, score, in[i].loadout, now};
+        // written only when it changed, so that the backup servers are not
+        // sent the same row every 30 seconds; an account that is gone is skipped
+        r = run(c,
+                "INSERT INTO gardn.crash_backups (uuid, score, loadout,"
+                " updated_at) SELECT $1::text, $2::bigint, $3::jsonb,"
+                " $4::bigint WHERE EXISTS (SELECT 1 FROM accounts.accounts"
+                " WHERE uuid = $1::text)"
+                " ON CONFLICT (uuid) DO UPDATE SET score = EXCLUDED.score,"
+                " loadout = EXCLUDED.loadout, updated_at = EXCLUDED.updated_at"
+                " WHERE gardn.crash_backups.score <> EXCLUDED.score"
+                " OR gardn.crash_backups.loadout <> EXCLUDED.loadout",
+                4, params);
+        if (!is_command_ok(r))
+            result = log_failure("gardn_backup upsert", r);
+        PQclear(r);
+    }
+    if (result == MS_DB_OK)
+    {
+        // everyone who was not reported this time has left (or the gardn
+        // server stopped seeing them): off the table
+        if (count == 0)
+            r = run(c, "DELETE FROM gardn.crash_backups", 0, NULL);
+        else
+        {
+            size_t size = (size_t)count * (MS_UUID_SIZE + 3) + 3;
+            char *list = malloc(size);
+            size_t at = 0;
+            list[at++] = '{';
+            for (int i = 0; i < count; ++i)
+                at += (size_t)snprintf(list + at, size - at, "%s\"%s\"",
+                                       i ? "," : "", in[i].uuid);
+            list[at++] = '}';
+            list[at] = 0;
+            char const *params[] = {list};
+            r = run(c,
+                    "DELETE FROM gardn.crash_backups WHERE uuid <> ALL($1::text[])",
+                    1, params);
+            free(list);
+        }
+        if (!is_command_ok(r))
+            result = log_failure("gardn_backup delete", r);
+        PQclear(r);
+    }
+    r = PQexec(c, result == MS_DB_OK ? "COMMIT" : "ROLLBACK");
+    if (!is_command_ok(r) && result == MS_DB_OK)
+        result = log_failure("gardn_backup commit", r);
+    PQclear(r);
+    release(pg, slot);
+    return result;
+}
+
+static int pg_gardn_backup_restore(struct ms_db *db, struct ms_db_backup *out,
+                                   int max)
+{
+    struct pg *pg = db->ctx;
+    int slot;
+    PGconn *c = acquire(pg, &slot);
+    int result = MS_DB_OK;
+    int moved = 0;
+    PGresult *r = PQexec(c, "BEGIN");
+    if (!is_command_ok(r))
+        result = log_failure("gardn_backup_restore begin", r);
+    PQclear(r);
+    char now[32];
+    fmt_i64(now, sizeof now, ms_now());
+    if (result == MS_DB_OK)
+    {
+        char const *params[] = {now};
+        // one statement: the rows leave the backups and arrive as saves together
+        r = run(c,
+                "WITH moved AS (DELETE FROM gardn.crash_backups"
+                " RETURNING uuid, score, loadout),"
+                " ins AS (INSERT INTO gardn.saves (uuid, save_id, score,"
+                "  loadout, created_at)"
+                "  SELECT uuid, substr(md5(random()::text ||"
+                "   clock_timestamp()::text || uuid), 1, 16), score, loadout,"
+                "   $1::bigint FROM moved WHERE score > 0"
+                "  ON CONFLICT DO NOTHING RETURNING uuid, score)"
+                " SELECT uuid, score FROM ins",
+                1, params);
+        if (PQresultStatus(r) != PGRES_TUPLES_OK)
+            result = log_failure("gardn_backup_restore", r);
+        else
+        {
+            moved = PQntuples(r);
+            for (int i = 0; i < moved && i < max; ++i)
+            {
+                memset(&out[i], 0, sizeof out[i]);
+                ms_strlcpy(out[i].uuid, PQgetvalue(r, i, 0), sizeof out[i].uuid);
+                out[i].score = (uint32_t)atoll(PQgetvalue(r, i, 1));
+            }
+        }
+        PQclear(r);
+    }
+    // the same limit as every other way of adding a save: the oldest go
+    for (int i = 0; result == MS_DB_OK && i < moved && i < max; ++i)
+    {
+        char limit[16];
+        snprintf(limit, sizeof limit, "%d", MS_GARDN_MAX_SAVES);
+        char const *params[] = {out[i].uuid, limit};
+        r = run(c,
+                "DELETE FROM gardn.saves WHERE uuid = $1 AND save_id NOT IN"
+                " (SELECT save_id FROM gardn.saves WHERE uuid = $1"
+                "  ORDER BY created_at DESC, save_id LIMIT $2::int)",
+                2, params);
+        if (!is_command_ok(r))
+            result = log_failure("gardn_backup_restore trim", r);
+        PQclear(r);
+    }
+    r = PQexec(c, result == MS_DB_OK ? "COMMIT" : "ROLLBACK");
+    if (!is_command_ok(r) && result == MS_DB_OK)
+        result = log_failure("gardn_backup_restore commit", r);
+    PQclear(r);
+    release(pg, slot);
+    return result == MS_DB_OK ? moved : MS_DB_ERROR;
 }
 
 static int pg_lb_submit(struct ms_db *db, char const *board, char const *uuid,
@@ -1320,6 +1460,8 @@ struct ms_db *ms_db_postgres_open()
     db->gardn_list = pg_gardn_list;
     db->gardn_apply = pg_gardn_apply;
     db->gardn_take = pg_gardn_take;
+    db->gardn_backup_replace = pg_gardn_backup_replace;
+    db->gardn_backup_restore = pg_gardn_backup_restore;
     db->lb_submit = pg_lb_submit;
     db->lb_top = pg_lb_top;
     db->lb_apply = pg_lb_apply;

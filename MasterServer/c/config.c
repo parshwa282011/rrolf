@@ -182,6 +182,7 @@ int ms_config_from_env()
     if (c->restart_wait_seconds < 5)
         c->restart_wait_seconds = 5;
     c->leaderboard_verify = get_uint("LEADERBOARD_VERIFY", 1);
+    get_str(c->sync_role_file, sizeof c->sync_role_file, "SYNC_ROLE_FILE", "");
 
     // secrets must exist and be long enough to be worth anything
     struct

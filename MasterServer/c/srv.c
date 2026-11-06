@@ -18,10 +18,12 @@
 // that needs leaderboard access.
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "api.h"
+#include "config.h"
 #include "leaderboard.h"
 #include "util.h"
 
@@ -393,4 +395,141 @@ void ms_h_srv_gardn_take(struct ms_req *req, struct ms_res *res)
             ms_lb_push_gardn(uuid, 0, 1, m, b);
     }
     cJSON_Delete(body);
+}
+
+// ---------------------------------------------------------- crash backups
+
+#define MAX_BACKUP_PLAYERS 2000
+#define MAX_RESTORED 512
+
+// The gardn server reports every signed-in player it has, every 30 seconds:
+// { players: [{ uuid, score, loadout: [petal ids] }] }. The table then holds
+// exactly these players, so whoever left, or is not reported, is removed.
+void ms_h_srv_gardn_backup(struct ms_req *req, struct ms_res *res)
+{
+    cJSON *body = ms_req_json(req);
+    cJSON const *players =
+        body ? cJSON_GetObjectItemCaseSensitive(body, "players") : NULL;
+    if (!cJSON_IsArray(players) ||
+        cJSON_GetArraySize(players) > MAX_BACKUP_PLAYERS)
+    {
+        ms_res_error(res, 400, "bad_request", NULL);
+        cJSON_Delete(body);
+        return;
+    }
+    if (MS_DB->gardn_backup_replace == NULL)
+    {
+        ms_res_error(res, 501, "not_supported",
+                     "This database keeps no crash backups");
+        cJSON_Delete(body);
+        return;
+    }
+    int count = cJSON_GetArraySize(players);
+    struct ms_db_backup *list = calloc((size_t)count + 1, sizeof *list);
+    int n = 0;
+    int ok = 1;
+    cJSON const *item;
+    cJSON_ArrayForEach(item, players)
+    {
+        char const *uuid = ms_json_str(item, "uuid");
+        cJSON const *score = cJSON_GetObjectItemCaseSensitive(item, "score");
+        cJSON const *loadout = cJSON_GetObjectItemCaseSensitive(item, "loadout");
+        if (!ms_uuid_valid(uuid) || !cJSON_IsNumber(score) ||
+            score->valuedouble < 0 || score->valuedouble > 4294967295.0 ||
+            !cJSON_IsArray(loadout) ||
+            cJSON_GetArraySize(loadout) > MAX_LOADOUT_LEN)
+        {
+            ok = 0;
+            break;
+        }
+        cJSON const *slot;
+        cJSON_ArrayForEach(slot, loadout)
+        {
+            if (!cJSON_IsNumber(slot) || slot->valuedouble < 0 ||
+                slot->valuedouble > 65535 ||
+                slot->valuedouble != floor(slot->valuedouble))
+                ok = 0;
+        }
+        if (!ok)
+            break;
+        ms_strlcpy(list[n].uuid, uuid, sizeof list[n].uuid);
+        list[n].score = (uint32_t)score->valuedouble;
+        list[n].loadout = cJSON_PrintUnformatted(loadout);
+        ++n;
+    }
+    int rc = ok ? MS_DB->gardn_backup_replace(MS_DB, list, n) : MS_DB_ERROR;
+    for (int i = 0; i < n; ++i)
+        free(list[i].loadout);
+    free(list);
+    if (!ok)
+        ms_res_error(res, 400, "bad_request", NULL);
+    else if (rc != MS_DB_OK)
+        ms_res_error(res, 500, "server_error", NULL);
+    else
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddBoolToObject(o, "ok", 1);
+        cJSON_AddNumberToObject(o, "count", n);
+        ms_res_json(res, 200, o);
+    }
+    cJSON_Delete(body);
+}
+
+int ms_gardn_backup_restore()
+{
+    if (MS_DB == NULL || MS_DB->gardn_backup_restore == NULL)
+        return -1;
+    struct ms_db_backup *moved = calloc(MAX_RESTORED, sizeof *moved);
+    int n = MS_DB->gardn_backup_restore(MS_DB, moved, MAX_RESTORED);
+    if (n < 0)
+        ms_log("backup", "could not turn the crash backups into saves");
+    else
+    {
+        for (int i = 0; i < n && i < MAX_RESTORED; ++i)
+            ms_lb_push_gardn_best(moved[i].uuid, moved[i].score);
+        if (n > 0)
+            ms_log("backup", "%d crash backup(s) are saves now", n);
+    }
+    free(moved);
+    return n;
+}
+
+// Every start: what the gardn server last reported (its players when it was
+// stopped or died) becomes saves before anything is served. A standby does not:
+// its backups are the primary's, kept for the day it takes over
+void ms_gardn_backup_restore_at_start()
+{
+    if (MS_CONFIG.sync_role_file[0] != 0)
+    {
+        FILE *f = fopen(MS_CONFIG.sync_role_file, "r");
+        if (f != NULL)
+        {
+            char role[32] = "";
+            if (fgets(role, sizeof role, f) == NULL)
+                role[0] = 0;
+            fclose(f);
+            if (strncmp(role, "standby", 7) == 0)
+            {
+                ms_log("backup", "standby: the crash backups are kept for a takeover");
+                return;
+            }
+        }
+    }
+    ms_gardn_backup_restore();
+}
+
+// syncd calls this on the machine that takes over, before its tunnel starts
+void ms_h_srv_gardn_backup_restore(struct ms_req *req, struct ms_res *res)
+{
+    (void)req;
+    int n = ms_gardn_backup_restore();
+    if (n < 0)
+        ms_res_error(res, 500, "server_error", NULL);
+    else
+    {
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddBoolToObject(o, "ok", 1);
+        cJSON_AddNumberToObject(o, "moved", n);
+        ms_res_json(res, 200, o);
+    }
 }

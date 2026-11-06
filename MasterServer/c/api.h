@@ -113,6 +113,12 @@ void ms_h_srv_verify(struct ms_req *, struct ms_res *);
 void ms_h_srv_gardn_load(struct ms_req *, struct ms_res *);
 void ms_h_srv_gardn_flush(struct ms_req *, struct ms_res *);
 void ms_h_srv_gardn_take(struct ms_req *, struct ms_res *);
+void ms_h_srv_gardn_backup(struct ms_req *, struct ms_res *);
+void ms_h_srv_gardn_backup_restore(struct ms_req *, struct ms_res *);
+// Moves the crash backups into the saves; returns how many or -1. At start-up
+// (not on a standby, which keeps them for a takeover) and when syncd takes over
+int ms_gardn_backup_restore();
+void ms_gardn_backup_restore_at_start();
 void ms_h_srv_lb_submit(struct ms_req *, struct ms_res *);
 void ms_h_srv_lb_top(struct ms_req *, struct ms_res *);
 

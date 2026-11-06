@@ -223,6 +223,20 @@ int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
     return failed ? -1 : 0;
 }
 
+int ms_lb_push_gardn_best(char const *uuid, uint64_t best_score)
+{
+    struct ms_db_account a;
+    if (best_score == 0 ||
+        MS_DB->account_get(MS_DB, ms_db_by_uuid, uuid, NULL, &a) != MS_DB_OK ||
+        a.is_dev)
+        return 0;
+    char *extra = name_json(a.username);
+    int failed = apply(MS_LB_RYSTERIA_BOARDS + 1, uuid, (double)best_score,
+                       ms_lb_max, extra);
+    free(extra);
+    return failed ? -1 : 0;
+}
+
 // ------------------------------------------------------- start up correction
 
 struct verify

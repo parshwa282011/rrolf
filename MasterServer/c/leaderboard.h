@@ -70,6 +70,9 @@ int ms_lb_push_rysteria(char const *uuid, char const *username,
 int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
                      uint64_t mythics, uint64_t best_score);
 
+// gardn's best score alone (a crash backup that became a save), Any thread.
+int ms_lb_push_gardn_best(char const *uuid, uint64_t best_score);
+
 // walks through every account on a worker thread and corrects the boards
 void ms_lb_verify_start();
 
