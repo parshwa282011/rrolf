@@ -499,16 +499,21 @@ int ms_gardn_backup_restore()
 // its backups are the primary's, kept for the day it takes over
 void ms_gardn_backup_restore_at_start()
 {
-    if (MS_CONFIG.sync_role_file[0] != 0)
+    if (MS_CONFIG.sync_state_file[0] != 0)
     {
-        FILE *f = fopen(MS_CONFIG.sync_role_file, "r");
+        FILE *f = fopen(MS_CONFIG.sync_state_file, "r");
         if (f != NULL)
         {
-            char role[32] = "";
-            if (fgets(role, sizeof role, f) == NULL)
-                role[0] = 0;
+            char text[2048];
+            size_t n = fread(text, 1, sizeof text - 1, f);
             fclose(f);
-            if (strncmp(role, "standby", 7) == 0)
+            text[n] = 0;
+            cJSON *state = cJSON_Parse(text);
+            cJSON const *was_primary =
+                state ? cJSON_GetObjectItemCaseSensitive(state, "wasPrimary") : NULL;
+            int standby = cJSON_IsFalse(was_primary);
+            cJSON_Delete(state);
+            if (standby)
             {
                 ms_log("backup", "standby: the crash backups are kept for a takeover");
                 return;

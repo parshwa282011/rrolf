@@ -75,10 +75,10 @@ struct ms_config
     // 1 = on start-up every account is checked against its saves and the
     // leaderboards are corrected (leaderboard.c)
     uint32_t leaderboard_verify;
-    // file written by syncd (sync.role: "primary" or "standby"). A standby keeps
-    // the crash backups of the primary for a takeover and does not turn them into
-    // saves when it starts. "" = no sync, the backups are always moved
-    char sync_role_file[512];
+    // syncd's state file (sync-state.json, "wasPrimary"). A standby keeps the crash
+    // backups of the primary for a takeover and does not turn them into saves when
+    // it starts. "" = no sync, the backups are always moved
+    char sync_state_file[512];
 };
 
 extern struct ms_config MS_CONFIG;
