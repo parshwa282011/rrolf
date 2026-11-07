@@ -58,7 +58,8 @@ enum rr_game_menu
     rr_game_menu_dev_squad_panel,
     rr_game_menu_legal,
     rr_game_menu_give_petals,
-    rr_game_menu_ctf_host
+    rr_game_menu_ctf_host,
+    rr_game_menu_changelog
 };
 
 enum rr_game_cursor

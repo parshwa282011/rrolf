@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
 #include <Client/Ui/Ui.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <Client/DOM.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -27,14 +29,24 @@
 
 #include <Shared/Utilities.h>
 
-static uint8_t changelog_container_should_show(struct rr_ui_element *this,
-                                               struct rr_game *game)
+// What changed, newest first. The button is in the row of links at the top right
+// of the title screen and the panel opens like the Terms & Privacy one. Gardn has
+// its own list, in the game (gardn/Client/Ui/TitleScreen/Changelog.cc): the
+// changes of both games are written in both.
+
+static uint8_t changelog_should_show(struct rr_ui_element *this,
+                                     struct rr_game *game)
 {
-    return game->top_ui_open == 2 && !game->simulation_ready;
+    return game->menu_open == rr_game_menu_changelog;
 }
 
-static void changelog_container_animate(struct rr_ui_element *this,
-                                        struct rr_game *game)
+static uint8_t changelog_button_should_show(struct rr_ui_element *this,
+                                            struct rr_game *game)
+{
+    return !game->simulation_ready;
+}
+
+static void changelog_animate(struct rr_ui_element *this, struct rr_game *game)
 {
     this->width = this->abs_width;
     this->height = this->abs_height;
@@ -43,51 +55,34 @@ static void changelog_container_animate(struct rr_ui_element *this,
         0);
 }
 
-static void inventory_toggle_on_render(struct rr_ui_element *this,
-                                       struct rr_game *game)
+static void changelog_button_on_event(struct rr_ui_element *this,
+                                      struct rr_game *game)
 {
-    struct rr_renderer *renderer = game->renderer;
-    if (game->focused == this)
-        renderer->state.filter.amount = 0.2;
-    rr_renderer_scale(renderer, renderer->scale);
-    rr_renderer_set_fill(renderer, this->fill);
-    renderer->state.filter.amount += 0.2;
-    rr_renderer_set_stroke(renderer, this->fill);
-    rr_renderer_set_line_width(renderer, 6);
-    rr_renderer_set_line_cap(renderer, 1);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_round_rect(renderer, -this->width / 2, -this->height / 2,
-                           this->width, this->height, 6);
-    rr_renderer_fill(renderer);
-    rr_renderer_stroke(renderer);
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    if (game->input_data->mouse_buttons_up_this_tick & 1 && game->pressed == this)
+        game->menu_open = game->menu_open == rr_game_menu_changelog
+                              ? rr_game_menu_none
+                              : rr_game_menu_changelog;
+    game->cursor = rr_game_cursor_pointer;
 }
 
-static void changelog_toggle_button_on_event(struct rr_ui_element *this,
-                                             struct rr_game *game)
+struct rr_ui_element *rr_ui_changelog_button_init()
 {
-    if (game->pressed != this)
-        return;
-    if (game->input_data->mouse_buttons_up_this_tick & 1)
-    {
-        if (game->top_ui_open == 2)
-            game->top_ui_open = 0;
-        else
-            game->top_ui_open = 2;
-    }
+    struct rr_ui_element *this =
+        rr_ui_labeled_button_init("Changelog", 30, NULL);
+    struct rr_ui_labeled_button_metadata *data = this->data;
+    data->clickable = 1;
+    this->on_event = changelog_button_on_event;
+    this->should_show = changelog_button_should_show;
+    rr_ui_set_background(this, 0xff5a9fdb);
+    return this;
 }
 
 static void changelog_divider_on_render(struct rr_ui_element *this,
                                         struct rr_game *game)
 {
     struct rr_renderer *renderer = game->renderer;
-    if (this->container->resizeable)
-    {
-        struct rr_ui_container_metadata *data = this->container->data;
-        if (this->abs_width <
-            this->container->abs_width - data->outer_spacing * 2)
-            this->abs_width =
-                this->container->abs_width - data->outer_spacing * 2;
-    }
     rr_renderer_scale(renderer, renderer->scale);
     rr_renderer_set_stroke(renderer, this->fill);
     rr_renderer_set_line_width(renderer, this->abs_height / 2);
@@ -100,90 +95,67 @@ static void changelog_divider_on_render(struct rr_ui_element *this,
 static struct rr_ui_element *changelog_divider_init()
 {
     struct rr_ui_element *this = rr_ui_element_init();
-    this->abs_height = this->height = 10;
-    this->abs_width = this->width = 100;
+    this->abs_height = this->height = 6;
+    this->abs_width = this->width = 420;
     rr_ui_set_background(this, 0x40000000);
     this->on_render = changelog_divider_on_render;
     return this;
 }
 
-static uint8_t changelog_button_should_show(struct rr_ui_element *this,
-                                            struct rr_game *game)
-{
-    return !game->simulation_ready;
-}
+#define DATE(text) rr_ui_text_init(text, 20, 0xffffffff)
+#define LINE(text) rr_ui_text_init("- " text, 14, 0xffffffff)
 
-struct rr_ui_element *rr_ui_changelog_toggle_button_init()
+// clang-format off
+struct rr_ui_element *rr_ui_changelog_container_init(struct rr_game *game)
 {
-    struct rr_ui_element *this = rr_ui_element_init();
-    rr_ui_set_background(this, 0xff888888);
-    this->abs_width = this->abs_height = this->width = this->height = 40;
-    this->on_event = changelog_toggle_button_on_event;
-    this->on_render = inventory_toggle_on_render;
-    this->should_show = changelog_button_should_show;
-    return this;
-}
-
-struct rr_ui_element *rr_ui_changelog_container_init()
-{
+    struct rr_ui_element *list = rr_ui_justify_all(
+        rr_ui_v_container_init(rr_ui_container_init(), 0, 6,
+            DATE("November 7th 2026"),
+            LINE("Changelog panel (this one)"),
+            LINE("A link to the game this one is forked from"),
+            LINE("Sign up with Apple is off for now"),
+            LINE("Gardn: Sandbox mode (two areas, a developer menu), M"),
+            LINE("switches between mouse and keyboard movement"),
+            changelog_divider_init(),
+            DATE("November 6th 2026"),
+            LINE("Gardn: who is in the world is backed up every 30 seconds,"),
+            LINE("after a crash they get their progress back as saves"),
+            changelog_divider_init(),
+            DATE("November 4th 2026"),
+            LINE("Accounts: the email is confirmed with a code"),
+            LINE("Account page: link Discord or Google, add an email,"),
+            LINE("delete your account"),
+            LINE("Privacy policy and terms of service pages"),
+            changelog_divider_init(),
+            DATE("November 3rd 2026"),
+            LINE("Minigames server: capture the flag, team deathmatch,"),
+            LINE("hide and seek"),
+            LINE("Leaderboards and a player stats page with search"),
+            changelog_divider_init(),
+            DATE("November 1st 2026"),
+            LINE("Leaderboards of Rysteria and gardn at /leaderboard"),
+            changelog_divider_init(),
+            DATE("October 31st 2026"),
+            LINE("The Gardn button on the title screen"),
+            LINE("Chat and the squad list shared between servers"),
+            LINE("Drag petals onto loadout slots, N shows the whole map"),
+            NULL
+        ), -1);
     struct rr_ui_element *this = rr_ui_pad(
         rr_ui_set_background(
             rr_ui_v_pad(
                 rr_ui_set_justify(
-                    rr_ui_v_container_init(
-                        rr_ui_container_init(), 10, 10,
-                        rr_ui_text_init("Changelog", 36, 0xffffffff),
-                        rr_ui_scroll_container_init(
-                            rr_ui_justify_all(
-                                rr_ui_v_container_init(
-                                    rr_ui_container_init(), 10, 10,
-                                    rr_ui_text_init("7/29/2023", 24,
-                                                    0xffffffff),
-                                    rr_ui_static_space_init(10),
-                                    rr_ui_text_init("Petas now act as one "
-                                                    "entity before being shot",
-                                                    16, 0xffffffff),
-                                    rr_ui_text_init("Buffed peas", 16,
-                                                    0xffffffff),
-                                    changelog_divider_init(),
-                                    rr_ui_text_init("7/28/2023", 24,
-                                                    0xffffffff),
-                                    rr_ui_static_space_init(10),
-                                    rr_ui_text_init("Pteranodon now does not "
-                                                    "shoot while chasing",
-                                                    16, 0xffffffff),
-                                    rr_ui_text_init(
-                                        "Death cameras now follows seed and "
-                                        "other alive players",
-                                        16, 0xffffffff),
-                                    changelog_divider_init(),
-                                    rr_ui_text_init("7/27/2023", 24,
-                                                    0xffffffff),
-                                    rr_ui_static_space_init(10),
-                                    rr_ui_text_init(
-                                        "Create seed. drops from fern", 16,
-                                        0xffffffff),
-                                    rr_ui_text_init("Change drop rates", 16,
-                                                    0xffffffff),
-                                    changelog_divider_init(),
-                                    rr_ui_text_init("2/13/2023", 24,
-                                                    0xffffffff),
-                                    rr_ui_static_space_init(10),
-                                    rr_ui_text_init(
-                                        "We have began working on a new game "
-                                        "called rrolf.io",
-                                        16, 0xffffffff),
-                                    rr_ui_text_init("I heard it's about dinos",
-                                                    16, 0xffffffff),
-                                    NULL),
-                                -1),
-                            300),
-                        NULL),
-                    -1, -1),
-                80),
-            0x40ffffff),
-        10);
-    this->animate = changelog_container_animate;
-    this->should_show = changelog_container_should_show;
+                    rr_ui_v_container_init(rr_ui_container_init(), 10, 10,
+                        rr_ui_text_init("Changelog", 24, 0xffffffff),
+                        rr_ui_scroll_container_init(list, 320),
+                        NULL
+                    ), -1, -1
+                ), 50
+            ), 0x40ffffff
+        ), 10
+    );
+    this->animate = changelog_animate;
+    this->should_show = changelog_should_show;
     return this;
 }
+// clang-format on

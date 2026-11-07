@@ -108,6 +108,7 @@ set(SRCS
     Ui/TitleScreen/Gardn.c
     Ui/TitleScreen/Github.c
     Ui/TitleScreen/Inventory.c
+    Ui/TitleScreen/Changelog.c
     Ui/TitleScreen/Legal.c
     Ui/TitleScreen/LevelBar.c
     Ui/TitleScreen/MobGallery.c

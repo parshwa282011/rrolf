@@ -491,6 +491,7 @@ void rr_game_init(struct rr_game *this)
                     rr_ui_leaderboard_page_button_init(),
                     rr_ui_stats_page_button_init(),
                     rr_ui_forked_from_button_init(),
+                    rr_ui_changelog_button_init(),
                     rr_ui_gardn_toggle_button_init(),
                     // the Github and Discord buttons are off for now
                     // rr_ui_github_toggle_button_init(),
@@ -738,6 +739,7 @@ void rr_game_init(struct rr_game *this)
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_settings_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_account_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_legal_container_init(this), close_menu_button_init(25))->container);
+    rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_changelog_container_init(this), close_menu_button_init(25))->container);
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_dev_panel_container_init(this), close_menu_button_init(25))->container);
 #ifdef PDEV
     rr_ui_container_add_element(this->window, rr_ui_container_add_element(rr_ui_give_petals_container_init(this), close_menu_button_init(25))->container);
