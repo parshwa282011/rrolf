@@ -490,6 +490,7 @@ void rr_game_init(struct rr_game *this)
                     rr_ui_crazygames_user_init(this),
                     rr_ui_leaderboard_page_button_init(),
                     rr_ui_stats_page_button_init(),
+                    rr_ui_forked_from_button_init(),
                     rr_ui_gardn_toggle_button_init(),
                     // the Github and Discord buttons are off for now
                     // rr_ui_github_toggle_button_init(),

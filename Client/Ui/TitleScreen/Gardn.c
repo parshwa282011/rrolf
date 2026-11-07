@@ -210,3 +210,21 @@ struct rr_ui_element *rr_ui_stats_page_button_init()
     rr_ui_set_background(this, 0xff4a8cf0);
     return this;
 }
+
+// The game this one is forked from (the buttons are on the title screen, next to the
+// leaderboard and stats pages)
+static void forked_button_on_event(struct rr_ui_element *this,
+                                   struct rr_game *game)
+{
+    page_button_on_event(this, game, "https://rysteria.pro");
+}
+
+struct rr_ui_element *rr_ui_forked_from_button_init()
+{
+    struct rr_ui_element *this =
+        rr_ui_labeled_button_init("Forked from Rysteria", 30, NULL);
+    this->on_event = forked_button_on_event;
+    this->should_show = gardn_button_should_show;
+    rr_ui_set_background(this, 0xff6b4fc4);
+    return this;
+}

@@ -245,7 +245,8 @@ function render() {
     let any = false;
     for (const p of ["discord", "google", "apple"]) {
         const link = (me.links || []).find((l) => l.provider === p);
-        if (!link && !providers[p]) continue;
+        // Apple sign up is off for now: an account that already linked it can still unlink
+        if (!link && (!providers[p] || p === "apple")) continue;
         any = true;
         const row = document.createElement("div"); row.className = "row";
         const what = document.createElement("div"); what.className = "what";
