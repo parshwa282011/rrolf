@@ -1,0 +1,43 @@
+# The changelog of both games, read by Rysteria and by gardn (served at /changelog.txt).
+#
+# "== " starts a day, newest first. Under it, one line per change:
+#   [all]       the same in both games (accounts, login, leaderboards, links...)
+#   [rysteria]  only in the Rysteria list
+#   [gardn]     only in the gardn list
+# A line can be as long as it needs: the games break it into lines. A day with no
+# change for a game is left out of that game's list.
+# After editing, copy the file to the machines (scripts/common/build.sh does it, so does
+# quick-deploy.sh) - no client has to be rebuilt for it, a reload shows the change.
+
+== November 7th 2026
+[all] A link to the game this one is forked from
+[all] Sign up with Apple is off for now
+[all] One changelog for both games: what is the same in both is written once
+[rysteria] A Changelog button next to Leaderboard and Stats
+[gardn] Sandbox mode, next to FFA and TDM: a normal area without mobs and a PVP area where mobs spawn. Nothing in it is saved to your account. Leave it with the X at the top left
+[gardn] Press \ in the sandbox for the developer menu: set your level, get any petal, summon mobs, clear them, be invincible
+[gardn] Press M to switch between mouse and keyboard movement
+[gardn] In mouse movement the buttons also spread and pull in the petals while the mouse is in the box at the bottom
+[gardn] 5 seconds of spawn protection when you spawn or restore in FFA and TDM: nothing collides with you or targets you
+[gardn] The minimap works in the sandbox
+
+== November 6th 2026
+[gardn] Who is in the world is backed up every 30 seconds; after a crash everybody gets their progress back as a save
+
+== November 4th 2026
+[all] Accounts: the email is confirmed with a code before the account can be used
+[all] Account page (/account): link Discord or Google, add an email, delete your account
+[all] Log in, sign up and password reset are one page (/login), with codes sent by email
+[all] Privacy policy and terms of service pages
+
+== November 3rd 2026
+[all] Separate leaderboards for Rysteria and gardn, and a player stats page with search
+[rysteria] Minigames server: capture the flag, team deathmatch, hide and seek
+
+== November 1st 2026
+[all] Leaderboards at /leaderboard
+
+== October 31st 2026
+[rysteria] The Gardn button on the title screen
+[rysteria] Chat and the squad list are shared between servers
+[rysteria] Drag petals onto loadout slots, N shows the whole map
