@@ -12,6 +12,7 @@
 == November 8th 2026
 [all] The stats pages show the icon of every petal: the loadout of a player in Rysteria, the petals that are saved in Gardn
 [gardn] The mobs in the sandbox's developer menu have their icons
+[gardn] The leader's curse (the mobs going for them, the damage at level 90) leaves a flower alone for its first 10 seconds after it spawns or is restored. There is no curse in the sandbox
 [rysteria] Snail run: the snail is epic 65%, legendary 25%, mythic 9%, exotic 0.75% or ancient 0.25% of the time
 [rysteria] The snail takes the cheapest way home: it goes round the hard parts of the garden, even when that is a longer walk
 [rysteria] The snail only wakes when a player is right next to it. Until then no mob can come within 500 units of it and none goes for it
