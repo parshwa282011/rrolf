@@ -376,8 +376,8 @@ void rr_main_loop(struct rr_game *this)
 // /?iconsheet and the game draws every petal at every rarity as its loadout does (without
 // the tile and the name: the page puts the rarity colour behind it), instead of playing.
 // scripts/gen-icons.mjs, which the build runs, takes the picture of that in headless
-// Chrome and cuts every petal out as a png. The petal with id i at rarity r is the 64
-// unit square at column i, row r.
+// Chrome and cuts every petal out as a png. The petal with id i at rarity r is the
+// ICON_CELL unit square at column i, row r.
 static uint8_t icon_sheet_wanted()
 {
 #ifdef __EMSCRIPTEN__
@@ -391,6 +391,10 @@ static uint8_t icon_sheet_wanted()
 #endif
 }
 
+// (a petal that is a clump of several is wider than the petal itself: the tiles are big
+// enough for the widest one with room to spare, so that no petal reaches into the next)
+#define ICON_CELL 128
+
 static void draw_icon_sheet(struct rr_renderer *renderer, float dpr)
 {
 #ifdef __EMSCRIPTEN__
@@ -401,9 +405,9 @@ static void draw_icon_sheet(struct rr_renderer *renderer, float dpr)
             window["iconSheetInfo"] = {};
             window["iconSheetInfo"]["columns"] = $0;
             window["iconSheetInfo"]["rows"] = $1;
-            window["iconSheetInfo"]["cell"] = 64;
+            window["iconSheetInfo"]["cell"] = $2;
         },
-        rr_petal_id_max, rr_rarity_id_max);
+        rr_petal_id_max, rr_rarity_id_max, ICON_CELL);
 #endif
     rr_renderer_set_transform(renderer, 1, 0, 0, 0, 1, 0);
     // the game sets these at the start of every frame
@@ -414,8 +418,8 @@ static void draw_icon_sheet(struct rr_renderer *renderer, float dpr)
         {
             struct rr_renderer_context_state state;
             rr_renderer_context_state_init(renderer, &state);
-            rr_renderer_translate(renderer, (id + 0.5f) * 64 * dpr,
-                                  (rarity + 0.5f) * 64 * dpr);
+            rr_renderer_translate(renderer, (id + 0.5f) * ICON_CELL * dpr,
+                                  (rarity + 0.5f) * ICON_CELL * dpr);
             rr_renderer_scale(renderer, dpr * 1.1f);
             // (flag 0: drawn from its shapes, flag 1 copies from a cache the game fills
             // while it plays)
