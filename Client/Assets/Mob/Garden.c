@@ -20,8 +20,8 @@
 
 #include <Client/Renderer/Renderer.h>
 
-// Art for the garden update: the bush, ant holes, eggs, the queen's abdomen, a
-// digger's claw, the snail and its hole. Everything is drawn around the origin
+// Art for the garden update: the bush, ant holes, eggs, the queen's abdomen, the
+// snail and its hole. Everything is drawn around the origin
 // and faces +x, like the other mobs.
 
 static void circle(struct rr_renderer *renderer, uint32_t color, float x,
@@ -128,24 +128,6 @@ void rr_queen_ant_abdomen_draw(struct rr_renderer *renderer)
     ellipse(renderer, 0xff3a1f15, 18, 0, 6, 78);
     ellipse(renderer, 0xff3a1f15, 58, 0, 6, 68);
     ellipse(renderer, 0xff8a5a46, -14, -34, 50, 18);
-}
-
-void rr_digger_ant_claw_draw(struct rr_renderer *renderer)
-{
-    // a flat scoop, drawn twice at the front of the head
-    rr_renderer_set_fill(renderer, 0xffc9a35a);
-    rr_renderer_set_stroke(renderer, 0xff8a6a30);
-    rr_renderer_set_line_width(renderer, 8);
-    rr_renderer_set_line_join(renderer, 1);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, 0, -12);
-    rr_renderer_line_to(renderer, 62, -42);
-    rr_renderer_line_to(renderer, 82, 0);
-    rr_renderer_line_to(renderer, 62, 42);
-    rr_renderer_line_to(renderer, 0, 12);
-    rr_renderer_line_to(renderer, 0, -12);
-    rr_renderer_fill(renderer);
-    rr_renderer_stroke(renderer);
 }
 
 void rr_snail_body_draw(struct rr_renderer *renderer)

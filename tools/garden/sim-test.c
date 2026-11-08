@@ -16,8 +16,7 @@
 
 // A test of the garden's mobs on a simulation, with no network and no clients:
 // ant holes are built with the right population, eggs hatch and the queen lays
-// new ones, killing the queen lets the others out, diggers cut through walls,
-// plants leave holes behind at the rate they should. Built with -DGARDEN by
+// new ones, killing the queen lets the others out, plants leave holes behind at the rate they should. Built with -DGARDEN by
 // tools/garden/run-sim-test.sh.
 
 #include <math.h>
@@ -178,42 +177,20 @@ int main()
     {
         struct rr_ant_hole_rarity_scale const *scale =
             &RR_ANT_HOLE_RARITY_SCALING[rarity];
-        uint32_t most_diggers = 0, total_diggers = 0;
-        uint32_t trials = 60;
-        for (uint32_t t = 0; t < trials; ++t)
-        {
-            EntityIdx hole = make_hole(rarity);
-            struct rr_component_arena *arena =
-                rr_simulation_get_arena(sim(), hole);
-            uint32_t diggers = count_mobs(hole, rr_mob_id_digger_ant);
-            if (t == 0)
-            {
-                CHECK(arena->biome == rr_biome_id_ant_hole, "the hole has its own biome");
-                CHECK(count_mobs(hole, rr_mob_id_queen_ant) == 1, "one queen at rarity %u", rarity);
-                CHECK(count_mobs(hole, rr_mob_id_ant_egg) == scale->egg_count,
-                      "%u eggs at rarity %u, got %u", scale->egg_count, rarity,
-                      count_mobs(hole, rr_mob_id_ant_egg));
-                CHECK(arena->ant_egg_count == scale->egg_count, "the egg count is kept (%u)", arena->ant_egg_count);
-                CHECK(count_mobs(hole, rr_mob_id_ant) == scale->worker_count, "%u workers at rarity %u", scale->worker_count, rarity);
-                CHECK(count_mobs(hole, rr_mob_id_baby_ant) == scale->baby_ant_count, "%u babies at rarity %u", scale->baby_ant_count, rarity);
-                uint32_t all = 1 + scale->egg_count + scale->worker_count + scale->baby_ant_count + diggers;
-                CHECK(arena->mob_count == all, "mob_count %u is what is in it, %u", arena->mob_count, all);
-            }
-            if (diggers > most_diggers)
-                most_diggers = diggers;
-            total_diggers += diggers;
-            remove_hole(hole);
-        }
-        printf("  rarity %u: diggers %.2f on average, at most %u\n", rarity,
-               (float)total_diggers / trials, most_diggers);
-        CHECK(most_diggers <= 2, "never more than two diggers, got %u", most_diggers);
-        if (scale->digger_second_chance == 0)
-            CHECK(most_diggers <= 1, "no second digger at rarity %u", rarity);
-        float expected = scale->digger_first_chance * (1 + scale->digger_second_chance);
-        float average = (float)total_diggers / trials;
-        CHECK(fabsf(average - expected) < 0.35f, "average %.2f is close to %.2f", average, expected);
-        if (scale->digger_first_chance >= 1)
-            CHECK(total_diggers >= trials, "a digger every time at rarity %u", rarity);
+        EntityIdx hole = make_hole(rarity);
+        struct rr_component_arena *arena =
+            rr_simulation_get_arena(sim(), hole);
+        CHECK(arena->biome == rr_biome_id_ant_hole, "the hole has its own biome");
+        CHECK(count_mobs(hole, rr_mob_id_queen_ant) == 1, "one queen at rarity %u", rarity);
+        CHECK(count_mobs(hole, rr_mob_id_ant_egg) == scale->egg_count,
+              "%u eggs at rarity %u, got %u", scale->egg_count, rarity,
+              count_mobs(hole, rr_mob_id_ant_egg));
+        CHECK(arena->ant_egg_count == scale->egg_count, "the egg count is kept (%u)", arena->ant_egg_count);
+        CHECK(count_mobs(hole, rr_mob_id_ant) == scale->worker_count, "%u workers at rarity %u", scale->worker_count, rarity);
+        CHECK(count_mobs(hole, rr_mob_id_baby_ant) == scale->baby_ant_count, "%u babies at rarity %u", scale->baby_ant_count, rarity);
+        uint32_t all = 1 + scale->egg_count + scale->worker_count + scale->baby_ant_count;
+        CHECK(arena->mob_count == all, "mob_count %u is what is in it, %u", arena->mob_count, all);
+        remove_hole(hole);
     }
 
     printf("eggs hatch and the queen lays new ones\n");
@@ -234,15 +211,14 @@ int main()
         printf("killing the queen lets the others out and removes the hole\n");
         uint32_t workers = count_mobs(hole, rr_mob_id_ant);
         uint32_t kids = count_mobs(hole, rr_mob_id_baby_ant);
-        uint32_t diggers = count_mobs(hole, rr_mob_id_digger_ant);
-        uint32_t outside_before = count_mobs(1, rr_mob_id_ant) + count_mobs(1, rr_mob_id_baby_ant) + count_mobs(1, rr_mob_id_digger_ant);
+        uint32_t outside_before = count_mobs(1, rr_mob_id_ant) + count_mobs(1, rr_mob_id_baby_ant);
         kill(find_mob(hole, rr_mob_id_queen_ant));
         tick(3);
         CHECK(!rr_simulation_has_entity(sim(), hole), "the hole is gone");
         CHECK(count_mobs(hole, rr_mob_id_ant_egg) == 0, "no eggs are left");
-        uint32_t outside_after = count_mobs(1, rr_mob_id_ant) + count_mobs(1, rr_mob_id_baby_ant) + count_mobs(1, rr_mob_id_digger_ant);
-        CHECK(outside_after - outside_before == workers + kids + diggers,
-              "%u ants came out, expected %u", outside_after - outside_before, workers + kids + diggers);
+        uint32_t outside_after = count_mobs(1, rr_mob_id_ant) + count_mobs(1, rr_mob_id_baby_ant);
+        CHECK(outside_after - outside_before == workers + kids,
+              "%u ants came out, expected %u", outside_after - outside_before, workers + kids);
         CHECK(rr_simulation_has_entity(sim(), 1), "the main arena is still there");
     }
 
@@ -304,79 +280,6 @@ int main()
             tick(2);
         }
         CHECK(count_mobs(1, rr_mob_id_ant_hole) == holes_before, "all holes were cleared");
-    }
-
-    printf("a digger cuts through a wall to a target on the other side\n");
-    {
-        EntityIdx hole = make_hole(rr_rarity_id_rare);
-        struct rr_component_arena *arena = rr_simulation_get_arena(sim(), hole);
-        // nothing but our two
-        rr_simulation_create_component_vectors(sim());
-        for (uint32_t i = 0; i < sim()->mob_count; ++i)
-        {
-            EntityIdx e = sim()->mob_vector[i];
-            if (rr_simulation_get_physical(sim(), e)->arena == hole)
-            {
-                rr_simulation_get_mob(sim(), e)->no_drop = 1;
-                rr_simulation_request_entity_deletion(sim(), e);
-            }
-        }
-        tick(2);
-        float g = arena->maze->grid_size;
-        uint32_t dim = arena->maze->maze_dim;
-        // two open cells in a line with one or two wall cells between them
-        int found = 0;
-        float ax = 0, ay = 0, bx = 0, by = 0;
-        for (uint32_t y = 1; y < dim - 1 && !found; ++y)
-            for (uint32_t x = 1; x < dim - 4 && !found; ++x)
-            {
-                if (rr_component_arena_get_grid(arena, x, y)->value != 1)
-                    continue;
-                for (uint32_t gap = 1; gap <= 2 && !found; ++gap)
-                {
-                    int walls = 1;
-                    for (uint32_t k = 1; k <= gap; ++k)
-                    {
-                        uint8_t w = rr_component_arena_get_grid(arena, x + k, y)->value;
-                        walls &= w == 0 || (w & 8);
-                    }
-                    if (walls &&
-                        rr_component_arena_get_grid(arena, x + gap + 1, y)->value == 1)
-                    {
-                        ax = (x + 0.5f) * g; ay = (y + 0.5f) * g;
-                        bx = (x + gap + 1.5f) * g; by = (y + 0.5f) * g;
-                        found = 1;
-                    }
-                }
-            }
-        CHECK(found, "the burrow has two open cells with a thin wall between them");
-        if (found)
-        {
-            EntityIdx digger = rr_simulation_alloc_mob(sim(), hole, ax, ay, rr_mob_id_digger_ant, rr_rarity_id_legendary, rr_simulation_team_id_mobs);
-            ++arena->mob_count;
-            EntityIdx target = rr_simulation_alloc_mob(sim(), hole, bx, by, rr_mob_id_snail, rr_rarity_id_legendary, rr_simulation_team_id_players);
-            ++arena->mob_count;
-            rr_simulation_get_mob(sim(), target)->no_drop = 1;
-            struct rr_component_physical *dp = rr_simulation_get_physical(sim(), digger);
-            struct rr_component_physical *tp = rr_simulation_get_physical(sim(), target);
-            int tunneled = 0, reached = 0;
-            for (uint32_t t = 0; t < 8 * 25 && !reached; ++t)
-            {
-                tick(1);
-                if (dp->tunneling)
-                    tunneled = 1;
-                float dx = dp->x - tp->x, dy = dp->y - tp->y;
-                if (dx * dx + dy * dy < 4 * (dp->radius + tp->radius) * (dp->radius + tp->radius))
-                    reached = 1;
-            }
-            CHECK(tunneled, "the digger dug");
-            CHECK(reached, "and got to the target, %.0f units away", sqrtf((dp->x - tp->x) * (dp->x - tp->x) + (dp->y - tp->y) * (dp->y - tp->y)));
-            tick(4 * 25);
-            CHECK(!dp->tunneling || rr_component_arena_get_grid(arena, dp->x / g, dp->y / g)->value != 1, "it never stays dug into a wall");
-            uint8_t v = rr_component_arena_get_grid(arena, dp->x / g, dp->y / g)->value;
-            CHECK(!dp->tunneling ? 1 : v == 1 || v != 0, "(position is in the maze)");
-        }
-        remove_hole(hole);
     }
 
     printf("a snail starts asleep in the zone of its rarity, hunted by mobs as rare as itself\n");

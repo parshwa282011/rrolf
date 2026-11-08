@@ -107,7 +107,6 @@ void rr_bush_draw(struct rr_renderer *);
 void rr_ant_hole_draw(struct rr_renderer *);
 void rr_ant_egg_draw(struct rr_renderer *);
 void rr_queen_ant_abdomen_draw(struct rr_renderer *);
-void rr_digger_ant_claw_draw(struct rr_renderer *);
 void rr_snail_body_draw(struct rr_renderer *);
 void rr_snail_shell_draw(struct rr_renderer *);
 void rr_snail_hole_draw(struct rr_renderer *);

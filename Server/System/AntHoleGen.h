@@ -23,7 +23,7 @@ struct rr_component_arena;
 
 // Picks one of the pregenerated RR_BEEHIVE_MAZE_TIERS by rarity and fills its
 // open cells with a queen ant (farthest from the entrance), a ring of eggs
-// around her, worker ants, baby ants and, by chance, one or two diggers. Every
+// around her, worker ants and baby ants. Every
 // mob is fixed at exactly `rarity_id`. Called once, at container spawn time.
 void rr_ant_hole_generate_layout(struct rr_simulation *simulation,
                                  EntityIdx container_id,
@@ -31,8 +31,8 @@ void rr_ant_hole_generate_layout(struct rr_simulation *simulation,
                                  enum rr_rarity_id rarity_id,
                                  enum rr_simulation_team_id team_id);
 
-// Runs when a queen ant dies inside a hole: every surviving worker, baby ant
-// and digger goes out into the main world, the eggs are removed, and the hole
+// Runs when a queen ant dies inside a hole: every surviving worker and baby
+// ant goes out into the main world, the eggs are removed, and the hole
 // itself is torn down, which ejects any players still inside.
 void rr_ant_hole_queen_teardown(struct rr_simulation *simulation,
                                 EntityIdx queen_id, EntityIdx container_id);

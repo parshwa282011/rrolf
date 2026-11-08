@@ -48,4 +48,3 @@ void tick_ai_quetzalcoaltus(EntityIdx, struct rr_simulation *);
 // the garden update, Server/MobAi/Ant.c
 void tick_ai_queen_ant(EntityIdx, struct rr_simulation *);
 void tick_ai_ant_egg(EntityIdx, struct rr_simulation *);
-void tick_ai_digger_ant(EntityIdx, struct rr_simulation *);

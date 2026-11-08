@@ -133,24 +133,6 @@ void rr_ant_hole_generate_layout(struct rr_simulation *simulation,
                                 rarity_id, team_id);
     }
 
-    // at most two diggers: a chance for the first, and only then for the second
-    uint32_t diggers = 0;
-    if (rr_frand() < scale->digger_first_chance)
-    {
-        ++diggers;
-        if (rr_frand() < scale->digger_second_chance)
-            ++diggers;
-    }
-    for (uint32_t i = 0; i < diggers; ++i)
-    {
-        struct open_cell cell = cells[count - 1 - rand() % spread];
-        ++arena->mob_count;
-        rr_simulation_alloc_mob(simulation, container_id,
-                                (cell.x + rr_frand()) * maze->grid_size,
-                                (cell.y + rr_frand()) * maze->grid_size,
-                                rr_mob_id_digger_ant, rarity_id, team_id);
-    }
-
     free(cells);
 }
 
@@ -174,10 +156,9 @@ void rr_ant_hole_queen_teardown(struct rr_simulation *simulation,
                       // callback, to the same spot
         struct rr_component_mob *mob = rr_simulation_get_mob(simulation, e);
 
-        // workers, babies and diggers go outside and stay there until killed
-        // or unloaded, like any wild mob. Eggs do not survive the hole
-        if (mob->id == rr_mob_id_ant || mob->id == rr_mob_id_baby_ant ||
-            mob->id == rr_mob_id_digger_ant)
+        // workers and babies go outside and stay there until killed or
+        // unloaded, like any wild mob. Eggs do not survive the hole
+        if (mob->id == rr_mob_id_ant || mob->id == rr_mob_id_baby_ant)
         {
             physical->arena = 1;
             rr_component_physical_set_x(physical, container_physical->x);

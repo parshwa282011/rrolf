@@ -231,10 +231,9 @@ enum rr_mob_id
     rr_mob_id_queen_ant,          // 24
     rr_mob_id_ant_egg,            // 25
     rr_mob_id_baby_ant,           // 26
-    rr_mob_id_digger_ant,         // 27
-    rr_mob_id_snail,              // 28
+    rr_mob_id_snail,              // 27
 
-    rr_mob_id_max,                // 29
+    rr_mob_id_max,                // 28
 };
 
 struct rr_petal_base_stat_scale
@@ -366,17 +365,12 @@ extern float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max];
 
 // How an ant hole's population scales with the rarity of the hole. It uses the
 // same pregenerated burrow sizes as the beehive (RR_BEEHIVE_MAZE_TIERS).
-// There are never more than two diggers: the first one spawns with
-// digger_first_chance, the second only if the first did, with
-// digger_second_chance.
 struct rr_ant_hole_rarity_scale
 {
     uint8_t size_tier; // index into RR_BEEHIVE_MAZE_TIERS
     uint32_t worker_count;
     uint32_t baby_ant_count;
     uint32_t egg_count; // also how many eggs the queen keeps alive
-    float digger_first_chance;
-    float digger_second_chance;
 };
 
 extern struct rr_ant_hole_rarity_scale RR_ANT_HOLE_RARITY_SCALING[rr_rarity_id_max];

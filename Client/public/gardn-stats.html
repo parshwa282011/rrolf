@@ -147,7 +147,10 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 }
 .row .rk { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: rgba(0, 0, 0, 0.28); }
 .row.r1 .rk { background: var(--gold); color: var(--ink); } .row.r2 .rk { background: var(--silver); color: var(--ink); } .row.r3 .rk { background: var(--bronze); color: var(--ink); }
-.row svg.ico { width: 44px; height: 44px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
+.row .ico { width: 44px; height: 44px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
+/* a petal: its picture on a tile in the colour of its rarity */
+.pico { display: inline-block; flex: none; border-radius: 10px; background-color: var(--c); background-image: url(/icons/gardn-petals.png);
+    background-repeat: no-repeat; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.22); }
 .row .info { min-width: 0; }
 .row .top { display: flex; gap: 7px; align-items: center; }
 .row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; min-width: 0; flex: 0 1 auto; }
@@ -312,14 +315,17 @@ function short(n) {
 const petalName = (id) => (PETALS[id] ? PETALS[id][0] : "Petal #" + id);
 const petalRarity = (id) => (PETALS[id] ? PETALS[id][1] : 0);
 
-// a petal: a round, shiny blob in the colour of its rarity with its first letter
+// A petal, as the game draws it: the picture is one sheet of all the petals made by the
+// game itself (icons/gardn-petals.png, scripts/gen-icons.mjs): 12 to a row, the petal with
+// id i at column i % 12, row i / 12. The rarity colour is put behind it here.
+const ICON_COLUMNS = 12;
+const ICON_ROWS = Math.ceil(PETALS.length / ICON_COLUMNS);
 function petalSvg(id, cls) {
-    const c = RARITY_COLOR[petalRarity(id)];
-    const letter = petalName(id).replace(/[^A-Za-z0-9]/g, "").charAt(0).toUpperCase() || "?";
-    return '<svg class="' + cls + '" viewBox="0 0 48 48" aria-hidden="true">' +
-        '<defs><radialGradient id="g' + id + cls + '" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#fff" stop-opacity=".85"/><stop offset=".35" stop-color="' + c + '"/><stop offset="1" stop-color="' + c + '" stop-opacity=".78"/></radialGradient></defs>' +
-        '<circle cx="24" cy="24" r="19.500" fill="url(#g' + id + cls + ')" stroke="#222" stroke-width="3"/>' +
-        '<text x="24" y="31" text-anchor="middle" font-family="Ubuntu,system-ui,sans-serif" font-weight="700" font-size="21" fill="#222" fill-opacity=".72">' + esc(letter) + "</text></svg>";
+    const col = id % ICON_COLUMNS, row = Math.floor(id / ICON_COLUMNS);
+    const x = ICON_COLUMNS > 1 ? (col / (ICON_COLUMNS - 1)) * 100 : 0;
+    const y = ICON_ROWS > 1 ? (row / (ICON_ROWS - 1)) * 100 : 0;
+    return '<i class="pico ' + cls + '" title="' + esc(petalName(id)) + '" style="background-size:' + ICON_COLUMNS * 100 + "% " + ICON_ROWS * 100 +
+        "%;background-position:" + x.toFixed(3) + "% " + y.toFixed(3) + '%" aria-hidden="true"></i>';
 }
 
 let data = null;                 // the last answer

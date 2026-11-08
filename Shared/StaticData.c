@@ -166,7 +166,6 @@ struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
     {rr_mob_id_queen_ant,          rr_rarity_id_common, rr_rarity_id_ancient, 120, 40, 36.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_mandible, 0.1},{rr_petal_id_pellet,     0.1},{rr_petal_id_sand,      0.03},{rr_petal_id_egg, 0.03}}},
     {rr_mob_id_ant_egg,            rr_rarity_id_common, rr_rarity_id_ancient,   8,  0, 14.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,  0.02}}},
     {rr_mob_id_baby_ant,           rr_rarity_id_common, rr_rarity_id_ancient,   4,  5, 12.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_pellet,  0.03}}},
-    {rr_mob_id_digger_ant,         rr_rarity_id_common, rr_rarity_id_ancient,  30, 20, 22.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_sand,     0.1},{rr_petal_id_gravel,    0.05},{rr_petal_id_mandible, 0.05}}},
     // the snail comes from the snail run (Server/Snail.c), it never drops anything
     {rr_mob_id_snail,              rr_rarity_id_common, rr_rarity_id_ancient,  60,  0, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{0, 0}}},
 };
@@ -177,7 +176,7 @@ char const *RR_MOB_NAMES[rr_mob_id_max] = {
 "Quetzalcoatlus","Edmontosaurus","Ant","Fighter Bee","Dragonfly",
 "Honeybee","Beehive","Spider","House Centipede","Lanternfly","Queen Bee",
 "Beehive Core","Bush","Ant Hole","Queen Ant","Ant Egg","Baby Ant",
-"Digger Ant","Snail"
+"Snail"
 };
 
 uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
@@ -210,7 +209,6 @@ uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
     0, //queen ant
     0, //ant egg
     0, //baby ant
-    0, //digger ant
     0, //snail
 };
 
@@ -332,15 +330,15 @@ float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4] = {
 };
 
 struct rr_ant_hole_rarity_scale RR_ANT_HOLE_RARITY_SCALING[rr_rarity_id_max] = {
-//   size_tier  workers  baby_ants  eggs  digger_first  digger_second
-    {0,          6,       6,         4,    0.25f,        0.00f}, // common
-    {0,          8,       8,         4,    0.40f,        0.00f}, // unusual
-    {1,          10,      10,        5,    0.60f,        0.05f}, // rare
-    {1,          14,      14,        6,    0.80f,        0.10f}, // epic
-    {2,          18,      18,        6,    1.00f,        0.15f}, // legendary
-    {2,          22,      22,        7,    1.00f,        0.20f}, // mythic
-    {3,          28,      28,        8,    1.00f,        0.25f}, // exotic
-    {3,          34,      34,        8,    1.00f,        0.30f}, // ancient
+//   size_tier  workers  baby_ants  eggs
+    {0,          6,       6,         4}, // common
+    {0,          8,       8,         4}, // unusual
+    {1,          10,      10,        5}, // rare
+    {1,          14,      14,        6}, // epic
+    {2,          18,      18,        6}, // legendary
+    {2,          22,      22,        7}, // mythic
+    {3,          28,      28,        8}, // exotic
+    {3,          34,      34,        8}, // ancient
 };
 // clang-format on
 
