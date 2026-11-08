@@ -20,6 +20,7 @@
 [gardn] In mouse movement the buttons also spread and pull in the petals while the mouse is in the box at the bottom
 [gardn] 5 seconds of spawn protection when you spawn or restore in FFA and TDM: nothing collides with you or targets you
 [gardn] The minimap works in the sandbox
+[gardn] The PVP area of the sandbox has 25 times the mobs now. The bees brought friends. The bees brought a lot of friends
 
 == November 6th 2026
 [gardn] Who is in the world is backed up every 30 seconds; after a crash everybody gets their progress back as a save
