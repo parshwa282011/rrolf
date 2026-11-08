@@ -27,11 +27,13 @@ struct rr_server_client;
 // The snail run, a world event of the Garden. Every few minutes a snail turns
 // up somewhere in the garden and slowly crawls to the snail hole, and the
 // garden's bugs go after it. It is on the players' side, so Mint heals it. When
-// it gets to the hole everyone near it is rewarded (shell, mint, nazar, see
-// RR_SNAIL_NAZAR_CHANCE), and when it is eaten nobody is.
+// it gets to the hole everyone in the game is rewarded (shell, mint, nazar, see
+// RR_SNAIL_NAZAR_CHANCE) with drops on the ground at their feet, and when it is
+// eaten nobody is.
 //
-// The snail is a normal mob. Its way to the hole is a breadth first search
-// over the map's template (SnailPath in Snail.c), the hole is not an entity,
+// The snail is a normal mob. Its way to the hole is the cheapest one over the
+// map's template, a cell costing more the harder it is (Dijkstra, build_field in
+// Snail.c), so it goes round the hard parts. The hole is not an entity,
 // the client draws it from the state packet.
 
 #define RR_SNAIL_TEMPLATE_DIM 40
@@ -79,13 +81,21 @@ struct rr_snail
     float hole_y;
     uint16_t event_seq;
     struct rr_snail_event events[RR_SNAIL_EVENT_HISTORY];
-    // walking distance in template cells to the hole, 255 for walls
-    uint8_t field[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+    // The cheapest way home from each template cell (see RR_SNAIL_CELL_COST): its
+    // cost, 0xffffffff for walls and what can not reach the hole, and how many cells
+    // that way is
+    uint32_t cost[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+    uint8_t steps[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
     uint8_t field_ready;
     uint32_t ticks; // for the packets, which go out every 5th tick
 };
 
+struct rr_component_physical;
 void rr_snail_init(struct rr_server *);
+// the rewards of a snail of a rarity for one player, as drops on the ground at a
+// place that only this player can pick up. Returns how many
+uint8_t rr_snail_give_rewards(struct rr_server *, struct rr_server_client *,
+                              struct rr_component_physical *, uint8_t rarity);
 void rr_snail_tick(struct rr_server *);
 void rr_snail_send_state(struct rr_server *, struct rr_server_client *);
 // the dev panel: start another snail now, as long as there is a free slot (the

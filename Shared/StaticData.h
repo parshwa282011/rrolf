@@ -335,10 +335,11 @@ extern float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4];
 // own, which is closer to the hole: an epic one in r/R, a legendary in e/E, a
 // mythic in l/L, an exotic in m/M and an ancient in x/X (template difficulty
 // 8 * rarity to 8 * rarity + 4 of that lower rarity), so it is easy to lead home
-// and what it meets on its way is not too much for it. Mobs leave it alone while
-// it sleeps and while a player is within RR_SNAIL_WAKE_RADIUS of it (they go for
-// the players), and go for it once nobody is. It waits there, hurt by nothing, until
-// a player comes within RR_SNAIL_WAKE_RADIUS of it. Only once it sets off does it
+// and what it meets on its way is not too much for it. While it sleeps the server
+// keeps every mob RR_SNAIL_KEEP_OUT_RADIUS away from it and none goes for it, and once
+// it is on its way they leave it alone while a player is within RR_SNAIL_WAKE_RADIUS of
+// it (they go for the players), and go for it once nobody is. It waits there, hurt by
+// nothing, until a player is right next to it (RR_SNAIL_START_RADIUS). Only once it sets off does it
 // keep the area around it loaded, and then the mobs that spawn around it are as
 // rare as it is wherever it walks (snail_difficulty in struct rr_maze_grid), so
 // its way home stays a challenge in the easier parts as well.
@@ -348,8 +349,17 @@ extern float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4];
 // the rarity of the map zone a snail of a rarity starts in
 #define RR_SNAIL_START_RARITY(rarity) ((rarity) - 1)
 #define RR_SNAIL_HUNT_DIFFICULTY(rarity) (8 * (rarity))
+// a snail only wakes (the run starts) when a player is right next to it
+#define RR_SNAIL_START_RADIUS 350
+// until then the server keeps every mob this far from it, and none goes for it
+#define RR_SNAIL_KEEP_OUT_RADIUS 500
+// once it is on its way the mobs go for the players, not for it, while one is
+// this near it
 #define RR_SNAIL_WAKE_RADIUS 2500
-#define RR_SNAIL_REWARD_RADIUS 5000
+// How hard a template cell is for the snail's way home. Its way is the cheapest one,
+// not the shortest: a cell costs 1 + difficulty^2 / 4, so it walks round the hard
+// parts of the map even when that is a long way
+#define RR_SNAIL_CELL_COST(difficulty) (1 + (uint32_t)(difficulty) * (difficulty) / 4)
 extern float RR_SNAIL_NAZAR_CHANCE[rr_rarity_id_max][rr_rarity_id_max];
 // how likely each rarity is when a snail run starts, relative to each other
 extern float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max];

@@ -24,7 +24,13 @@
 #include <Server/EntityAllocation.h>
 #include <Server/Server.h>
 #include <Server/Simulation.h>
+#include <Server/SpatialHash.h>
+#include <Shared/Component/Arena.h>
+#include <Shared/Component/Drop.h>
 #include <Shared/Component/Flower.h>
+#include <Shared/Component/Mob.h>
+#include <Shared/Component/Physical.h>
+#include <Shared/Component/Relations.h>
 #include <Shared/StaticData.h>
 #include <Shared/Utilities.h>
 #include <Shared/pb.h>
@@ -33,6 +39,8 @@
 // that it and every start are open and how far each start is)
 #define HOLE_X 20
 #define HOLE_Y 21
+
+#define UNREACHABLE 0xffffffffu
 
 #define FIRST_RUN_TICKS (3 * 60 * 25)
 #define RUN_PERIOD_TICKS (10 * 60 * 25)
@@ -96,7 +104,7 @@ static uint16_t pick_start(struct rr_snail *s, uint8_t rarity)
     {
         uint8_t difficulty = RR_MAZE_TEMPLATE_GARDEN[at / RR_SNAIL_TEMPLATE_DIM]
                                                     [at % RR_SNAIL_TEMPLATE_DIM];
-        if (s->field[at] == 255 || difficulty < min || difficulty > max)
+        if (s->cost[at] == UNREACHABLE || difficulty < min || difficulty > max)
             continue;
         // reservoir sampling: each cell ends up chosen with the same chance
         if (rand() % ++seen == 0)
@@ -105,17 +113,41 @@ static uint16_t pick_start(struct rr_snail *s, uint8_t rarity)
     return chosen;
 }
 
-// breadth first search outwards from the hole over the open template cells
+// The cheapest way home from every open template cell: Dijkstra outwards from the hole.
+// A step into a cell costs RR_SNAIL_CELL_COST of its difficulty, so the snail prefers
+// the easier parts of the map even when they are a longer way round. 1600 cells, so
+// picking the cheapest open one by looking at all of them is fast enough, once
+static uint32_t cell_cost(uint16_t at)
+{
+    return RR_SNAIL_CELL_COST(RR_MAZE_TEMPLATE_GARDEN[at / RR_SNAIL_TEMPLATE_DIM]
+                                                     [at % RR_SNAIL_TEMPLATE_DIM]);
+}
+
 static void build_field(struct rr_snail *s)
 {
-    memset(s->field, 255, sizeof s->field);
-    static uint16_t queue[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
-    uint32_t head = 0, tail = 0;
-    s->field[HOLE_Y * RR_SNAIL_TEMPLATE_DIM + HOLE_X] = 0;
-    queue[tail++] = HOLE_Y * RR_SNAIL_TEMPLATE_DIM + HOLE_X;
-    while (head < tail)
+    uint32_t const cells = RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM;
+    static uint8_t done[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+    for (uint32_t i = 0; i < cells; ++i)
     {
-        uint16_t at = queue[head++];
+        s->cost[i] = UNREACHABLE;
+        s->steps[i] = 255;
+        done[i] = 0;
+    }
+    s->cost[HOLE_Y * RR_SNAIL_TEMPLATE_DIM + HOLE_X] = 0;
+    s->steps[HOLE_Y * RR_SNAIL_TEMPLATE_DIM + HOLE_X] = 0;
+    for (;;)
+    {
+        uint32_t best = UNREACHABLE;
+        uint16_t at = 0xffff;
+        for (uint16_t i = 0; i < cells; ++i)
+            if (!done[i] && s->cost[i] < best)
+            {
+                best = s->cost[i];
+                at = i;
+            }
+        if (at == 0xffff)
+            break;
+        done[at] = 1;
         int32_t x = at % RR_SNAIL_TEMPLATE_DIM, y = at / RR_SNAIL_TEMPLATE_DIM;
         static int8_t const step[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
         for (uint8_t i = 0; i < 4; ++i)
@@ -127,10 +159,13 @@ static void build_field(struct rr_snail *s)
             if (RR_MAZE_TEMPLATE_GARDEN[ny][nx] == 0)
                 continue;
             uint16_t n = ny * RR_SNAIL_TEMPLATE_DIM + nx;
-            if (s->field[n] != 255)
-                continue;
-            s->field[n] = s->field[at] + 1;
-            queue[tail++] = n;
+            // from n the snail steps into at
+            uint32_t through = s->cost[at] + cell_cost(at);
+            if (!done[n] && through < s->cost[n] && s->steps[at] < 254)
+            {
+                s->cost[n] = through;
+                s->steps[n] = s->steps[at] + 1;
+            }
         }
     }
     s->hole_x = (HOLE_X + 0.5f) * cell_size();
@@ -143,7 +178,7 @@ static void build_field(struct rr_snail *s)
             s->field_ready = 0;
 }
 
-// the centre of the neighbouring cell that is closer to the hole, or the hole
+// the centre of the neighbouring cell on the cheapest way to the hole, or the hole
 static void next_waypoint(struct rr_snail *s, float x, float y, float *tx,
                           float *ty, int32_t *cell_out, uint16_t *left_out)
 {
@@ -155,25 +190,30 @@ static void next_waypoint(struct rr_snail *s, float x, float y, float *tx,
     if (cx < 0 || cy < 0 || cx >= RR_SNAIL_TEMPLATE_DIM ||
         cy >= RR_SNAIL_TEMPLATE_DIM)
         return;
-    uint8_t here = s->field[cy * RR_SNAIL_TEMPLATE_DIM + cx];
-    *cell_out = cy * RR_SNAIL_TEMPLATE_DIM + cx;
-    if (here == 255)
+    uint16_t here = cy * RR_SNAIL_TEMPLATE_DIM + cx;
+    *cell_out = here;
+    if (s->cost[here] == UNREACHABLE)
         return; // knocked into a wall, head straight for the hole
-    *left_out = here;
-    if (here == 0)
+    *left_out = s->steps[here];
+    if (s->cost[here] == 0)
         return;
     static int8_t const step[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+    uint32_t best = UNREACHABLE;
     for (uint8_t i = 0; i < 4; ++i)
     {
         int32_t nx = cx + step[i][0], ny = cy + step[i][1];
         if (nx < 0 || ny < 0 || nx >= RR_SNAIL_TEMPLATE_DIM ||
             ny >= RR_SNAIL_TEMPLATE_DIM)
             continue;
-        if (s->field[ny * RR_SNAIL_TEMPLATE_DIM + nx] < here)
+        uint16_t n = ny * RR_SNAIL_TEMPLATE_DIM + nx;
+        if (s->cost[n] == UNREACHABLE)
+            continue;
+        uint32_t through = s->cost[n] + cell_cost(n);
+        if (through < best)
         {
+            best = through;
             *tx = (nx + 0.5f) * cell_size();
             *ty = (ny + 0.5f) * cell_size();
-            return;
         }
     }
 }
@@ -261,7 +301,7 @@ static void start_run(struct rr_server *this, struct rr_snail_run *r,
     uint16_t start = pick_start(s, rarity);
     uint8_t sx = start % RR_SNAIL_TEMPLATE_DIM, sy = start / RR_SNAIL_TEMPLATE_DIM;
     r->rarity = rarity;
-    r->route_cells = s->field[sy * RR_SNAIL_TEMPLATE_DIM + sx];
+    r->route_cells = s->steps[sy * RR_SNAIL_TEMPLATE_DIM + sx];
     r->cells_left = r->route_cells;
     float x = (sx + 0.5f) * cell_size(), y = (sy + 0.5f) * cell_size();
     EntityIdx e = rr_simulation_alloc_mob(&this->simulation, 1, x, y,
@@ -300,25 +340,30 @@ static void start_run(struct rr_server *this, struct rr_snail_run *r,
             players_in_game(this));
 }
 
-static void give(struct rr_component_player_info *player_info, uint8_t id,
-                 uint8_t rarity)
+// What a player is given: at most RR_SNAIL_MAX_REWARDS petals, which the snail turns
+// into drops on the ground at the player's feet when it gets home (the same drops a
+// mob leaves: the player walks over them, only they can pick them up)
+#define RR_SNAIL_MAX_REWARDS 12
+
+struct rewards
 {
-    if (player_info->drops_this_tick_size >= RR_MAX_SLOT_COUNT)
+    uint8_t count;
+    uint8_t id[RR_SNAIL_MAX_REWARDS];
+    uint8_t rarity[RR_SNAIL_MAX_REWARDS];
+};
+
+static void give(struct rewards *rewards, uint8_t id, uint8_t rarity)
+{
+    if (rewards->count >= RR_SNAIL_MAX_REWARDS)
         return;
-    // the same as picking up a drop: shown with the loot of the run, and put in
-    // the account by the server tick
-    ++player_info->collected_this_run[id * rr_rarity_id_max + rarity];
-    rr_component_player_info_set_update_loot(player_info);
-    player_info->drops_this_tick[player_info->drops_this_tick_size].id = id;
-    player_info->drops_this_tick[player_info->drops_this_tick_size].rarity =
-        rarity;
-    ++player_info->drops_this_tick_size;
+    rewards->id[rewards->count] = id;
+    rewards->rarity[rewards->count] = rarity;
+    ++rewards->count;
 }
 
 // exactly one, its rarity rolled from RR_SNAIL_REWARD_TIER_CHANCE. Not below the
 // lowest rarity the petal exists at
-static void give_reward_petal(struct rr_component_player_info *player_info,
-                              uint8_t id, uint8_t rarity)
+static void give_reward_petal(struct rewards *rewards, uint8_t id, uint8_t rarity)
 {
     float roll = rr_frand() * 100;
     uint8_t below = 3;
@@ -334,9 +379,61 @@ static void give_reward_petal(struct rr_component_player_info *player_info,
     int given = rarity - below;
     if (given < (int)RR_PETAL_DATA[id].min_rarity)
         given = RR_PETAL_DATA[id].min_rarity;
-    give(player_info, id, (uint8_t)given);
+    give(rewards, id, (uint8_t)given);
 }
 
+// a drop on the ground that only one player can pick up, like the ones mobs leave
+// (Shared/Component/Mob.c)
+static void drop_for(struct rr_server *this, struct rr_server_client *client,
+                     struct rr_component_physical *at, uint8_t id,
+                     uint8_t rarity, uint8_t index, uint8_t count)
+{
+    struct rr_simulation *simulation = &this->simulation;
+    EntityIdx entity = rr_simulation_alloc_entity(simulation);
+    struct rr_component_physical *physical =
+        rr_simulation_add_physical(simulation, entity);
+    struct rr_component_drop *drop = rr_simulation_add_drop(simulation, entity);
+    struct rr_component_relations *relations =
+        rr_simulation_add_relations(simulation, entity);
+    rr_component_physical_set_x(physical, at->x);
+    rr_component_physical_set_y(physical, at->y);
+    rr_component_physical_set_radius(physical, 20);
+    rr_component_drop_set_id(drop, id);
+    rr_component_drop_set_rarity(drop, rarity);
+    rr_component_relations_set_team(relations, rr_simulation_team_id_players);
+    drop->ticks_until_despawn = 25 * 10 * (rarity + 1);
+    rr_bitset_set(drop->can_be_picked_up_by, client - this->clients);
+    physical->arena = at->arena;
+    if (count != 1)
+    {
+        float angle = M_PI * 2 * (index + 0.65 * rr_frand()) / count;
+        rr_vector_from_polar(&physical->velocity, 15 + 20 * rr_frand(), angle);
+        physical->friction = 0.75;
+    }
+}
+
+// the rewards of a snail of this rarity for one player: drops on the ground at `at`,
+// only that player can pick them up. Returns how many
+uint8_t rr_snail_give_rewards(struct rr_server *this,
+                              struct rr_server_client *client,
+                              struct rr_component_physical *at, uint8_t rarity)
+{
+    struct rewards rewards;
+    rewards.count = 0;
+    // nazars first, they are the ones worth the slots in the queue
+    for (uint8_t q = 0; q < rr_rarity_id_max; ++q)
+        if (rr_frand() * 100 < RR_SNAIL_NAZAR_CHANCE[rarity][q])
+            give(&rewards, rr_petal_id_nazar, q);
+    give_reward_petal(&rewards, rr_petal_id_shell, rarity);
+    give_reward_petal(&rewards, rr_petal_id_mint, rarity);
+    for (uint8_t i = 0; i < rewards.count; ++i)
+        drop_for(this, client, at, rewards.id[i], rewards.rarity[i], i,
+                 rewards.count);
+    return rewards.count;
+}
+
+// Everybody in the game gets their own drops, wherever they are: every player who is
+// connected and alive in the garden, not only the ones near the snail
 static uint8_t reward_players(struct rr_server *this, struct rr_snail_run *r)
 {
     uint8_t rewarded = 0;
@@ -359,16 +456,7 @@ static uint8_t reward_players(struct rr_server *this, struct rr_snail_run *r)
                 rr_simulation_get_physical(&this->simulation, flower);
             if (physical->arena != 1)
                 continue;
-            float dx = physical->x - r->snail_x, dy = physical->y - r->snail_y;
-            if (dx * dx + dy * dy >
-                (float)RR_SNAIL_REWARD_RADIUS * RR_SNAIL_REWARD_RADIUS)
-                continue;
-            // nazars first, they are the ones worth the slots in the queue
-            for (uint8_t q = 0; q < rr_rarity_id_max; ++q)
-                if (rr_frand() * 100 < RR_SNAIL_NAZAR_CHANCE[r->rarity][q])
-                    give(player_info, rr_petal_id_nazar, q);
-            give_reward_petal(player_info, rr_petal_id_shell, r->rarity);
-            give_reward_petal(player_info, rr_petal_id_mint, r->rarity);
+            rr_snail_give_rewards(this, member->client, physical, r->rarity);
             // whoever got the rewards has now seen this snail
             ++member->client->mob_gallery[rr_mob_id_snail][r->rarity];
             rr_server_client_write_to_api(member->client);
@@ -398,6 +486,62 @@ static void finish(struct rr_server *this, struct rr_snail_run *r,
     }
     else
         r->phase = rr_snail_phase_idle; // a dev snail's slot is free again
+}
+
+// While a snail sleeps no mob may be within RR_SNAIL_KEEP_OUT_RADIUS of it: the ones
+// that are (they spawned there, wandered in, or were chasing a player) are put back
+// on the edge of the circle. Mobs of the players (summons) are left alone
+struct keep_out_captures
+{
+    struct rr_simulation *simulation;
+    EntityIdx snail;
+    float x;
+    float y;
+};
+
+static void keep_out_cb(EntityIdx entity, void *_captures)
+{
+    struct keep_out_captures *captures = _captures;
+    struct rr_simulation *simulation = captures->simulation;
+    if (entity == captures->snail || !rr_simulation_has_mob(simulation, entity))
+        return;
+    struct rr_component_mob *mob = rr_simulation_get_mob(simulation, entity);
+    if (mob->player_spawned || mob->id == rr_mob_id_snail)
+        return;
+    struct rr_component_physical *physical =
+        rr_simulation_get_physical(simulation, entity);
+    float dx = physical->x - captures->x, dy = physical->y - captures->y;
+    float distance_sq = dx * dx + dy * dy;
+    float const limit = RR_SNAIL_KEEP_OUT_RADIUS;
+    if (distance_sq >= limit * limit)
+        return;
+    if (distance_sq < 1)
+    {
+        float angle = rr_frand() * 2 * (float)M_PI;
+        dx = cosf(angle);
+        dy = sinf(angle);
+        distance_sq = 1;
+    }
+    float scale = limit / sqrtf(distance_sq);
+    rr_component_physical_set_x(physical, captures->x + dx * scale);
+    rr_component_physical_set_y(physical, captures->y + dy * scale);
+    rr_vector_set(&physical->velocity, 0, 0);
+    rr_vector_set(&physical->collision_velocity, 0, 0);
+}
+
+static void keep_mobs_out(struct rr_server *this, EntityIdx snail_id,
+                          struct rr_component_physical *snail)
+{
+    struct rr_simulation *simulation = &this->simulation;
+    if (!rr_simulation_has_arena(simulation, snail->arena))
+        return;
+    struct rr_component_arena *arena =
+        rr_simulation_get_arena(simulation, snail->arena);
+    struct keep_out_captures captures = {simulation, snail_id,
+                                         snail->x, snail->y};
+    float const reach = RR_SNAIL_KEEP_OUT_RADIUS + 20;
+    rr_spatial_hash_query(&arena->spatial_hash, snail->x, snail->y, reach, reach,
+                          &captures, keep_out_cb);
 }
 
 static void tick_running(struct rr_server *this, struct rr_snail_run *r)
@@ -441,13 +585,14 @@ static void tick_running(struct rr_server *this, struct rr_snail_run *r)
     if (r->waiting)
     {
         // the snail sleeps, nothing hurts it and mobs bumping into it don't move
-        // it until somebody gets close. It loads nothing while it sleeps
+        // it until somebody is right next to it. It loads nothing while it sleeps
         rr_component_physical_set_x(physical, r->wait_x);
         rr_component_physical_set_y(physical, r->wait_y);
         rr_vector_set(&physical->velocity, 0, 0);
         rr_vector_set(&physical->collision_velocity, 0, 0);
+        keep_mobs_out(this, r->snail_id, physical);
         if (player_distance_sq(this, physical->x, physical->y) <
-            (float)RR_SNAIL_WAKE_RADIUS * RR_SNAIL_WAKE_RADIUS)
+            (float)RR_SNAIL_START_RADIUS * RR_SNAIL_START_RADIUS)
         {
             r->waiting = 0;
             health->invulnerable = 0;

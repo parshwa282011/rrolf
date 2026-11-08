@@ -292,8 +292,9 @@ struct rr_beehive_rarity_scale RR_BEEHIVE_RARITY_SCALING[rr_rarity_id_max] = {
     {3,          32,                44}, // ultimate
 };
 
-// nothing below RR_SNAIL_MIN_RARITY
-float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max] = {0, 0, 0, 55, 25, 12, 6, 2};
+// percent, nothing below RR_SNAIL_MIN_RARITY: epic 65, legendary 25, mythic 9,
+// exotic 0.75, ancient 0.25
+float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max] = {0, 0, 0, 65, 25, 9, 0.75f, 0.25f};
 
 // 100% for a common nazar down to 60% for an ancient one, in even steps
 float RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_max] = {

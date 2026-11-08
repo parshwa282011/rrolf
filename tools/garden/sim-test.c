@@ -31,6 +31,7 @@
 #include <Server/Simulation.h>
 #include <Server/Snail.h>
 #include <Shared/Component/Arena.h>
+#include <Shared/Component/Drop.h>
 #include <Shared/Component/Health.h>
 #include <Shared/Component/Mob.h>
 #include <Shared/StaticData.h>
@@ -63,6 +64,37 @@ static uint8_t any_target(struct rr_simulation *s, EntityIdx seeker,
 {
     (void)s; (void)seeker; (void)target; (void)captures;
     return 1;
+}
+
+static void count_drop(EntityIdx entity, void *count)
+{
+    (void)entity;
+    ++*(uint32_t *)count;
+}
+
+struct drop_check
+{
+    uint32_t seen, wrong_owner, only_one_owner, far;
+    float x, y;
+};
+
+static void check_drop(EntityIdx entity, void *_check)
+{
+    struct drop_check *check = _check;
+    struct rr_component_drop *drop = rr_simulation_get_drop(sim(), entity);
+    // only what the snail gives (earlier tests may have left other drops)
+    if (drop->id != rr_petal_id_shell && drop->id != rr_petal_id_mint && drop->id != rr_petal_id_nazar)
+        return;
+    ++check->seen;
+    uint32_t owners = 0;
+    for (uint32_t i = 0; i < RR_MAX_CLIENT_COUNT; ++i)
+        owners += rr_bitset_get_bit(drop->can_be_picked_up_by, i) != 0;
+    check->only_one_owner += owners == 1;
+    if (!(rr_bitset_get_bit(drop->can_be_picked_up_by, 0) || rr_bitset_get_bit(drop->can_be_picked_up_by, 1)))
+        ++check->wrong_owner;
+    struct rr_component_physical *p = rr_simulation_get_physical(sim(), entity);
+    if (fabsf(p->x - check->x) > 400 || fabsf(p->y - check->y) > 400)
+        ++check->far;
 }
 
 static void tick(uint32_t n)
@@ -409,6 +441,169 @@ int main()
             run->snail = RR_NULL_ENTITY;
             tick(2);
         }
+    }
+
+    printf("a sleeping snail keeps the mobs 500 units away\n");
+    {
+        rr_snail_dev_start(&server, rr_rarity_id_epic);
+        struct rr_snail_run *run = &server.snail.runs[1];
+        struct rr_component_physical *sp = rr_simulation_get_physical(sim(), run->snail_id);
+        EntityIdx near[3];
+        float offsets[3][2] = {{100, 0}, {0, -250}, {-5, 5}};
+        for (uint8_t i = 0; i < 3; ++i)
+            near[i] = rr_simulation_alloc_mob(sim(), 1, sp->x + offsets[i][0], sp->y + offsets[i][1], rr_mob_id_ant, rr_rarity_id_common, rr_simulation_team_id_mobs);
+        for (uint32_t t = 0; t < 5; ++t)
+        {
+            tick(1);
+            rr_snail_tick(&server);
+        }
+        for (uint8_t i = 0; i < 3; ++i)
+        {
+            struct rr_component_physical *mp = rr_simulation_get_physical(sim(), near[i]);
+            float d = sqrtf((mp->x - sp->x) * (mp->x - sp->x) + (mp->y - sp->y) * (mp->y - sp->y));
+            CHECK(d >= RR_SNAIL_KEEP_OUT_RADIUS - 2, "mob %u is %.0f units from the sleeping snail", i, d);
+        }
+        // it wakes for a player right next to it, not for one a little farther
+        {
+            EntityIdx flower = rr_simulation_alloc_entity(sim());
+            struct rr_component_physical *fp = rr_simulation_add_physical(sim(), flower);
+            rr_simulation_add_flower(sim(), flower);
+            fp->arena = 1;
+            static struct rr_component_player_info player_info;
+            memset(&player_info, 0, sizeof player_info);
+            player_info.flower_id = flower;
+            player_info.client = &server.clients[0];
+            server.clients[0].player_info = &player_info;
+            server.clients[0].disconnected = 0;
+            rr_bitset_set(server.clients_in_use, 0);
+            float away[3] = {2400, 1000, RR_SNAIL_START_RADIUS + 50};
+            for (uint8_t i = 0; i < 3; ++i)
+            {
+                rr_component_physical_set_x(fp, sp->x + away[i]);
+                rr_component_physical_set_y(fp, sp->y);
+                rr_snail_tick(&server);
+                CHECK(run->waiting, "it sleeps on with a player %.0f units away", away[i]);
+            }
+            rr_component_physical_set_x(fp, sp->x + RR_SNAIL_START_RADIUS - 50);
+            rr_snail_tick(&server);
+            CHECK(!run->waiting, "and wakes for one %d units away", RR_SNAIL_START_RADIUS - 50);
+            rr_bitset_unset(server.clients_in_use, 0);
+            server.clients[0].player_info = NULL;
+            rr_simulation_request_entity_deletion(sim(), flower);
+            run->waiting = 1;
+            rr_simulation_get_health(sim(), run->snail_id)->invulnerable = 1;
+        }
+        // a woken snail does not push anybody
+        run->waiting = 0;
+        rr_simulation_get_health(sim(), run->snail_id)->invulnerable = 0;
+        EntityIdx close = rr_simulation_alloc_mob(sim(), 1, sp->x + 60, sp->y, rr_mob_id_ant, rr_rarity_id_common, rr_simulation_team_id_mobs);
+        rr_snail_tick(&server);
+        struct rr_component_physical *cp = rr_simulation_get_physical(sim(), close);
+        CHECK(fabsf(cp->x - (sp->x + 60)) < 30, "once it is on its way a mob can be next to it");
+        for (uint8_t i = 0; i < 3; ++i)
+            rr_simulation_request_entity_deletion(sim(), near[i]);
+        rr_simulation_request_entity_deletion(sim(), close);
+        rr_simulation_get_mob(sim(), run->snail_id)->no_drop = 1;
+        rr_simulation_request_entity_deletion(sim(), run->snail_id);
+        run->phase = rr_snail_phase_idle;
+        run->snail = RR_NULL_ENTITY;
+        tick(2);
+    }
+
+    printf("the snail's way home is the cheapest one: it goes round the hard parts\n");
+    {
+        struct rr_snail *sn = &server.snail;
+        uint32_t cells = RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM;
+        // the shortest way (fewest cells) from every cell, by breadth first search,
+        // and what it costs
+        static uint16_t dist[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+        static uint32_t short_cost[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+        static uint16_t queue[RR_SNAIL_TEMPLATE_DIM * RR_SNAIL_TEMPLATE_DIM];
+        for (uint32_t i = 0; i < cells; ++i)
+            dist[i] = 0xffff;
+        uint32_t hole = 21 * RR_SNAIL_TEMPLATE_DIM + 20, head = 0, tail = 0;
+        dist[hole] = 0;
+        short_cost[hole] = 0;
+        queue[tail++] = hole;
+        while (head < tail)
+        {
+            uint16_t at = queue[head++];
+            int32_t x = at % RR_SNAIL_TEMPLATE_DIM, y = at / RR_SNAIL_TEMPLATE_DIM;
+            int8_t const step[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+            for (uint8_t i = 0; i < 4; ++i)
+            {
+                int32_t nx = x + step[i][0], ny = y + step[i][1];
+                if (nx < 0 || ny < 0 || nx >= RR_SNAIL_TEMPLATE_DIM || ny >= RR_SNAIL_TEMPLATE_DIM ||
+                    RR_MAZE_TEMPLATE_GARDEN[ny][nx] == 0)
+                    continue;
+                uint16_t n = ny * RR_SNAIL_TEMPLATE_DIM + nx;
+                if (dist[n] != 0xffff)
+                    continue;
+                dist[n] = dist[at] + 1;
+                short_cost[n] = short_cost[at] + RR_SNAIL_CELL_COST(RR_MAZE_TEMPLATE_GARDEN[at / RR_SNAIL_TEMPLATE_DIM][at % RR_SNAIL_TEMPLATE_DIM]);
+                queue[tail++] = n;
+            }
+        }
+        uint32_t never_dearer = 1, longer = 0, cheaper = 0, reachable = 0;
+        for (uint32_t i = 0; i < cells; ++i)
+        {
+            if (dist[i] == 0xffff)
+                continue;
+            ++reachable;
+            if (sn->cost[i] > short_cost[i])
+                never_dearer = 0;
+            longer += sn->steps[i] > dist[i];
+            cheaper += sn->cost[i] < short_cost[i];
+        }
+        CHECK(reachable > 0 && never_dearer, "no way is dearer than the shortest one");
+        CHECK(longer > 0 && cheaper > 0, "and %u cells have a longer way that is cheaper", longer);
+        // starting where a snail does, the way is never dearer either
+        uint32_t checked = 0;
+        for (uint8_t rarity = RR_SNAIL_MIN_RARITY; rarity < rr_rarity_id_max; ++rarity)
+        {
+            rr_snail_dev_start(&server, rarity);
+            struct rr_snail_run *run = &server.snail.runs[1];
+            struct rr_component_physical *p = rr_simulation_get_physical(sim(), run->snail_id);
+            uint32_t cx = p->x / (2 * RR_MAZES[rr_biome_id_garden].grid_size);
+            uint32_t cy = p->y / (2 * RR_MAZES[rr_biome_id_garden].grid_size);
+            checked += sn->cost[cy * RR_SNAIL_TEMPLATE_DIM + cx] <= short_cost[cy * RR_SNAIL_TEMPLATE_DIM + cx];
+            printf("  rarity %u starts at (%u,%u): %u cells, cost %u (the shortest is %u cells, cost %u)\n", rarity, cx, cy,
+                   sn->steps[cy * RR_SNAIL_TEMPLATE_DIM + cx], sn->cost[cy * RR_SNAIL_TEMPLATE_DIM + cx], dist[cy * RR_SNAIL_TEMPLATE_DIM + cx], short_cost[cy * RR_SNAIL_TEMPLATE_DIM + cx]);
+            rr_simulation_get_mob(sim(), run->snail_id)->no_drop = 1;
+            rr_simulation_request_entity_deletion(sim(), run->snail_id);
+            run->phase = rr_snail_phase_idle;
+            run->snail = RR_NULL_ENTITY;
+            tick(2);
+        }
+        CHECK(checked == rr_rarity_id_max - RR_SNAIL_MIN_RARITY, "from every start");
+    }
+
+    printf("the rewards are drops on the ground, one set for each player\n");
+    {
+        EntityIdx marker = rr_simulation_alloc_mob(sim(), 1, 9000, 9000, rr_mob_id_ant, rr_rarity_id_common, rr_simulation_team_id_mobs);
+        struct rr_component_physical *at = rr_simulation_get_physical(sim(), marker);
+        float px = at->x, py = at->y;
+        uint32_t drops_before = 0;
+        rr_simulation_for_each_drop(sim(), &drops_before, count_drop);
+        struct drop_check old_ones = {0, 0, 0, 0, px, py};
+        rr_simulation_for_each_drop(sim(), &old_ones, check_drop);
+        CHECK(old_ones.seen == 0, "no shells, mints or nazars lying around before (%u)", old_ones.seen);
+        uint32_t got_a = 0, got_b = 0, total_c = 0;
+        for (uint8_t trial = 0; trial < 50; ++trial)
+        {
+            got_a += rr_snail_give_rewards(&server, &server.clients[0], at, rr_rarity_id_epic);
+            got_b += rr_snail_give_rewards(&server, &server.clients[1], at, rr_rarity_id_ancient);
+            ++total_c;
+        }
+        tick(1);
+        uint32_t drops_after = 0;
+        rr_simulation_for_each_drop(sim(), &drops_after, count_drop);
+        CHECK(got_a >= 2 * total_c && got_b >= 2 * total_c, "every player gets at least a shell and a mint (%u, %u)", got_a, got_b);
+        CHECK(drops_after - drops_before == got_a + got_b, "each one is a drop entity (%u new)", drops_after - drops_before);
+        struct drop_check check = {0, 0, 0, 0, px, py};
+        rr_simulation_for_each_drop(sim(), &check, check_drop);
+        CHECK(check.wrong_owner == 0 && check.only_one_owner == check.seen, "each is for one player only");
+        CHECK(check.far == 0, "and they are where the player is");
     }
 
     printf("the dev panel can have several snails going at once\n");

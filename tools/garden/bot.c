@@ -495,8 +495,11 @@ int main(int argc, char **argv)
     pump(5);
     CHECK(b->waiting && b->snail_x == x0 && b->snail_y == y0 && b->cells_left == left0,
           "it has not moved with nobody near (%.0f, %.0f)", b->snail_x, b->snail_y);
-    printf("the bot goes to it\n");
-    teleport(&bot, x0 + 400, y0);
+    printf("the bot goes to it, next to it: the snail only wakes for a player that close\n");
+    teleport(&bot, x0 + 1000, y0);
+    pump(2);
+    CHECK(b->waiting, "it stays asleep for a player 1000 units away");
+    teleport(&bot, x0 + 200, y0);
     WAIT(!b->waiting, 8, "the snail wakes up");
     // and then to the snail hole, which is cell (20, 21) of the map, a cell is
     // 2048 units, so that the bot is there when the snail arrives
@@ -536,7 +539,7 @@ int main(int argc, char **argv)
     CHECK(b->last_event_count >= 1, "the bot was rewarded, count %d", b->last_event_count);
     pump(1.5); // the account result follows
     uint64_t mint_after = b->inv[rr_petal_id_mint][1] + b->inv[rr_petal_id_mint][2] + b->inv[rr_petal_id_mint][3];
-    CHECK(mint_after > mint_before, "a mint was added to the inventory (%llu -> %llu)",
+    CHECK(mint_after > mint_before, "the mint drop at its feet was picked up and added to the inventory (%llu -> %llu)",
           (unsigned long long)mint_before, (unsigned long long)mint_after);
     printf("  mint by rarity: u %llu r %llu e %llu\n",
            (unsigned long long)b->inv[rr_petal_id_mint][1], (unsigned long long)b->inv[rr_petal_id_mint][2],

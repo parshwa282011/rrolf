@@ -9,6 +9,12 @@
 # After editing, copy the file to the machines (scripts/common/build.sh does it, so does
 # quick-deploy.sh) - no client has to be rebuilt for it, a reload shows the change.
 
+== November 8th 2026
+[rysteria] Snail run: the snail is epic 65%, legendary 25%, mythic 9%, exotic 0.75% or ancient 0.25% of the time
+[rysteria] The snail takes the cheapest way home: it goes round the hard parts of the garden, even when that is a longer walk
+[rysteria] The snail only wakes when a player is right next to it. Until then no mob can come within 500 units of it and none goes for it
+[rysteria] The snail's rewards (shell, mint, nazar) are drops on the ground at your feet, for everybody in the game, not only the players near the snail
+
 == November 7th 2026
 [all] A link to the game this one is forked from
 [all] Sign up with Apple is off for now

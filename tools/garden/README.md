@@ -35,11 +35,14 @@ that can reach the hole. Run it after every change.
 
 ## The snail run
 
-A snail is at least epic (weights 55/25/12/6/2 from epic to ancient) and starts in
+A snail is at least epic (65%, 25%, 9%, 0.75% and 0.25% from epic to ancient) and starts in
 the part of the map of its own rarity: epic `e`/`E`, legendary `l`/`L`, mythic
 `m`/`M`, exotic `x`/`X`, ancient `a`/`A`. It sleeps there, nothing can hurt it,
-and it loads nothing, until a player gets within 2500 units. Then it sets off for
-the hole and from then on keeps the area around it loaded, and the mobs that
+and it loads nothing, until a player is right next to it (350 units, `RR_SNAIL_START_RADIUS`).
+Until then the server keeps every mob 500 units away from it and none goes for it. Then it sets off for
+the hole, by the cheapest way: a template cell costs `1 + difficulty^2 / 4`
+(`RR_SNAIL_CELL_COST`), so it walks round the hard parts even when that is a long way.
+From then on it keeps the area around it loaded, and the mobs that
 spawn around it are as rare as the snail is (`snail_difficulty` in
 `struct rr_maze_grid`), so its way home stays a challenge in the easy parts as
 well. If nobody comes for 8 minutes it is given up on. The numbers are `RR_SNAIL_*` in
@@ -48,8 +51,10 @@ well. If nobody comes for 8 minutes it is given up on. The numbers are `RR_SNAIL
 `run-sim-test.sh` checks the garden's mobs on a simulation in a few seconds.
 
 `run-bot-test.sh` plays a whole run with a bot against a real garden server: the
-snail starts asleep and stays put, the bot goes to it and it wakes, it crawls to
-the hole, the bot (waiting there) is rewarded and gets its mint. It needs the ports 55554 and 1236 and takes about four minutes.
+snail starts asleep and stays put, the bot goes to it (a player 1000 units away does
+not wake it, one 200 away does), it crawls to the hole, and the bot (waiting there)
+is rewarded: the shell, the mint and any nazar are drops on the ground at its feet,
+the same for every player in the game, wherever they are. It needs the ports 55554 and 1236 and takes about four minutes.
 
 `Server/Snail.c` reads a few settings from the environment, only for that
 test: `RR_SNAIL_FIRST_RUN_SECONDS`, `RR_SNAIL_PERIOD_SECONDS`, `RR_SNAIL_RARITY`
