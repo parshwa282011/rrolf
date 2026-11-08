@@ -149,8 +149,8 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .row.r1 .rk { background: var(--gold); color: var(--ink); } .row.r2 .rk { background: var(--silver); color: var(--ink); } .row.r3 .rk { background: var(--bronze); color: var(--ink); }
 .row .ico { width: 44px; height: 44px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
 /* a petal: its picture on a tile in the colour of its rarity */
-.pico { display: inline-block; flex: none; border-radius: 10px; background-color: var(--c); background-image: url(/icons/gardn-petals.png);
-    background-repeat: no-repeat; box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.22); }
+.pico { display: inline-block; flex: none; border-radius: 10px; background-color: var(--c); box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.22); }
+.pico img { width: 100%; height: 100%; display: block; }
 .row .info { min-width: 0; }
 .row .top { display: flex; gap: 7px; align-items: center; }
 .row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; min-width: 0; flex: 0 1 auto; }
@@ -315,17 +315,12 @@ function short(n) {
 const petalName = (id) => (PETALS[id] ? PETALS[id][0] : "Petal #" + id);
 const petalRarity = (id) => (PETALS[id] ? PETALS[id][1] : 0);
 
-// A petal, as the game draws it: the picture is one sheet of all the petals made by the
-// game itself (icons/gardn-petals.png, scripts/gen-icons.mjs): 12 to a row, the petal with
-// id i at column i % 12, row i / 12. The rarity colour is put behind it here.
-const ICON_COLUMNS = 12;
-const ICON_ROWS = Math.ceil(PETALS.length / ICON_COLUMNS);
+// A petal, as the game draws it: the build has the game draw every petal and saves each
+// one as a picture (icons/gardn/<id>.png, scripts/gen-icons.mjs). The rarity colour is put
+// behind it here. A build without them leaves just the coloured tile.
 function petalSvg(id, cls) {
-    const col = id % ICON_COLUMNS, row = Math.floor(id / ICON_COLUMNS);
-    const x = ICON_COLUMNS > 1 ? (col / (ICON_COLUMNS - 1)) * 100 : 0;
-    const y = ICON_ROWS > 1 ? (row / (ICON_ROWS - 1)) * 100 : 0;
-    return '<i class="pico ' + cls + '" title="' + esc(petalName(id)) + '" style="background-size:' + ICON_COLUMNS * 100 + "% " + ICON_ROWS * 100 +
-        "%;background-position:" + x.toFixed(3) + "% " + y.toFixed(3) + '%" aria-hidden="true"></i>';
+    return '<span class="pico ' + cls + '" title="' + esc(petalName(id)) + '"><img src="/icons/gardn/' + id +
+        '.png" alt="" loading="lazy" onerror="this.style.display=\'none\'"></span>';
 }
 
 let data = null;                 // the last answer

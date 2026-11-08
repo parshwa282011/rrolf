@@ -127,7 +127,8 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .mode .note { font-size: 12px; font-weight: 400; opacity: 0.75; margin-top: 6px; }
 .slots { display: flex; flex-wrap: wrap; gap: 10px; }
 .slot { --c: var(--common); width: 92px; padding: 8px 4px 6px; text-align: center; border-radius: 14px; border: 3px solid var(--ink); background: var(--c); color: var(--ink); }
-.slot .dotp { width: 36px; height: 36px; margin: 0 auto 4px; border-radius: 50%; background: rgba(255, 255, 255, 0.85); border: 3px solid var(--ink); }
+.slot .dotp { width: 56px; height: 56px; margin: 0 auto 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.25); border: 3px solid var(--ink); overflow: hidden; }
+.slot .dotp img { width: 100%; height: 100%; display: block; }
 .slot .nm { font-size: 13px; line-height: 1.1; overflow-wrap: anywhere; }
 .slot .rar { font-size: 10px; opacity: 0.8; }
 .slot.empty { background: rgba(0, 0, 0, 0.25); color: #fff; border-style: dashed; opacity: 0.6; }
@@ -218,7 +219,10 @@ function fail(message) { $("error").textContent = message; $("error").style.disp
 function slotHtml(entry) {
     if (!Array.isArray(entry) || !entry[0]) return '<div class="slot empty"><div class="dotp"></div><div class="nm">empty</div></div>';
     const id = entry[0], r = Math.max(0, Math.min(7, entry[1] | 0));
-    return '<div class="slot" style="--c:var(--' + RARITY_VAR[r] + ')"><div class="dotp"></div><div class="nm">' + esc(RR_PETALS[id] || "Petal " + id) +
+    // the picture is the petal as the game draws it at this rarity: the build saves one for
+    // every petal and rarity (icons/rysteria/<id>-<rarity>.png, scripts/gen-icons.mjs)
+    return '<div class="slot" style="--c:var(--' + RARITY_VAR[r] + ')"><div class="dotp"><img src="/icons/rysteria/' + id + "-" + r +
+        '.png" alt="" loading="lazy" onerror="this.style.display=\'none\'"></div><div class="nm">' + esc(RR_PETALS[id] || "Petal " + id) +
         '</div><div class="rar">' + RARITIES[r] + "</div></div>";
 }
 

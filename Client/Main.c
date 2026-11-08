@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 
+#include <Client/Assets/RenderFunctions.h>
 #include <Client/Game.h>
 #include <Client/InputData.h>
 #include <Client/Renderer/Renderer.h>
@@ -371,11 +372,72 @@ void rr_main_loop(struct rr_game *this)
 #endif
 }
 
+// The petal icons of the web pages (the stats page) are made with the game itself: open
+// /?iconsheet and the game draws every petal at every rarity as its loadout does (without
+// the tile and the name: the page puts the rarity colour behind it), instead of playing.
+// scripts/gen-icons.mjs, which the build runs, takes the picture of that in headless
+// Chrome and cuts every petal out as a png. The petal with id i at rarity r is the 64
+// unit square at column i, row r.
+static uint8_t icon_sheet_wanted()
+{
+#ifdef __EMSCRIPTEN__
+    static int requested = -1;
+    if (requested < 0)
+        requested = EM_ASM_INT(
+            { return window.location.search.indexOf("iconsheet") >= 0 ? 1 : 0; });
+    return requested == 1;
+#else
+    return 0;
+#endif
+}
+
+static void draw_icon_sheet(struct rr_renderer *renderer, float dpr)
+{
+#ifdef __EMSCRIPTEN__
+    // what scripts/gen-icons.mjs cuts out (the names are in quotes: the build renames
+    // the others)
+    EM_ASM(
+        {
+            window["iconSheetInfo"] = {};
+            window["iconSheetInfo"]["columns"] = $0;
+            window["iconSheetInfo"]["rows"] = $1;
+            window["iconSheetInfo"]["cell"] = 64;
+        },
+        rr_petal_id_max, rr_rarity_id_max);
+#endif
+    rr_renderer_set_transform(renderer, 1, 0, 0, 0, 1, 0);
+    // the game sets these at the start of every frame
+    rr_renderer_set_global_alpha(renderer, 1);
+    renderer->state.filter.amount = 0;
+    for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
+        for (uint8_t id = 1; id < rr_petal_id_max; ++id)
+        {
+            struct rr_renderer_context_state state;
+            rr_renderer_context_state_init(renderer, &state);
+            rr_renderer_translate(renderer, (id + 0.5f) * 64 * dpr,
+                                  (rarity + 0.5f) * 64 * dpr);
+            rr_renderer_scale(renderer, dpr * 1.1f);
+            // (flag 0: drawn from its shapes, flag 1 copies from a cache the game fills
+            // while it plays)
+            rr_renderer_draw_static_petal(renderer, id, rarity, 0);
+            rr_renderer_context_state_free(renderer, &state);
+        }
+    // the drawing is queued and the game runs the queue at the end of its frame
+    rr_renderer_execute_instructions();
+}
+
 void rr_renderer_main_loop(struct rr_game *this, float delta, float width,
                            float height, float device_pixel_ratio)
 {
     if (this->renderer == NULL)
         return;
+    if (icon_sheet_wanted())
+    {
+        this->renderer->width = width;
+        this->renderer->height = height;
+        draw_icon_sheet(this->renderer, device_pixel_ratio);
+        return;
+    }
     float a = height / 1080;
     float b = width / 1920;
     float scale = (this->renderer->scale = b < a ? a : b) * device_pixel_ratio;
