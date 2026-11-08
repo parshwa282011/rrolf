@@ -165,8 +165,7 @@ static EntityIdx rr_simulation_alloc_mob_non_recursive(
     struct rr_mob_rarity_scale const *rarity_scale =
         RR_MOB_RARITY_SCALING + rarity_id;
     struct rr_mob_data const *mob_data = RR_MOB_DATA + mob_id;
-    rr_component_physical_set_radius(physical,
-                                     mob_data->radius * rarity_scale->radius);
+    rr_component_physical_set_radius(physical, rr_mob_radius(mob_id, rarity_id));
     rr_component_physical_set_angle(physical, rr_frand() * 2 * M_PI);
     rr_component_physical_set_x(physical, x);
     rr_component_physical_set_y(physical, y);
@@ -211,8 +210,7 @@ EntityIdx rr_simulation_alloc_mob(struct rr_simulation *this,
     struct rr_mob_rarity_scale const *rarity_scale =
         RR_MOB_RARITY_SCALING + rarity_id;
     struct rr_mob_data const *mob_data = RR_MOB_DATA + mob_id;
-    rr_component_physical_set_radius(physical,
-                                     mob_data->radius * rarity_scale->radius);
+    rr_component_physical_set_radius(physical, rr_mob_radius(mob_id, rarity_id));
     rr_component_physical_set_angle(physical, rr_frand() * 2 * M_PI);
     rr_component_physical_set_x(physical, x);
     rr_component_physical_set_y(physical, y);

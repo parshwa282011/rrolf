@@ -190,8 +190,21 @@ int main()
         CHECK(count_mobs(hole, rr_mob_id_baby_ant) == scale->baby_ant_count, "%u babies at rarity %u", scale->baby_ant_count, rarity);
         uint32_t all = 1 + scale->egg_count + scale->worker_count + scale->baby_ant_count;
         CHECK(arena->mob_count == all, "mob_count %u is what is in it, %u", arena->mob_count, all);
+        // a hole is the size of a common one at every rarity (the other mobs grow)
+        float radius = rr_simulation_get_physical(sim(), hole)->radius;
+        CHECK(radius == RR_MOB_DATA[rr_mob_id_ant_hole].radius, "the hole of rarity %u is %.0f wide, a common one is %.0f",
+              rarity, radius, RR_MOB_DATA[rr_mob_id_ant_hole].radius);
         remove_hole(hole);
     }
+
+    printf("the other mobs still grow with their rarity\n");
+    for (uint8_t rarity = 1; rarity < rr_rarity_id_max; ++rarity)
+    {
+        EntityIdx ant = rr_simulation_alloc_mob(sim(), 1, 9500, 9500, rr_mob_id_ant, rarity, rr_simulation_team_id_mobs);
+        CHECK(rr_simulation_get_physical(sim(), ant)->radius > RR_MOB_DATA[rr_mob_id_ant].radius, "an ant of rarity %u is bigger than a common one", rarity);
+        rr_simulation_request_entity_deletion(sim(), ant);
+    }
+    tick(2);
 
     printf("eggs hatch and the queen lays new ones\n");
     {

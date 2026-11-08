@@ -381,6 +381,10 @@ extern char const *RR_PETAL_DESCRIPTIONS[rr_petal_id_max];
 extern struct rr_mob_data RR_MOB_DATA[rr_mob_id_max];
 extern char const *RR_MOB_NAMES[rr_mob_id_max];
 extern struct rr_mob_rarity_scale RR_MOB_RARITY_SCALING[rr_rarity_id_max];
+// how big a mob of a rarity is: its radius times the scale of the rarity, except the ant
+// hole, which is the size of a common one at every rarity (a bigger hole only has more
+// ants in it, see RR_ANT_HOLE_RARITY_SCALING)
+float rr_mob_radius(uint8_t mob_id, uint8_t rarity);
 extern struct rr_petal_rarity_scale RR_PETAL_RARITY_SCALE[rr_rarity_id_max];
 extern double RR_MOB_LOOT_RARITY_COEFFICIENTS[rr_rarity_id_max];
 extern double RR_DROP_RARITY_COEFFICIENTS[rr_rarity_id_max];

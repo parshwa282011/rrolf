@@ -955,3 +955,10 @@ uint8_t RR_GLOBAL_BIOME = rr_biome_id_hell_creek;
 #undef X
 #undef a
 #undef A
+
+float rr_mob_radius(uint8_t mob_id, uint8_t rarity)
+{
+    if (mob_id == rr_mob_id_ant_hole)
+        return RR_MOB_DATA[mob_id].radius;
+    return RR_MOB_DATA[mob_id].radius * RR_MOB_RARITY_SCALING[rarity].radius;
+}
