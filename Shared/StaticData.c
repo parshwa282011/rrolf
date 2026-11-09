@@ -192,8 +192,6 @@ uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
     1, //meteor
     5, //quetz
     3, //edmo
-    // the garden spawns these in the open. Everything that only lives inside
-    // a hive or a hole, or comes from an event, costs nothing
     1, //ant
     3, //fighter bee
     2, //dragonfly
@@ -233,8 +231,8 @@ double RR_HELL_CREEK_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
 double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //tric
     0,    //trex
-    40,   //fern
-    5,  //tree
+    3,   //fern
+    0.5,  //tree
     0,    //pter
     0,    //dako
     0,    //pachy
@@ -243,17 +241,17 @@ double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //meteor
     0,    //quetz
     0,    //edmo
-    40,   //ant
-    55,   //fighter bee
-    40,   //dragonfly
-    45,   //honeybee
+    15,   //ant
+    15,   //fighter bee
+    15,   //dragonfly
+    15,   //honeybee
     0,    //beehive
-    30,   //spider
-    40,   //house centipede
-    30,   //lanternfly
+    15,   //spider
+    15,   //house centipede
+    15,   //lanternfly
     0,    //queen bee
     0,    //beehive core
-    35,   //bush
+    3,   //bush
 };
 
 struct rr_petal_rarity_scale RR_PETAL_RARITY_SCALE[rr_rarity_id_max] = {
