@@ -36,3 +36,12 @@ loadout look). `--tick T` draws the mobs at another animation time (radians).
 
 The page has switches for the hitbox circle, the sprite cells, a light page, zoom,
 "only flagged" and a name search.
+
+## A video of one mob
+
+    python3 rrolf/tools/asset-sheet/make-video.py "Lanternfly" --open
+
+Writes `out/lanternfly-animation.mp4` (eight rounds of the animation) and `out/lanternfly-animation.gif`
+(one round, it repeats by itself). Left is the mob at rest, right is the same mob going through its
+animation, both drawn by the client's own draw code. `--frames`, `--fps`, `--loops` change its
+length. Any name of the main list works.

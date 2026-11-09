@@ -30,6 +30,7 @@
   .part.unused { border-color:var(--bad); }
   .part.over { border-color:var(--warn); }
   canvas { display:block; }
+  body.headup canvas[data-kind=mob] { transform: rotate(-90deg); }
   .chk { background-image:linear-gradient(45deg,#0001 25%,transparent 25%,transparent 75%,#0001 75%),linear-gradient(45deg,#0001 25%,transparent 25%,transparent 75%,#0001 75%); background-size:16px 16px; background-position:0 0,8px 8px; }
   .tag { display:inline-block; border-radius:3px; padding:0 5px; font-size:11px; color:#111; }
   .tag.bad { background:var(--bad); } .tag.warn { background:var(--warn); } .tag.ok { background:var(--ok); }
@@ -44,6 +45,7 @@
   <label><input type="checkbox" id="hitbox" checked> hitbox circle</label>
   <label><input type="checkbox" id="bounds" checked> sprite cells</label>
   <label><input type="checkbox" id="light"> light page</label>
+  <label><input type="checkbox" id="headup"> head up (like the pictures)</label>
   <label>zoom <input type="range" id="zoom" min="0.5" max="2" step="0.1" value="1"></label>
   <input type="search" id="find" placeholder="find by name">
   <span id="counts" class="note"></span>
@@ -285,11 +287,12 @@ D.petals.forEach((p) => petalsEl.append(petalCard(p)));
 function apply() {
   const q = $("find").value.trim().toLowerCase(), only = $("onlyflag").checked;
   document.body.classList.toggle("light", $("light").checked);
+  document.body.classList.toggle("headup", $("headup").checked);
   document.querySelectorAll(".card").forEach((c) => {
     c.classList.toggle("hidden", (q && !c.dataset.name.includes(q)) || (only && !c.dataset.flagged));
   });
 }
-["find", "onlyflag", "light"].forEach((i) => $(i).addEventListener("input", apply));
+["find", "onlyflag", "light", "headup"].forEach((i) => $(i).addEventListener("input", apply));
 ["hitbox", "bounds", "zoom"].forEach((i) => $(i).addEventListener("input", () => cards.forEach((c) => c._redraw && c._redraw())));
 apply();
 </script>

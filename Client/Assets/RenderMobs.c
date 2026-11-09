@@ -19,6 +19,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <Client/Assets/Mob/HandPart.h>
 #include <Client/Assets/Render.h>
 #include <Client/Renderer/Renderer.h>
 #include <Shared/StaticData.h>
@@ -48,6 +49,27 @@ void render_sprite(struct rr_renderer *renderer, uint8_t id, uint32_t pos,
     }
     else
         mob_sprites[id].sprites[pos].render(renderer);
+}
+
+// the parts of a mob that is drawn by hand (Mob/HandDrawn.h): every part is a sprite of the
+// sheet of the mob, put where the list says, turned over for the other side of the bug
+static void render_hand_parts(struct rr_renderer *renderer, uint8_t id,
+                              struct rr_hand_part const *parts, uint8_t count,
+                              float timer, uint8_t flags)
+{
+    struct rr_renderer_context_state state;
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_translate(renderer, parts[i].x / 8.0f, parts[i].y / 8.0f);
+        if (parts[i].flags & RR_HAND_PART_MIRROR)
+            rr_renderer_scale2(renderer, 1, -1);
+        float angle = rr_hand_part_angle(&parts[i], timer);
+        if (angle != 0)
+            rr_renderer_rotate(renderer, angle);
+        render_sprite(renderer, id, parts[i].slot, flags);
+        rr_renderer_context_state_free(renderer, &state);
+    }
 }
 
 void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
@@ -364,58 +386,9 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         render_sprite(renderer, id, 0, flags);
         break;
     case rr_mob_id_spider:
-        rr_renderer_scale(renderer, 0.2);
-
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * 0.05f + M_PI / 4);
-        rr_renderer_translate(renderer, 100, 0);
-        rr_renderer_scale2(renderer, 1, -1);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * -0.05f + 5 * M_PI / 12);
-        rr_renderer_translate(renderer, 100, 0);
-        rr_renderer_scale2(renderer, 1, -1);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * 0.05f + 7 * M_PI / 12);
-        rr_renderer_translate(renderer, 100, 0);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * -0.05f + 3 * M_PI / 4);
-        rr_renderer_translate(renderer, 100, 0);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * 0.05f - M_PI / 4);
-        rr_renderer_translate(renderer, 100, 0);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * -0.05f - 5 * M_PI / 12);
-        rr_renderer_translate(renderer, 100, 0);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * 0.05f - 7 * M_PI / 12);
-        rr_renderer_translate(renderer, 100, 0);
-        rr_renderer_scale2(renderer, 1, -1);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * -0.05f - 3 * M_PI / 4);
-        rr_renderer_translate(renderer, 100, 0);
-        rr_renderer_scale2(renderer, 1, -1);
-        render_sprite(renderer, id, 2, flags);
-        rr_renderer_context_state_free(renderer, &state);
-
-        // rr_renderer_translate(renderer, -120, 0);
-        // render_sprite(renderer, id, 1, flags);
-        rr_renderer_translate(renderer, 10, 0);
-        render_sprite(renderer, id, 0, flags);
+        rr_renderer_scale(renderer, 0.2f);
+        render_hand_parts(renderer, id, RR_SPIDER_PARTS, RR_SPIDER_PART_COUNT,
+                          raw_animation_tick, flags);
         break;
     case rr_mob_id_house_centipede:
         if (!(flags & 4))
@@ -440,26 +413,9 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         }
         break;
     case rr_mob_id_lanternfly:
-        rr_renderer_scale(renderer, 0.2);
-        render_sprite(renderer, id, 1, flags); // abdomen
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_rotate(renderer, animation_tick * 0.2f);
-        render_sprite(renderer, id, 0, flags); // wing1
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_scale2(renderer, 1, -1);
-        rr_renderer_rotate(renderer, animation_tick * -0.2f);
-        render_sprite(renderer, id, 0, flags); // mirrored wing1
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_translate(renderer, -40, 60);
-        render_sprite(renderer, id, 2, flags); // leg
-        rr_renderer_context_state_free(renderer, &state);
-        rr_renderer_context_state_init(renderer, &state);
-        rr_renderer_scale2(renderer, -1, 1);
-        rr_renderer_translate(renderer, -40, 60);
-        render_sprite(renderer, id, 2, flags); // mirrored leg
-        rr_renderer_context_state_free(renderer, &state);
+        rr_renderer_scale(renderer, 0.2f);
+        render_hand_parts(renderer, id, RR_LANTERNFLY_PARTS,
+                          RR_LANTERNFLY_PART_COUNT, raw_animation_tick, flags);
         break;
     }
 
@@ -572,19 +528,14 @@ void rr_renderer_mob_cache_init()
     rr_renderer_spritesheet_init(&mob_sprites[16], NULL, 384, 384,
                                  rr_beehive_draw, 0);
 
-    rr_renderer_spritesheet_init(
-        &mob_sprites[17], NULL, 240, 240, rr_spider_head_draw, 240, 240,
-        rr_spider_abdomen_draw, 240, 240, rr_spider_leg_draw, 0);
+    rr_spider_sheet_init(&mob_sprites[17]);
 
     rr_renderer_spritesheet_init(&mob_sprites[18], NULL, 240, 240,
                                  rr_house_centipede_head_draw, 240, 240,
                                  rr_house_centipede_body_draw, 240, 240,
                                  rr_house_centipede_leg_draw, 0);
 
-    rr_renderer_spritesheet_init(&mob_sprites[19], NULL, 240, 240,
-                                 rr_lanternfly_wing1_draw, 240, 240,
-                                 rr_lanternfly_abdomen_draw, 240, 240,
-                                 rr_lanternfly_leg_draw, 0);
+    rr_lanternfly_sheet_init(&mob_sprites[19]);
 
     rr_renderer_spritesheet_init(
         &mob_sprites[20], NULL, 192, 192, rr_queen_bee_head_draw, 192, 192,

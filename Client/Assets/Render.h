@@ -16,7 +16,12 @@
 
 #pragma once
 
+#include <stdint.h>
+
+#include <Client/Assets/Mob/HandPart.h>
+
 struct rr_renderer;
+struct rr_renderer_spritesheet;
 
 void rr_triceratops_head_draw(struct rr_renderer *);
 void rr_triceratops_body_draw(struct rr_renderer *);
@@ -112,17 +117,20 @@ void rr_snail_shell_draw(struct rr_renderer *);
 void rr_snail_hole_draw(struct rr_renderer *);
 void rr_beehive_post_draw(struct rr_renderer *);
 
-void rr_spider_abdomen_draw(struct rr_renderer *);
-void rr_spider_head_draw(struct rr_renderer *);
-void rr_spider_leg_draw(struct rr_renderer *);
+// drawn by hand in parts, Mob/Spider.c: the sprites of its sheet and where the parts go
+void rr_spider_sheet_init(struct rr_renderer_spritesheet *);
+extern struct rr_hand_part const RR_SPIDER_PARTS[];
+extern uint8_t const RR_SPIDER_PART_COUNT;
 
 void rr_house_centipede_body_draw(struct rr_renderer *);
 void rr_house_centipede_head_draw(struct rr_renderer *);
 void rr_house_centipede_leg_draw(struct rr_renderer *);
 
-void rr_lanternfly_wing1_draw(struct rr_renderer *);
-void rr_lanternfly_abdomen_draw(struct rr_renderer *);
-void rr_lanternfly_leg_draw(struct rr_renderer *);
+// drawn by hand in parts, Mob/Lanternfly.c: the sprites of its sheet and where the parts go
+// (struct rr_hand_part, Mob/HandPart.h)
+void rr_lanternfly_sheet_init(struct rr_renderer_spritesheet *);
+extern struct rr_hand_part const RR_LANTERNFLY_PARTS[];
+extern uint8_t const RR_LANTERNFLY_PART_COUNT;
 
 void rr_hc_tile_1_draw(struct rr_renderer *);
 void rr_hc_tile_2_draw(struct rr_renderer *);

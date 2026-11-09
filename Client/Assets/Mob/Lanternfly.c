@@ -14,111 +14,47 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#include <stddef.h>
+
 #include <Client/Assets/Render.h>
 
+#include <Client/Assets/Mob/HandDrawn.h>
 #include <Client/Renderer/Renderer.h>
 
-void rr_lanternfly_wing1_draw(struct rr_renderer *renderer)
+// The lanternfly, drawn by hand after the picture of the bugs, in parts (Mob/HandDrawn.h says
+// how), put together like the one it replaces: an abdomen, two wings that swing, the legs, and
+// now the head. 105 x 120 pixels. The middle line of the bug is u 52.3, the middle of its height v 60.
+// 2.42 units a pixel. Everything below was measured on the picture: the edges of the shell,
+// the head and its diamond, the lobes of the back, the spots, the width and the ends of
+// every leg.
+#define LF_F 2.42f
+#define LF_U 52.3f
+#define LF_V 60.0f
+#define LF_LEG 0xff0f1314
+
+// the three legs on the right; the left ones are these turned over. Each is a limb of one
+// width with round ends, one end under the body
+static void lanternfly_leg_top(struct rr_renderer *r)
 {
-    rr_renderer_set_fill(renderer, 0xff8d7968);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -109.14, -0.51);
-    rr_renderer_bezier_curve_to(renderer, -109.42, 24.86, -88.78, 48.39, -55.02,
-                                61.18);
-    rr_renderer_bezier_curve_to(renderer, -21.27, 73.97, 20.45, 74.07, 54.34,
-                                61.44);
-    rr_renderer_bezier_curve_to(renderer, 88.24, 48.80, 109.14, 25.37, 109.14,
-                                0.00);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff8d7968);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, 91.56, 15.10);
-    rr_renderer_bezier_curve_to(renderer, 101.27, 15.10, 109.14, 7.23, 109.14,
-                                -2.48);
-    rr_renderer_bezier_curve_to(renderer, 109.14, -7.15, 107.28, -11.62, 103.99,
-                                -14.92);
-    rr_renderer_bezier_curve_to(renderer, 100.69, -18.22, 96.22, -20.07, 91.56,
-                                -20.07);
-    rr_renderer_bezier_curve_to(renderer, 81.85, -20.07, 73.98, -12.20, 73.98,
-                                -2.48);
-    rr_renderer_bezier_curve_to(renderer, 73.98, 7.23, 81.85, 15.10, 91.56,
-                                15.10);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff8d7968);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -91.55, 15.10);
-    rr_renderer_bezier_curve_to(renderer, -81.84, 15.10, -73.97, 7.23, -73.97,
-                                -2.48);
-    rr_renderer_bezier_curve_to(renderer, -73.97, -7.15, -75.82, -11.62, -79.12,
-                                -14.92);
-    rr_renderer_bezier_curve_to(renderer, -82.42, -18.22, -86.89, -20.07,
-                                -91.55, -20.07);
-    rr_renderer_bezier_curve_to(renderer, -101.26, -20.07, -109.13, -12.20,
-                                -109.13, -2.48);
-    rr_renderer_bezier_curve_to(renderer, -109.13, 7.23, -101.26, 15.10, -91.55,
-                                15.10);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff8d7968);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, 91.70, -2.49);
-    rr_renderer_line_to(renderer, 91.70, -20.07);
-    rr_renderer_line_to(renderer, -91.69, -20.07);
-    rr_renderer_line_to(renderer, -91.69, -2.49);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xffa38c78);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -91.99, -2.92);
-    rr_renderer_bezier_curve_to(renderer, -92.24, 17.61, -74.90, 36.65, -46.54,
-                                47.00);
-    rr_renderer_bezier_curve_to(renderer, -18.19, 57.35, 16.87, 57.43, 45.35,
-                                47.21);
-    rr_renderer_bezier_curve_to(renderer, 73.83, 36.99, 91.39, 18.04, 91.39,
-                                -2.49);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff34393a);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, 10.97, 26.29);
-    rr_renderer_bezier_curve_to(renderer, 3.95, 26.29, -1.73, 20.60, -1.73,
-                                13.58);
-    rr_renderer_bezier_curve_to(renderer, -1.73, 10.21, -0.40, 6.98, 1.99,
-                                4.60);
-    rr_renderer_bezier_curve_to(renderer, 4.37, 2.21, 7.60, 0.87, 10.97, 0.87);
-    rr_renderer_bezier_curve_to(renderer, 17.99, 0.87, 23.67, 6.56, 23.67,
-                                13.58);
-    rr_renderer_bezier_curve_to(renderer, 23.67, 20.60, 17.99, 26.29, 10.97,
-                                26.29);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff34393a);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -12.09, 51.70);
-    rr_renderer_bezier_curve_to(renderer, -19.11, 51.70, -24.80, 46.01, -24.80,
-                                38.99);
-    rr_renderer_bezier_curve_to(renderer, -24.80, 35.62, -23.46, 32.39, -21.08,
-                                30.01);
-    rr_renderer_bezier_curve_to(renderer, -18.69, 27.62, -15.46, 26.29, -12.09,
-                                26.29);
-    rr_renderer_bezier_curve_to(renderer, -5.08, 26.29, 0.61, 31.97, 0.61,
-                                38.99);
-    rr_renderer_bezier_curve_to(renderer, 0.61, 46.01, -5.08, 51.70, -12.09,
-                                51.70);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff34393a);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -50.61, 37.61);
-    rr_renderer_bezier_curve_to(renderer, -57.63, 37.61, -63.32, 31.92, -63.32,
-                                24.90);
-    rr_renderer_bezier_curve_to(renderer, -63.32, 21.53, -61.98, 18.30, -59.59,
-                                15.92);
-    rr_renderer_bezier_curve_to(renderer, -57.21, 13.54, -53.98, 12.20, -50.61,
-                                12.20);
-    rr_renderer_bezier_curve_to(renderer, -43.60, 12.20, -37.91, 17.89, -37.91,
-                                24.90);
-    rr_renderer_bezier_curve_to(renderer, -37.91, 31.92, -43.60, 37.61, -50.61,
-                                37.61);
-    rr_renderer_fill(renderer);
+    frame(r, LF_F, 80, 11);
+    limb(r, LF_LEG, 9.6, 89.3, 6.4, 70.8, 15.4);
 }
 
-void rr_lanternfly_abdomen_draw(struct rr_renderer *renderer)
+static void lanternfly_leg_mid(struct rr_renderer *r)
+{
+    frame(r, LF_F, 89, 36.4);
+    limb(r, LF_LEG, 9.6, 99.5, 39.2, 78.8, 33.5);
+}
+
+static void lanternfly_leg_low(struct rr_renderer *r)
+{
+    frame(r, LF_F, 92.5, 64);
+    limb(r, LF_LEG, 9.6, 87.6, 60.8, 95.1, 70.3);
+}
+
+// the abdomen: the red one the lanternfly always had, kept as it was. It is under the wings
+// and only shows when they open. It is drawn in the units of its own sprite, not the picture's
+static void lanternfly_abdomen(struct rr_renderer *renderer)
 {
     rr_renderer_set_fill(renderer, 0xffa42312);
     rr_renderer_begin_path(renderer);
@@ -150,29 +86,108 @@ void rr_lanternfly_abdomen_draw(struct rr_renderer *renderer)
     rr_renderer_fill(renderer);
 }
 
-void rr_lanternfly_leg_draw(struct rr_renderer *renderer)
+// the edge of the back, from the top of the middle line round the left side to the bottom of it
+// (the wings are cut along that line: each is one half of the back)
+static float const lanternfly_edge[][2] = {
+    {52.3, 31},   {35, 33},     {21, 36},     {16.4, 44},   {14.2, 52},
+    {13.3, 60},   {13.2, 68},   {13.7, 76},   {15.2, 84},   {17.7, 92},
+    {21.4, 100},  {27.1, 108},  {38.0, 116},  {52.3, 117.7}};
+
+// the lighter part of a wing: the left one, from the middle line at the top, round it and back
+static float const lanternfly_lobe[][2] = {
+    {47.7, 38},  {30, 38},    {24.9, 41},  {23.5, 48},  {21.5, 57},
+    {21.1, 65},  {21.1, 72},  {22.7, 81},  {25.3, 90},  {30.1, 99},
+    {36.2, 105}, {41.3, 108}, {45.8, 109.2}, {47.7, 107.6}, {47.7, 100},
+    {47.7, 80},  {47.7, 60}};
+
+// the left wing: one half of the back, the lighter part and its three spots. It swings round
+// its root, the corner next to the head where it joins the body, so that is the middle of the
+// sprite
+static void lanternfly_wing_left(struct rr_renderer *r)
 {
-    rr_renderer_set_fill(renderer, 0xff0e1113);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -20.52, 48.13);
-    rr_renderer_bezier_curve_to(renderer, 7.17, 28.26, 22.17, -4.86, 18.81,
-                                -38.78);
-    rr_renderer_line_to(renderer, -3.36, -36.59);
-    rr_renderer_bezier_curve_to(renderer, -0.79, -10.59, -12.28, 14.80, -33.51,
-                                30.02);
-    rr_renderer_fill(renderer);
-    rr_renderer_set_fill(renderer, 0xff0e1113);
-    rr_renderer_begin_path(renderer);
-    rr_renderer_move_to(renderer, -29.81, 27.97);
-    rr_renderer_bezier_curve_to(renderer, -35.54, 29.99, -38.55, 36.28, -36.52,
-                                42.01);
-    rr_renderer_bezier_curve_to(renderer, -35.55, 44.76, -33.53, 47.01, -30.89,
-                                48.27);
-    rr_renderer_bezier_curve_to(renderer, -28.26, 49.53, -25.24, 49.69, -22.49,
-                                48.72);
-    rr_renderer_bezier_curve_to(renderer, -16.76, 46.69, -13.75, 40.41, -15.78,
-                                34.68);
-    rr_renderer_bezier_curve_to(renderer, -17.80, 28.95, -24.08, 25.95, -29.81,
-                                27.97);
-    rr_renderer_fill(renderer);
+    frame(r, LF_F, 47.7, 40);
+    smooth_open_fill(r, 0xff917966, lanternfly_edge, 14);
+    smooth_closed(r, 0xffa88c75, lanternfly_lobe, 17);
+    dot(r, 0xff323a38, 33.7, 60.2, 6);
+    dot(r, 0xff323a38, 33.7, 81.5, 6);
+    dot(r, 0xff323a38, 42.2, 95.6, 6);
+}
+
+// the right wing: the shape of the left one turned over, and its own three spots
+static void lanternfly_wing_right(struct rr_renderer *r)
+{
+    frame(r, LF_F, 56.9, 40);
+    float edge[14][2], lobe[17][2];
+    for (int i = 0; i < 14; ++i)
+    {
+        edge[i][0] = 104.6f - lanternfly_edge[i][0];
+        edge[i][1] = lanternfly_edge[i][1];
+    }
+    for (int i = 0; i < 17; ++i)
+    {
+        lobe[i][0] = 104.6f - lanternfly_lobe[i][0];
+        lobe[i][1] = lanternfly_lobe[i][1];
+    }
+    smooth_open_fill(r, 0xff917966, edge, 14);
+    smooth_closed(r, 0xffa88c75, lobe, 17);
+    dot(r, 0xff323a38, 64.3, 60.8, 6);
+    dot(r, 0xff323a38, 76.3, 71.8, 6);
+    dot(r, 0xff323a38, 69.7, 90, 6);
+}
+
+// the dark shield and the lighter diamond in it
+static void lanternfly_head(struct rr_renderer *r)
+{
+    frame(r, LF_F, 52.3, 30);
+    static float const shield[][2] = {
+        {52.3, 3.3}, {47.4, 4},    {41.5, 7},    {37.6, 10},   {32, 14},
+        {28.1, 19},  {25.6, 24},   {24.3, 29},   {24, 34},     {25.6, 37},
+        {28.3, 40},  {30.4, 43},   {33, 46},     {36.5, 49},   {41, 52},
+        {46, 54.3},  {52.3, 55.2}};
+    smooth_symmetric(r, 0xff212526, 52.3, shield, 17);
+    static float const diamond[][2] = {
+        {52.3, 11.5}, {47.2, 14},   {43.3, 17},  {40, 20},   {37.4, 23},
+        {34.9, 26},   {33.3, 29.5}, {33.2, 31},  {34.6, 34}, {37.3, 38},
+        {39.7, 41},   {43.2, 44},   {46, 45.6},  {52.3, 46.7}};
+    smooth_symmetric(r, 0xff333a3a, 52.3, diamond, 14);
+}
+
+// the order of the sprites of the lanternfly's sheet
+enum
+{
+    LF_LEG_TOP,
+    LF_LEG_MID,
+    LF_LEG_LOW,
+    LF_ABDOMEN,
+    LF_WING_LEFT,
+    LF_WING_RIGHT,
+    LF_HEAD
+};
+
+struct rr_hand_part const RR_LANTERNFLY_PARTS[] = {
+    AT_WIGGLE(LF_LEG_TOP, LF_F, LF_U, LF_V, 80, 11),
+    AT_M_WIGGLE(LF_LEG_TOP, LF_F, LF_U, LF_V, 80, 11),
+    AT_WIGGLE(LF_LEG_MID, LF_F, LF_U, LF_V, 89, 36.4),
+    AT_M_WIGGLE(LF_LEG_MID, LF_F, LF_U, LF_V, 89, 36.4),
+    AT_WIGGLE(LF_LEG_LOW, LF_F, LF_U, LF_V, 92.5, 64),
+    AT_M_WIGGLE(LF_LEG_LOW, LF_F, LF_U, LF_V, 92.5, 64),
+    AT(LF_ABDOMEN, LF_F, LF_U, LF_V, 52.3, 78),
+    AT_SWING(LF_WING_LEFT, LF_F, LF_U, LF_V, 47.7, 40),
+    AT_SWING(LF_WING_RIGHT, LF_F, LF_U, LF_V, 56.9, 40),
+    AT(LF_HEAD, LF_F, LF_U, LF_V, 52.3, 30)};
+
+uint8_t const RR_LANTERNFLY_PART_COUNT =
+    sizeof RR_LANTERNFLY_PARTS / sizeof *RR_LANTERNFLY_PARTS;
+
+// the sprites of the sheet, in the order of the enum, with the cell of each (its widest reach
+// from its middle, in pixels)
+void rr_lanternfly_sheet_init(struct rr_renderer_spritesheet *sheet)
+{
+#define SPRITE(reach, draw) CELL(LF_F, reach), CELL(LF_F, reach), draw
+    rr_renderer_spritesheet_init(
+        sheet, NULL, SPRITE(14, lanternfly_leg_top),
+        SPRITE(14, lanternfly_leg_mid), SPRITE(14, lanternfly_leg_low),
+        SPRITE(40, lanternfly_abdomen), SPRITE(80, lanternfly_wing_left),
+        SPRITE(80, lanternfly_wing_right), SPRITE(30, lanternfly_head), 0);
+#undef SPRITE
 }
