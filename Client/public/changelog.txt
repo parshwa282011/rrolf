@@ -11,45 +11,52 @@
 # quick-deploy.sh) - no client has to be rebuilt for it, a reload shows the change.
 
 == November 8th 2026
-[all] The stats pages show the icon of every petal: the loadout of a player in Rysteria, the petals that are saved in Gardn. By: Parshwa
-[gardn] The mobs in the sandbox's developer menu have their icons. By: Parshwa
-[gardn] The leader's curse (the mobs going for them, the damage at level 90) leaves a flower alone for its first 10 seconds after it spawns or is restored. There is no curse in the sandbox. By: Parshwa
-[rysteria] Snail run: the snail is epic 65%, legendary 25%, mythic 9%, exotic 0.75% or ancient 0.25% of the time. By: Parshwa
-[rysteria] The snail takes the cheapest way home: it goes round the hard parts of the garden, even when that is a longer walk. By: Parshwa
-[rysteria] The snail only wakes when a player is right next to it. Until then no mob can come within 500 units of it and none goes for it. By: Parshwa
-[rysteria] Ant holes are the size of a common ant hole at every rarity (a higher rarity hole only has more ants in it). By: Parshwa
-[rysteria] The snail's rewards (shell, mint, nazar) are drops on the ground at your feet, for everybody in the game, not only the players near the snail. By: Parshwa
+[all] The stats pages show the icon of every petal: the loadout of a player in Rysteria, the petals that are saved in Gardn.
+[gardn] The mobs in the sandbox's developer menu have their icons.
+[gardn] The leader's curse (the mobs going for them, the damage at level 90) leaves a flower alone for its first 10 seconds after it spawns or is restored. There is no curse in the sandbox.
+[rysteria] Snail run: the snail is epic 65%, legendary 25%, mythic 9%, exotic 0.75% or ancient 0.25% of the time.
+[rysteria] The snail takes the cheapest way home: it goes round the hard parts of the garden, even when that is a longer walk.
+[rysteria] The snail only wakes when a player is right next to it. Until then no mob can come within 500 units of it and none goes for it.
+[rysteria] Ant holes are the size of a common ant hole at every rarity (a higher rarity hole only has more ants in it).
+[rysteria] The snail's rewards (shell, mint, nazar) are drops on the ground at your feet, for everybody in the game, not only the players near the snail.
+By: Parshwa
 
 == November 7th 2026
-[all] A link to the game this one is forked from. By: Parshwa
-[all] Sign up with Apple is off for now. By: Parshwa
-[all] One changelog for both games: what is the same in both is written once. By: Parshwa
-[rysteria] A Changelog button next to Leaderboard and Stats. By: Parshwa
-[gardn] Sandbox mode, next to FFA and TDM: a normal area without mobs and a PVP area where mobs spawn. Nothing in it is saved to your account. Leave it with the X at the top left. By: Parshwa
-[gardn] Press \ in the sandbox for the developer menu: set your level, get any petal, summon mobs, clear them, be invincible. By: Parshwa
-[gardn] Press M to switch between mouse and keyboard movement. By: Parshwa
-[gardn] In mouse movement the buttons also spread and pull in the petals while the mouse is in the box at the bottom. By: Parshwa
-[gardn] 5 seconds of spawn protection when you spawn or restore in FFA and TDM: nothing collides with you or targets you. By: Parshwa
-[gardn] The minimap works in the sandbox. By: Parshwa
-[gardn] The PVP area of the sandbox has 25 times the mobs now. The bees brought friends. The bees brought a lot of friends. By: Parshwa
+[all] A link to the game this one is forked from.
+[all] Sign up with Apple is off for now.
+[all] One changelog for both games: what is the same in both is written once.
+[rysteria] A Changelog button next to Leaderboard and Stats.
+[gardn] Sandbox mode, next to FFA and TDM: a normal area without mobs and a PVP area where mobs spawn. Nothing in it is saved to your account. Leave it with the X at the top left.
+[gardn] Press \ in the sandbox for the developer menu: set your level, get any petal, summon mobs, clear them, be invincible.
+[gardn] Press M to switch between mouse and keyboard movement.
+[gardn] In mouse movement the buttons also spread and pull in the petals while the mouse is in the box at the bottom.
+[gardn] 5 seconds of spawn protection when you spawn or restore in FFA and TDM: nothing collides with you or targets you.
+[gardn] The minimap works in the sandbox.
+[gardn] The PVP area of the sandbox has 25 times the mobs now. The bees brought friends. The bees brought a lot of friends.
+By: Parshwa
 
 == November 6th 2026
-[gardn] Who is in the world is backed up every 30 seconds; after a crash everybody gets their progress back as a save. By: Parshwa
+[gardn] Who is in the world is backed up every 30 seconds; after a crash everybody gets their progress back as a save.
+By: Parshwa
 
 == November 4th 2026
-[all] Accounts: the email is confirmed with a code before the account can be used. By: Parshwa
-[all] Account page (/account): link Discord or Google, add an email, delete your account. By: Parshwa
-[all] Log in, sign up and password reset are one page (/login), with codes sent by email. By: Parshwa
-[all] Privacy policy and terms of service pages. By: Parshwa
+[all] Accounts: the email is confirmed with a code before the account can be used.
+[all] Account page (/account): link Discord or Google, add an email, delete your account.
+[all] Log in, sign up and password reset are one page (/login), with codes sent by email.
+[all] Privacy policy and terms of service pages.
+By: Parshwa
 
 == November 3rd 2026
-[all] Separate leaderboards for Rysteria and gardn, and a player stats page with search. By: Parshwa
-[rysteria] Minigames server: capture the flag, team deathmatch, hide and seek. By: Parshwa
+[all] Separate leaderboards for Rysteria and gardn, and a player stats page with search.
+[rysteria] Minigames server: capture the flag, team deathmatch, hide and seek.
+By: Parshwa
 
 == November 1st 2026
-[all] Leaderboards at /leaderboard. By: Parshwa
+[all] Leaderboards at /leaderboard.
+By: Parshwa
 
 == October 31st 2026
-[rysteria] The Gardn button on the title screen. By: Parshwa
-[rysteria] Chat and the squad list are shared between servers. By: Parshwa
-[rysteria] Drag petals onto loadout slots, N shows the whole map. By: Parshwa
+[rysteria] The Gardn button on the title screen.
+[rysteria] Chat and the squad list are shared between servers.
+[rysteria] Drag petals onto loadout slots, N shows the whole map.
+By: Parshwa

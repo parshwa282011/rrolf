@@ -204,11 +204,30 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         render_sprite(renderer, id, 0, flags);
         break;
     case rr_mob_id_ant:
-        rr_renderer_scale(renderer, 0.35f);
-        rr_renderer_translate(renderer, -35, 0);
-        render_sprite(renderer, id, 1, flags);
+        rr_renderer_scale(renderer, 0.27f);
+        // the thorax, put so the middle of the whole ant is the hitbox centre
+        rr_renderer_translate(renderer, 15, 0);
+        // three legs a side, drawn first so the body covers their roots. The
+        // legs of a pair and of the two sides swing in turns
+        for (uint8_t side = 0; side < 2; ++side)
+            for (uint8_t i = 0; i < 3; ++i)
+            {
+                float s = side ? -1.0f : 1.0f;
+                float swing = ((i + side) & 1 ? 1.0f : -1.0f) * 0.25f *
+                              animation_tick;
+                rr_renderer_context_state_init(renderer, &state);
+                rr_renderer_rotate(renderer,
+                                   s * (M_PI / 2 + (i - 1) * 0.55f + swing));
+                rr_renderer_translate(renderer, 45, 0);
+                render_sprite(renderer, id, 3, flags);
+                rr_renderer_context_state_free(renderer, &state);
+            }
+        rr_renderer_translate(renderer, -95, 0);
+        render_sprite(renderer, id, 2, flags); // abdomen
+        rr_renderer_translate(renderer, 95, 0);
+        render_sprite(renderer, id, 1, flags); // thorax
         rr_renderer_translate(renderer, 70, 0);
-        render_sprite(renderer, id, 0, flags);
+        render_sprite(renderer, id, 0, flags); // head
         break;
     case rr_mob_id_bush:
         rr_renderer_scale(renderer, 0.21f);

@@ -1,0 +1,295 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Rysteria asset sheet</title>
+<style>
+  :root { --bg:#1d1f24; --card:#2a2d34; --line:#3b3f48; --text:#e8e8ea; --dim:#9aa0ab; --bad:#ff5d5d; --warn:#ffb347; --ok:#6fcf97; }
+  body.light { --bg:#e9eaee; --card:#fff; --line:#cfd2d9; --text:#1c1d21; --dim:#666b75; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.4 -apple-system,Segoe UI,Helvetica,Arial,sans-serif; }
+  header { position:sticky; top:0; z-index:5; background:var(--bg); border-bottom:1px solid var(--line); padding:8px 16px; display:flex; gap:16px; flex-wrap:wrap; align-items:center; }
+  header h1 { font-size:15px; margin:0 8px 0 0; }
+  label { color:var(--dim); user-select:none; }
+  input[type=search] { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:4px; padding:3px 8px; }
+  main { padding:12px 16px 60px; }
+  h2 { margin:26px 0 8px; font-size:16px; }
+  .summary { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:8px 14px; }
+  .summary h3 { margin:10px 0 2px; font-size:13px; }
+  .summary ul { margin:0 0 4px; padding-left:20px; }
+  .summary a { color:inherit; }
+  .summary code { color:var(--dim); }
+  .grid { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:8px; }
+  .card.flag { border-color:var(--bad); }
+  .card.warn { border-color:var(--warn); }
+  .card h4 { margin:0 0 4px; font-size:13px; display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; }
+  .card h4 small { color:var(--dim); font-weight:normal; }
+  .card.hidden { display:none; }
+  .row { display:flex; gap:8px; align-items:flex-start; }
+  .parts { display:flex; flex-wrap:wrap; gap:6px; max-width:420px; margin-top:6px; }
+  .part { border:1px solid var(--line); border-radius:4px; padding:3px; text-align:center; font-size:11px; color:var(--dim); }
+  .part.unused { border-color:var(--bad); }
+  .part.over { border-color:var(--warn); }
+  canvas { display:block; }
+  .chk { background-image:linear-gradient(45deg,#0001 25%,transparent 25%,transparent 75%,#0001 75%),linear-gradient(45deg,#0001 25%,transparent 25%,transparent 75%,#0001 75%); background-size:16px 16px; background-position:0 0,8px 8px; }
+  .tag { display:inline-block; border-radius:3px; padding:0 5px; font-size:11px; color:#111; }
+  .tag.bad { background:var(--bad); } .tag.warn { background:var(--warn); } .tag.ok { background:var(--ok); }
+  .rar { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; max-width:760px; }
+  .rar div { text-align:center; font-size:10px; color:#fff; border-radius:4px; padding:2px; }
+  .rar div.dim { opacity:.35; }
+  .note { color:var(--dim); font-size:11px; margin-top:2px; }
+</style>
+<header>
+  <h1>Rysteria asset sheet</h1>
+  <label><input type="checkbox" id="onlyflag"> only flagged</label>
+  <label><input type="checkbox" id="hitbox" checked> hitbox circle</label>
+  <label><input type="checkbox" id="bounds" checked> sprite cells</label>
+  <label><input type="checkbox" id="light"> light page</label>
+  <label>zoom <input type="range" id="zoom" min="0.5" max="2" step="0.1" value="1"></label>
+  <input type="search" id="find" placeholder="find by name">
+  <span id="counts" class="note"></span>
+</header>
+<main>
+  <div class="summary" id="summary"></div>
+  <h2>Mobs <small class="note">the mob the way <code>rr_renderer_draw_mob</code> composes it, then each sprite of its sheet alone</small></h2>
+  <div class="grid" id="mobs"></div>
+  <h2>Petals <small class="note">raw <code>rr_renderer_draw_petal</code>, then <code>rr_renderer_draw_static_petal</code> at every rarity (the loadout look)</small></h2>
+  <div class="grid" id="petals"></div>
+</main>
+<script id="data" type="application/json">/*DATA*/</script>
+<script>
+"use strict";
+const D = JSON.parse(document.getElementById("data").textContent);
+const $ = (id) => document.getElementById(id);
+const hex = (c) => "#" + (c & 0xffffff).toString(16).padStart(6, "0");
+const issues = { unused: [], over: [], size: [], empty: [], nosheet: [], dead: D.unreferenced_functions, same: [] };
+
+// replays what the C renderer recorded (the numbers are the ones of Client/Renderer/Wasm.c).
+// base: where the origin of the drawing is on this canvas
+function replay(ctx, ops, base) {
+  ctx.setTransform(...base);
+  ctx.lineCap = "butt"; ctx.lineJoin = "miter";
+  for (const o of ops) {
+    const t = o[0];
+    switch (t) {
+      case 0: ctx.fillStyle = `rgba(${o[1]},${o[2]},${o[3]},${o[4]})`; break;
+      case 1: ctx.strokeStyle = `rgba(${o[1]},${o[2]},${o[3]},${o[4]})`; break;
+      case 2: ctx.lineWidth = o[1]; break;
+      case 3: ctx.font = o[1] + "px Ubuntu, sans-serif"; break;
+      case 4: ctx.globalAlpha = o[1]; break;
+      case 5: ctx.lineCap = ["butt", "round", "square"][o[1]] || "butt"; break;
+      case 6: ctx.lineJoin = ["bevel", "round", "miter"][o[1]] || "miter"; break;
+      case 7: ctx.textAlign = ["left", "center", "right"][o[1]]; break;
+      case 8: ctx.textBaseline = ["top", "middle", "bottom"][o[1]]; break;
+      case 9: // absolute in the game, so put the base under it
+        ctx.setTransform(...base); ctx.transform(o[1], o[2], o[4], o[5], o[3], o[6]); break;
+      case 10: ctx.save(); break;
+      case 11: ctx.restore(); break;
+      case 12: ctx.beginPath(); break;
+      case 13: ctx.moveTo(o[1], o[2]); break;
+      case 14: ctx.lineTo(o[1], o[2]); break;
+      case 15: ctx.quadraticCurveTo(o[1], o[2], o[3], o[4]); break;
+      case 16: ctx.bezierCurveTo(o[1], o[2], o[3], o[4], o[5], o[6]); break;
+      case 17: ctx.arc(o[1], o[2], o[3], o[4], o[5], !!o[6]); break;
+      case 18: ctx.ellipse(o[1], o[2], o[3], o[4], 0, 0, 2 * Math.PI); break;
+      case 19: ctx.rect(o[1], o[2], o[3], o[4]); break;
+      case 21: ctx.fillRect(o[1], o[2], o[3], o[4]); break;
+      case 22: ctx.strokeRect(o[1], o[2], o[3], o[4]); break;
+      case 23: ctx.fill(); break;
+      case 24: ctx.stroke(); break;
+      case 25: ctx.clip(); break;
+      case 26: ctx.clip("evenodd"); break;
+      case 27: ctx.fillText(o[3], o[1], o[2]); break;
+      case 28: ctx.strokeText(o[3], o[1], o[2]); break;
+      case 30: ctx.globalCompositeOperation = o[1] == 1 ? "destination-out" : "source-over"; break;
+    }
+  }
+}
+
+function canvas(w, h, cls) {
+  const c = document.createElement("canvas");
+  const dpr = 2;
+  c.width = Math.ceil(w * dpr); c.height = Math.ceil(h * dpr);
+  c.style.width = w + "px"; c.style.height = h + "px";
+  if (cls) c.className = cls;
+  c.dpr = dpr;
+  return c;
+}
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+
+// how far from the origin (and outside a box) the drawing reaches, in the units of the drawing
+function measure(ops, box) {
+  const R = 400, S = 1; // pixels per unit, 800x800 around the origin
+  const c = document.createElement("canvas"); c.width = c.height = 2 * R;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  replay(ctx, ops, [S, 0, 0, S, R, R]);
+  const px = ctx.getImageData(0, 0, 2 * R, 2 * R).data;
+  let far = 0, over = 0, minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+  for (let y = 0; y < 2 * R; y++) for (let x = 0; x < 2 * R; x++) {
+    if (px[(y * 2 * R + x) * 4 + 3] < 16) continue;
+    const ux = (x - R) / S, uy = (y - R) / S;
+    far = Math.max(far, Math.hypot(ux, uy));
+    minx = Math.min(minx, ux); maxx = Math.max(maxx, ux); miny = Math.min(miny, uy); maxy = Math.max(maxy, uy);
+    if (box) over = Math.max(over, Math.abs(ux) - box.w / 2, Math.abs(uy) - box.h / 2);
+  }
+  return { far, over: Math.max(0, over), empty: far === 0, minx, maxx, miny, maxy };
+}
+
+function drawCanvas(c, ops, scale, opts = {}) {
+  const ctx = c.getContext("2d");
+  ctx.scale(c.dpr, c.dpr);
+  const w = c.width / c.dpr, h = c.height / c.dpr;
+  if (opts.bg) { ctx.fillStyle = opts.bg; ctx.fillRect(0, 0, w, h); }
+  if (opts.under) opts.under(ctx, w / 2, h / 2);
+  ctx.save();
+  const k = c.dpr; // replay sets absolute matrices, so the pixel ratio goes in the base
+  replay(ctx, ops, [scale * k, 0, 0, scale * k, w / 2 * k, h / 2 * k]);
+  ctx.restore();
+  ctx.setTransform(c.dpr, 0, 0, c.dpr, 0, 0);
+  if (opts.over) opts.over(ctx, w / 2, h / 2);
+}
+
+function dashed(ctx, f) { ctx.save(); ctx.setLineDash([4, 4]); ctx.lineWidth = 1; f(); ctx.restore(); }
+
+const cards = [];
+
+function mobCard(m) {
+  const card = el("div", "card"); card.id = "mob-" + m.id; card.dataset.name = m.name.toLowerCase();
+  const h = el("h4", "", `#${m.id} ${m.name} <small>radius ${m.radius}</small>`);
+  card.append(h);
+  const flags = [];
+  if (!m.has_sheet) { flags.push(["bad", "no sprite sheet"]); issues.nosheet.push(m); }
+  if (m.composite.length === 0) { flags.push(["bad", "draws nothing"]); issues.empty.push(["mob", m.name]); }
+  // the composite
+  const meas = measure(m.composite, null);
+  const S = 440;
+  // the hitbox is 110 px, smaller when the drawing reaches further than the canvas
+  const z = Math.min(110 / m.radius, meas.far ? 165 / meas.far : 1e9);
+  const row = el("div", "row"); card.append(row);
+  const make = (ops, label) => {
+    const wrap = el("div");
+    const c = canvas(S * 0.8, S * 0.8, "chk");
+    wrap.append(c, el("div", "note", label));
+    c.dataset.kind = "mob"; c.dataset.radius = m.radius;
+    c._ops = ops; c._zoom = z; c._redraw = () => {
+      const zoom = +$("zoom").value;
+      const cc = c.getContext("2d"); cc.setTransform(1, 0, 0, 1, 0, 0); cc.clearRect(0, 0, c.width, c.height);
+      c.style.width = c.style.height = S * 0.8 * zoom + "px";
+      drawCanvas(c, ops, z * 0.8, {
+        under: (ctx, cx, cy) => {
+          if ($("hitbox").checked) dashed(ctx, () => { ctx.strokeStyle = "#ff5d5d"; ctx.beginPath(); ctx.arc(cx, cy, m.radius * z * 0.8, 0, 2 * Math.PI); ctx.stroke(); });
+        },
+      });
+    };
+    c._redraw();
+    return wrap;
+  };
+  row.append(make(m.composite, "as the world draws it (red circle = hitbox)"));
+  if (m.composite_alt) row.append(make(m.composite_alt, "other flags (the head of a centipede)"));
+  const reach = meas.far / m.radius; // how far the drawing reaches, in hitbox radii
+  if (!meas.empty) {
+    h.append(el("small", "", `drawn reach ×${reach.toFixed(2)} of the radius`));
+    if (reach > 3 || reach < 0.4) { flags.push(["warn", `reach ×${reach.toFixed(2)}`]); issues.size.push([m.name, reach]); }
+  }
+  // the parts
+  const parts = el("div", "parts"); card.append(parts);
+  for (const p of m.parts) {
+    const unused = p.used === 0 && p.used_alt === 0;
+    const mm = measure(p.ops, { w: p.w, h: p.h });
+    const over = mm.over > 3;
+    const s = Math.min(1, 150 / Math.max(p.w, p.h));
+    const part = el("div", "part" + (unused ? " unused" : over ? " over" : ""));
+    const c = canvas(p.w * s + 24, p.h * s + 24, "chk");
+    c._redraw = () => {
+      const cc = c.getContext("2d"); cc.setTransform(1, 0, 0, 1, 0, 0); cc.clearRect(0, 0, c.width, c.height);
+      drawCanvas(c, p.ops, s, {
+        over: (ctx, cx, cy) => { if ($("bounds").checked) dashed(ctx, () => { ctx.strokeStyle = over ? "#ffb347" : "#8a8f99"; ctx.strokeRect(cx - p.w * s / 2, cy - p.h * s / 2, p.w * s, p.h * s); }); },
+      });
+    };
+    c._redraw();
+    const uses = p.used + (m.composite_alt ? ` (+${p.used_alt} as a centipede head)` : "");
+    part.append(c, el("div", "", `slot ${p.slot} · ${p.w}×${p.h} · ` + (unused ? `<b style="color:var(--bad)">never drawn</b>` : `drawn ×${uses}`) + (over ? ` · <b style="color:var(--warn)">out of its cell by ${mm.over.toFixed(0)}</b>` : "") + (mm.empty ? ` · <b style="color:var(--bad)">empty</b>` : "")));
+    parts.append(part);
+    cards.push(c);
+    if (unused) { issues.unused.push([m, p]); }
+    if (over) { issues.over.push([m, p, mm.over]); }
+    if (mm.empty) issues.empty.push(["mob " + m.name, "slot " + p.slot]);
+  }
+  if (m.images_skipped) flags.push(["warn", `${m.images_skipped} cached images skipped`]);
+  for (const [k, t] of flags) h.append(el("span", "tag " + k, t));
+  const bad = flags.some((f) => f[0] === "bad") || m.parts.some((p) => p.used === 0 && p.used_alt === 0);
+  if (bad) card.classList.add("flag"); else if (flags.length || card.querySelector(".part.over")) card.classList.add("warn");
+  card.dataset.flagged = card.classList.contains("flag") || card.classList.contains("warn") ? "1" : "";
+  cards.push(...card.querySelectorAll("canvas"));
+  return card;
+}
+
+function petalCard(p) {
+  const card = el("div", "card"); card.id = "petal-" + p.id; card.dataset.name = p.name.toLowerCase();
+  const h = el("h4", "", `#${p.id} ${p.name} <small>spawns from ${D.rarities[p.min_rarity] ? D.rarities[p.min_rarity].name : "?"}</small>`);
+  card.append(h);
+  const flags = [];
+  const empty = p.raw.length === 0 && p.id !== 0; // petal 0 is the empty placeholder
+  if (empty) { flags.push(["bad", "draws nothing"]); issues.empty.push(["petal", p.name]); }
+  const row = el("div", "row"); card.append(row);
+  const c = canvas(130, 130, "chk");
+  c._redraw = () => { const cc = c.getContext("2d"); cc.setTransform(1, 0, 0, 1, 0, 0); cc.clearRect(0, 0, c.width, c.height); drawCanvas(c, p.raw, 4, {}); };
+  c._redraw(); cards.push(c);
+  const w = el("div"); w.append(c, el("div", "note", "draw_petal (×4)")); row.append(w);
+  const rar = el("div", "rar"); row.append(rar);
+  const keys = p.by_rarity.map((o) => JSON.stringify(o));
+  D.rarities.forEach((r, i) => {
+    const t = el("div", i < p.min_rarity ? "dim" : "");
+    t.style.background = hex(r.color);
+    const cc = canvas(86, 86);
+    cc._redraw = () => { const x = cc.getContext("2d"); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cc.width, cc.height); drawCanvas(cc, p.by_rarity[i], 2.2, {}); };
+    cc._redraw(); cards.push(cc);
+    t.append(cc, document.createTextNode(`${r.name} ×${p.counts[i]}`));
+    rar.append(t);
+  });
+  if (keys.every((k) => k === keys[0]) && !empty) issues.same.push(p.name);
+  if (p.images_skipped) flags.push(["warn", `${p.images_skipped} cached images skipped`]);
+  for (const [k, t] of flags) h.append(el("span", "tag " + k, t));
+  if (flags.some((f) => f[0] === "bad")) card.classList.add("flag"); else if (flags.length) card.classList.add("warn");
+  card.dataset.flagged = flags.length ? "1" : "";
+  return card;
+}
+
+const mobsEl = $("mobs"), petalsEl = $("petals");
+D.mobs.forEach((m) => mobsEl.append(mobCard(m)));
+D.petals.forEach((p) => petalsEl.append(petalCard(p)));
+
+// ------------------------------------------------------------- the summary
+(function summary() {
+  const s = $("summary"); const sec = (t, items, note) => {
+    s.append(el("h3", "", `${t} <span class="tag ${items.length ? "bad" : "ok"}">${items.length}</span>`));
+    if (note) s.append(el("div", "note", note));
+    if (items.length) { const ul = el("ul"); items.forEach((i) => ul.append(el("li", "", i))); s.append(ul); }
+  };
+  const link = (m) => `<a href="#mob-${m.id}">${m.name}</a>`;
+  sec("Sprites that are in a mob's sheet but its composite never draws", issues.unused.map(([m, p]) => `${link(m)} slot ${p.slot} (${p.w}×${p.h}, ${p.ops.length} instructions)`),
+    "Rasterized into the cache for nothing, or forgotten when the mob was put together (RenderMobs.c).");
+  sec("Sprites that reach outside their cell", issues.over.map(([m, p, o]) => `${link(m)} slot ${p.slot}: ${o.toFixed(0)} units out of ${p.w}×${p.h}`),
+    "In the game the cell is cut out of a shared cache, so the part that is outside is cut off or bleeds into its neighbour.");
+  sec("Mobs whose drawing is much bigger or smaller than their radius", issues.size.map(([n, r]) => `${n}: reach ×${r.toFixed(2)}`),
+    "Under 0.4 or over 3 times the hitbox (long bodies and wings reach 2×, that is normal).");
+  sec("Draws nothing", issues.empty.map(([a, b]) => `${a} ${b}`));
+  s.append(el("h3", "", `Petals that look the same at every rarity <span class="tag ok">${issues.same.length}</span>`));
+  s.append(el("div", "note", "Information only, most petals are meant to: " + issues.same.join(", ")));
+  sec("Mobs without a sprite sheet", issues.nosheet.map((m) => m.name));
+  sec("Draw functions defined in Client/Assets and referenced by nothing", issues.dead.map((f) => `<code>${f.name}</code> <span class="note">${f.file}:${f.line}</span>`),
+    "Found by reading the source, not by running it.");
+  $("counts").textContent = `${D.mobs.length} mobs · ${D.petals.length} petals`;
+})();
+
+// ----------------------------------------------------------------- controls
+function apply() {
+  const q = $("find").value.trim().toLowerCase(), only = $("onlyflag").checked;
+  document.body.classList.toggle("light", $("light").checked);
+  document.querySelectorAll(".card").forEach((c) => {
+    c.classList.toggle("hidden", (q && !c.dataset.name.includes(q)) || (only && !c.dataset.flagged));
+  });
+}
+["find", "onlyflag", "light"].forEach((i) => $(i).addEventListener("input", apply));
+["hitbox", "bounds", "zoom"].forEach((i) => $(i).addEventListener("input", () => cards.forEach((c) => c._redraw && c._redraw())));
+apply();
+</script>
