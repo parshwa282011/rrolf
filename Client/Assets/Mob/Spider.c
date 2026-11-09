@@ -115,14 +115,14 @@ enum
 };
 
 struct rr_hand_part const RR_SPIDER_PARTS[] = {
-    AT(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
-    AT_M(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
-    AT(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
-    AT_M(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
-    AT(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
-    AT_M(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
-    AT(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
-    AT_M(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
+    AT_WIGGLE(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
+    AT_M_WIGGLE_ODD(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
+    AT_WIGGLE_ODD(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
+    AT_M_WIGGLE(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
+    AT_WIGGLE(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
+    AT_M_WIGGLE_ODD(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
+    AT_WIGGLE_ODD(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
+    AT_M_WIGGLE(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
     AT(SP_FANG, SP_F, SP_U, SP_V, 54.5, 19),
     AT_M(SP_FANG, SP_F, SP_U, SP_V, 54.5, 19),
     AT(SP_ABDOMEN, SP_F, SP_U, SP_V, 47.5, 77),

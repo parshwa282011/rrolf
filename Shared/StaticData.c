@@ -244,13 +244,13 @@ double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //quetz
     0,    //edmo
     40,   //ant
-    10,   //fighter bee
-    25,   //dragonfly
-    30,   //honeybee
+    55,   //fighter bee
+    30,   //dragonfly
+    45,   //honeybee
     0,    //beehive
     30,   //spider
-    20,   //house centipede
-    25,   //lanternfly
+    50,   //house centipede
+    30,   //lanternfly
     0,    //queen bee
     0,    //beehive core
     35,   //bush

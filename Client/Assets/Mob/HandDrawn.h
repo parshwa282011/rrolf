@@ -60,6 +60,13 @@ static inline void frame(struct rr_renderer *r, float f, float cu, float cv)
     {slot, RR_HAND_PART_WIGGLE | RR_HAND_PART_MIRROR,                           \
      (int16_t)(-((cv) - (bv)) * (f) * 8),                                      \
      (int16_t)(-((cu) - (bu)) * (f) * 8)}
+#define AT_WIGGLE_ODD(slot, f, bu, bv, cu, cv)                                 \
+    {slot, RR_HAND_PART_WIGGLE | RR_HAND_PART_ODD,                             \
+     (int16_t)(-((cv) - (bv)) * (f) * 8), (int16_t)(((cu) - (bu)) * (f) * 8)}
+#define AT_M_WIGGLE_ODD(slot, f, bu, bv, cu, cv)                               \
+    {slot, RR_HAND_PART_WIGGLE | RR_HAND_PART_MIRROR | RR_HAND_PART_ODD,       \
+     (int16_t)(-((cv) - (bv)) * (f) * 8),                                      \
+     (int16_t)(-((cu) - (bu)) * (f) * 8)}
 // the size of a sprite's cell: its widest reach from its middle, in pixels
 #define CELL(f, reach) ((int)((2 * (f) * (reach) + 12) / 16 + 1) * 16)
 
