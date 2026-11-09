@@ -358,7 +358,7 @@ extern float RR_SNAIL_REWARD_TIER_CHANCE[rr_rarity_id_max][4];
 // How hard a template cell is for the snail's way home. Its way is the cheapest one,
 // not the shortest: a cell costs 1 + difficulty^2 / 4, so it walks round the hard
 // parts of the map even when that is a long way
-#define RR_SNAIL_CELL_COST(difficulty) (1 + (uint32_t)(difficulty) * (difficulty) / 4)
+#define RR_SNAIL_CELL_COST(difficulty) (1 + (uint32_t)(difficulty-1) * (difficulty-1) / 4)
 extern float RR_SNAIL_NAZAR_CHANCE[rr_rarity_id_max][rr_rarity_id_max];
 // how likely each rarity is when a snail run starts, relative to each other
 extern float RR_SNAIL_RARITY_WEIGHTS[rr_rarity_id_max];
