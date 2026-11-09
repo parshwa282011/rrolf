@@ -234,7 +234,7 @@ double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //tric
     0,    //trex
     40,   //fern
-    0.5,  //tree
+    5,  //tree
     0,    //pter
     0,    //dako
     0,    //pachy
@@ -245,11 +245,11 @@ double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //edmo
     40,   //ant
     55,   //fighter bee
-    30,   //dragonfly
+    40,   //dragonfly
     45,   //honeybee
     0,    //beehive
     30,   //spider
-    50,   //house centipede
+    40,   //house centipede
     30,   //lanternfly
     0,    //queen bee
     0,    //beehive core
