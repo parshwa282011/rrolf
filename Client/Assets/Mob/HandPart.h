@@ -25,6 +25,7 @@
 #define RR_HAND_PART_SWING 2  // a wing that opens and shuts around the middle of its sprite
 #define RR_HAND_PART_WIGGLE 4 // a leg that rocks a little around the middle of its sprite
 #define RR_HAND_PART_ODD 8    // rocks half a round later, so that the legs next to it go the other way
+#define RR_HAND_PART_STEP 16  // a leg that steps forward and back around the end of its sprite, once a round
 
 struct rr_hand_part
 {
@@ -43,11 +44,13 @@ static inline float rr_hand_part_angle(struct rr_hand_part const *part,
 {
     float side = part->y < 0 ? 1.0f : -1.0f;
     float angle = 0;
+    float phase = part->flags & RR_HAND_PART_ODD ? 3.14159265f : 0;
     if (part->flags & RR_HAND_PART_SWING)
         angle = side * 0.275f * (1 - cosf(timer));
+    else if (part->flags & RR_HAND_PART_STEP)
+        angle = side * 0.22f * sinf(timer + phase);
     else if (part->flags & RR_HAND_PART_WIGGLE)
-        angle = side * 0.1f *
-                sinf(2 * timer + (part->flags & RR_HAND_PART_ODD ? 3.14159265f : 0));
+        angle = side * 0.1f * sinf(2 * timer + phase);
     // a turned over sprite is turned over with its angle too
     return part->flags & RR_HAND_PART_MIRROR ? -angle : angle;
 }

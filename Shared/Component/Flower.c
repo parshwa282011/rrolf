@@ -127,6 +127,9 @@ void rr_component_flower_set_dead(struct rr_component_flower *this,
                                                   player_info->parent_id))
                     health->last_attacker = RR_NULL_ENTITY;
             }
+            // the best score counts when the flower dies, before the points are halved
+            if (player_info->client->pvp_points > player_info->client->pvp_best)
+                player_info->client->pvp_best = player_info->client->pvp_points;
             if (rr_simulation_entity_alive(simulation, health->last_attacker))
             {
                 struct rr_component_player_info *killer_info =

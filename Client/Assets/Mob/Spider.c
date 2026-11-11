@@ -23,12 +23,15 @@
 
 // The spider (the black widow of the picture of the bugs), drawn by hand in parts
 // (Mob/HandDrawn.h says how), from plain shapes: ellipses, circles and limbs of one width.
-// 97 x 108 pixels. The middle line of the bug is u 47.4, the middle of its height v 54.
+// 97 x 108 pixels. The middle line of the bug is u 47.4, and v 60.5 is the middle between the tips of the
+// fangs and the back of the abdomen: that is the middle of the mob, so the circle that is
+// hit starts at the head and ends at the back, with no gap in front. A leg's sprite has its
+// middle at the leg's first end (under the body), so that it can step around it.
 // 2.69 units a pixel. Measured on the picture: the size and place of the head, the abdomen,
 // the light shapes in them and the hourglass, the fangs, and the line a leg goes along.
 #define SP_F 2.69f
 #define SP_U 47.4f
-#define SP_V 54.0f
+#define SP_V 60.5f
 #define SP_LEG 0xff1b232a
 #define SP_BODY 0xff2a363f
 #define SP_LIGHT 0xff34424d
@@ -37,25 +40,25 @@
 // is one curve of one width with round ends, and its first end is under the body
 static void spider_leg1(struct rr_renderer *r)
 {
-    frame(r, SP_F, 73, 17);
+    frame(r, SP_F, 64.5, 30);
     bent(r, SP_LEG, 9.3, 64.5, 30, 71.2, 23, 76.8, 14.9, 80.6, 5.9);
 }
 
 static void spider_leg2(struct rr_renderer *r)
 {
-    frame(r, SP_F, 79, 32);
+    frame(r, SP_F, 66.5, 37);
     bent(r, SP_LEG, 9.3, 66.5, 37, 74.3, 33.8, 82.8, 32.4, 89.9, 27.5);
 }
 
 static void spider_leg3(struct rr_renderer *r)
 {
-    frame(r, SP_F, 80, 49);
+    frame(r, SP_F, 68, 43.2);
     bent(r, SP_LEG, 9.3, 68, 43.2, 76.5, 44.4, 83.5, 49.4, 90.5, 53.8);
 }
 
 static void spider_leg4(struct rr_renderer *r)
 {
-    frame(r, SP_F, 77, 62);
+    frame(r, SP_F, 67, 49.5);
     bent(r, SP_LEG, 9.3, 67, 49.5, 74.7, 56.7, 82.5, 64.4, 86.5, 74.4);
 }
 
@@ -115,14 +118,14 @@ enum
 };
 
 struct rr_hand_part const RR_SPIDER_PARTS[] = {
-    AT_WIGGLE(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
-    AT_M_WIGGLE_ODD(SP_LEG1, SP_F, SP_U, SP_V, 73, 17),
-    AT_WIGGLE_ODD(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
-    AT_M_WIGGLE(SP_LEG2, SP_F, SP_U, SP_V, 79, 32),
-    AT_WIGGLE(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
-    AT_M_WIGGLE_ODD(SP_LEG3, SP_F, SP_U, SP_V, 80, 49),
-    AT_WIGGLE_ODD(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
-    AT_M_WIGGLE(SP_LEG4, SP_F, SP_U, SP_V, 77, 62),
+    AT_WITH(RR_HAND_PART_STEP, SP_LEG1, SP_F, SP_U, SP_V, 64.5, 30),
+    AT_M_WITH(RR_HAND_PART_STEP | RR_HAND_PART_ODD, SP_LEG1, SP_F, SP_U, SP_V, 64.5, 30),
+    AT_WITH(RR_HAND_PART_STEP | RR_HAND_PART_ODD, SP_LEG2, SP_F, SP_U, SP_V, 66.5, 37),
+    AT_M_WITH(RR_HAND_PART_STEP, SP_LEG2, SP_F, SP_U, SP_V, 66.5, 37),
+    AT_WITH(RR_HAND_PART_STEP, SP_LEG3, SP_F, SP_U, SP_V, 68, 43.2),
+    AT_M_WITH(RR_HAND_PART_STEP | RR_HAND_PART_ODD, SP_LEG3, SP_F, SP_U, SP_V, 68, 43.2),
+    AT_WITH(RR_HAND_PART_STEP | RR_HAND_PART_ODD, SP_LEG4, SP_F, SP_U, SP_V, 67, 49.5),
+    AT_M_WITH(RR_HAND_PART_STEP, SP_LEG4, SP_F, SP_U, SP_V, 67, 49.5),
     AT(SP_FANG, SP_F, SP_U, SP_V, 54.5, 19),
     AT_M(SP_FANG, SP_F, SP_U, SP_V, 54.5, 19),
     AT(SP_ABDOMEN, SP_F, SP_U, SP_V, 47.5, 77),
@@ -138,8 +141,8 @@ void rr_spider_sheet_init(struct rr_renderer_spritesheet *sheet)
 {
 #define SPRITE(reach, draw) CELL(SP_F, reach), CELL(SP_F, reach), draw
     rr_renderer_spritesheet_init(
-        sheet, NULL, SPRITE(18, spider_leg1), SPRITE(16, spider_leg2),
-        SPRITE(16, spider_leg3), SPRITE(20, spider_leg4), SPRITE(14, spider_fang),
+        sheet, NULL, SPRITE(32, spider_leg1), SPRITE(29, spider_leg2),
+        SPRITE(29, spider_leg3), SPRITE(35, spider_leg4), SPRITE(14, spider_fang),
         SPRITE(33, spider_abdomen), SPRITE(28, spider_head),
         SPRITE(14, spider_hourglass), 0);
 #undef SPRITE

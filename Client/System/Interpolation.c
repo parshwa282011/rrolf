@@ -71,10 +71,16 @@ void system_interpolation_for_each_function(EntityIdx entity, void *_captures)
             physical->turning_animation = rr_angle_lerp(
                 physical->turning_animation, physical->angle, 6 * delta);
 
+            // the legs of the spider step once a round of the timer: it speeds up much less
+            // with the speed than the other mobs, or the legs blur when it starts to chase
+            float speed_gain =
+                rr_simulation_get_mob(this, entity)->id == rr_mob_id_spider
+                    ? 0.12f
+                    : 0.5f;
             physical->animation_timer +=
                 (2 * (physical->parent_id % 2) - 1) * delta *
                 (fmin(rr_vector_get_magnitude(&physical->lerp_velocity), 20) *
-                     0.5 +
+                     speed_gain +
                  1) *
                 2;
         }

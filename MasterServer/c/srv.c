@@ -242,6 +242,12 @@ static int apply_change(cJSON const *change)
             have = 1;
         if (k > 0 || have)
             ms_lb_push_gardn(uuid, k, have, m, b);
+        // the highest score a flower of the account died with (saved or not): the
+        // "Highest score" board keeps the highest
+        cJSON const *seen = cJSON_GetObjectItemCaseSensitive(change, "best_seen");
+        if (cJSON_IsNumber(seen) && seen->valuedouble > 0 &&
+            seen->valuedouble < 4294967296.0)
+            ms_lb_push_gardn_best(uuid, (uint64_t)seen->valuedouble);
     }
     return result;
 }

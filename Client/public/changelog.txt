@@ -10,6 +10,10 @@
 # After editing, copy the file to the machines (scripts/common/build.sh does it, so does
 # quick-deploy.sh) - no client has to be rebuilt for it, a reload shows the change.
 
+== November 11th 2026
+[gardn] Fixed how score is saved in gardn on death so leaderbaord should update correctly
+[rysteria] Fixed spider animation as it was borken when it ran at player
+
 == November 8th 2026
 [all] The stats pages show the icon of every petal: the loadout of a player in Rysteria, the petals that are saved in Gardn.
 [gardn] The mobs in the sandbox's developer menu have their icons.
