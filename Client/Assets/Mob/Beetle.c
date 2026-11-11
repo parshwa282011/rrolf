@@ -27,10 +27,10 @@
 // The picture of it is 130 x 184 pixels. The middle line of the bug is u 64.5, and v 105 is the
 // middle of the mob: the big oval of the back is around v 111, and the two horns reach out in
 // front of it, so the circle that is hit is the back with the horns a little out of it.
-// 3 units a pixel.
+// 2.55 units a pixel.
 #include <Client/Assets/Mob/BeetleShapes.h>
 
-#define BT_F 3.0f
+#define BT_F 2.55f
 #define BT_U BEETLE_AXIS
 #define BT_V 105.0f
 // a horn opens and shuts around its foot, which is on the back, so that is the middle of its sprite

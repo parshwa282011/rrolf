@@ -26,10 +26,10 @@
 // (there is no white in it: the gaps between the arms and the neck are the page showing through).
 // The head, the neck, the body, the antennae and the legs are drawn from numbers measured on the
 // picture; the arm and the stripes of the abdomen are traced from it by tools/sprite-trace/trace_mantis.py
-// (MantisShapes.h). The middle line of the bug is u 48.5, and v 100 is the middle of the mob. 2 units a pixel.
+// (MantisShapes.h). The middle line of the bug is u 48.5, and v 100 is the middle of the mob. 2.55 units a pixel, as the beetle has.
 #include <Client/Assets/Mob/MantisShapes.h>
 
-#define MA_F 2.0f
+#define MA_F 2.55f
 #define MA_U MANTIS_AXIS
 #define MA_V 100.0f
 #define MA_DARK 0xff0f5118

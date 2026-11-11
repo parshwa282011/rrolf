@@ -169,9 +169,9 @@ struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
     // the snail comes from the snail run (Server/Snail.c), it never drops anything
     {rr_mob_id_snail,              rr_rarity_id_common, rr_rarity_id_ancient,  60,  0, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{0, 0}}},
     // the bugs of the picture: a hard one that bites
-    {rr_mob_id_beetle,             rr_rarity_id_common, rr_rarity_id_ancient,  45, 20, 28.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_rare,        {{rr_petal_id_shell,    0.05},{rr_petal_id_mandible,  0.05}}},
+    {rr_mob_id_beetle,             rr_rarity_id_common, rr_rarity_id_ancient,  45, 20, 34.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_rare,        {{rr_petal_id_shell,    0.05},{rr_petal_id_mandible,  0.05}}},
     // long and thin, and it waits for what comes near
-    {rr_mob_id_mantis,             rr_rarity_id_common, rr_rarity_id_ancient,  25, 18, 26.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_unusual,     {{rr_petal_id_peas,     0.1},{rr_petal_id_mandible,   0.05}}},
+    {rr_mob_id_mantis,             rr_rarity_id_common, rr_rarity_id_ancient,  25, 18, 32.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_unusual,     {{rr_petal_id_peas,     0.1},{rr_petal_id_mandible,   0.05}}},
 };
 
 char const *RR_MOB_NAMES[rr_mob_id_max] = {
