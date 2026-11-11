@@ -36,6 +36,7 @@
 #define MS_GARDN_MAX_SAVES 100
 #define MS_NICKNAME_SIZE 32
 #define MS_PROVIDER_SIZE 16
+#define MS_TAG_SIZE 16 // with the 0 at the end: the 'role' of the game servers is 16 too
 
 struct ms_db_account
 {
@@ -46,6 +47,10 @@ struct ms_db_account
     char pw_hash[MS_PW_HASH_SIZE]; // libsodium argon2id string
     uint8_t token_key[32];
     int is_dev;
+    // A name the account carries in the games ("Spider", "Supporter"), shown beside the
+    // player and, for some, changing how their flower looks (Shared/Tags.h). "" when the
+    // account has none, which is also what every account made before the tag existed reads as
+    char tag[MS_TAG_SIZE];
     int64_t created_at;
     int64_t last_login_at;
 };
@@ -64,7 +69,7 @@ struct ms_db_link
 
 // Maps are stored exactly as the old node master did: json objects keyed by
 // "id:rarity". Fields are malloc'd json text ("{}" when empty).
-struct ms_db_rysteria
+struct ms_db_parteria
 {
     double xp;
     // checkpoints of the three saved biomes (hell creek, pvp, garden), one byte
@@ -169,10 +174,10 @@ struct ms_db
     int (*links_get)(struct ms_db *, char const *uuid, struct ms_db_link *out,
                      int max);
 
-    int (*rysteria_get)(struct ms_db *, char const *uuid,
-                        struct ms_db_rysteria *out);
-    int (*rysteria_put)(struct ms_db *, char const *uuid,
-                        struct ms_db_rysteria const *);
+    int (*parteria_get)(struct ms_db *, char const *uuid,
+                        struct ms_db_parteria *out);
+    int (*parteria_put)(struct ms_db *, char const *uuid,
+                        struct ms_db_parteria const *);
 
     int (*gardn_list)(struct ms_db *, char const *uuid, struct ms_db_gsave *out,
                       int max);
@@ -257,7 +262,7 @@ struct ms_db *ms_db_postgres_open();
 struct ms_db *ms_db_mongo_open();
 
 // helpers
-void ms_db_rysteria_init(struct ms_db_rysteria *);
-void ms_db_rysteria_free(struct ms_db_rysteria *);
+void ms_db_parteria_init(struct ms_db_parteria *);
+void ms_db_parteria_free(struct ms_db_parteria *);
 void ms_db_gsave_free(struct ms_db_gsave *, int count);
 void ms_db_lb_free(struct ms_db_lb_entry *, int count);

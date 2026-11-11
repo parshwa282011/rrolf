@@ -1,4 +1,4 @@
-# Rysteria
+# Parteria
 
 Many thanks to the developers of the original game.
 

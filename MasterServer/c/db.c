@@ -51,7 +51,7 @@ void ms_db_close(struct ms_db *db)
     db->close(db);
 }
 
-void ms_db_rysteria_init(struct ms_db_rysteria *r)
+void ms_db_parteria_init(struct ms_db_parteria *r)
 {
     memset(r, 0, sizeof *r);
     r->petals = strdup("{}");
@@ -60,7 +60,7 @@ void ms_db_rysteria_init(struct ms_db_rysteria *r)
     r->loadout = strdup("{}");
 }
 
-void ms_db_rysteria_free(struct ms_db_rysteria *r)
+void ms_db_parteria_free(struct ms_db_parteria *r)
 {
     free(r->petals);
     free(r->failed_crafts);

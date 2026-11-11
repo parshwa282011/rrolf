@@ -339,8 +339,10 @@ void rr_server_client_reset_ctf_data(struct rr_server_client *this)
 #endif
 
 int rr_server_client_read_from_api(struct rr_server_client *this,
-                                   struct rr_binary_encoder *encoder)
+                                   struct rr_binary_encoder *encoder,
+                                   size_t size)
 {
+    memset(this->tag, 0, sizeof this->tag);
     memset(this->inventory, 0, sizeof this->inventory);
     memset(this->craft_fails, 0, sizeof this->craft_fails);
     memset(this->mob_gallery, 0, sizeof this->mob_gallery);
@@ -423,6 +425,14 @@ int rr_server_client_read_from_api(struct rr_server_client *this,
     char nickname[256];
     rr_binary_encoder_read_nt_string(encoder, nickname);
     strncpy(this->saved_nickname, nickname, sizeof this->saved_nickname - 1);
+    // the tag of the account follows the nickname. A master from before the tags ends the
+    // message there, and then the player has none. It is read byte by byte up to the end of
+    // the message and cut to what a tag can hold
+    size_t used = (size_t)(encoder->at - encoder->start);
+    for (size_t n = 0; used < size && encoder->start[used] != 0 &&
+                       n + 1 < sizeof this->tag;
+         ++used, ++n)
+        this->tag[n] = (char)encoder->start[used];
     return 1;
 }
 

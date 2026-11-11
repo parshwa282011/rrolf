@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Rysteria Stats</title>
+<title>Parteria Stats</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="/favicon.ico" rel="icon" sizes="any">
 <link href="/logo.png" rel="icon" type="image/png">
@@ -143,10 +143,10 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
     <header>
         <div class="brand">
             <img src="/logo.png" alt="">
-            <h1 class="outline">Stats<small class="outline" id="sub">Rysteria</small></h1>
+            <h1 class="outline">Stats<small class="outline" id="sub">Parteria</small></h1>
         </div>
         <nav>
-            <a class="btn" href="/">Play Rysteria</a>
+            <a class="btn" href="/">Play Parteria</a>
             <a class="btn" href="/status">My stats</a>
             <a class="btn alt" href="/leaderboard">Leaderboards</a>
             <a class="btn warn" href="/gardn/stats">Gardn stats</a>
@@ -166,7 +166,7 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 
 <script>
 "use strict";
-// the names of Rysteria's petals, by id (scripts/gen-petal-table.py)
+// the names of Parteria's petals, by id (scripts/gen-petal-table.py)
 /*RRPETALS-BEGIN*/
 const RR_PETALS = ["Secret", "Petal", "Pellet", "Fossil", "Stinger", "Berry", "Shell", "Peas", "Leaf", "Egg", "Magnet", "Uranium", "Feather", "Azalea", "Bone", "Web", "Seed", "Gravel", "Club", "Crest", "Droplet", "Beak", "Lightning", "Third Eye", "Nest", "Fireball", "Meat", "Bubble", "Meteor", "Mandible", "Wax", "Sand", "Mint", "Bee Egg", "Beehive Post", "Nazar"];   // the index is the petal id
 /*RRPETALS-END*/
@@ -227,7 +227,7 @@ function slotHtml(entry) {
 }
 
 function render(p) {
-    document.title = p.name + " - Rysteria Stats";
+    document.title = p.name + " - Parteria Stats";
     const link = location.origin + "/stats?uuid=" + p.uuid;
     let h = '<section class="panel who"><div><h2 class="outline">' + esc(p.name) + "</h2><small>Joined " +
         (p.created ? new Date(p.created * 1000).toLocaleDateString() : "?") + "</small></div>" +

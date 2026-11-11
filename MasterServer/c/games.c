@@ -91,8 +91,9 @@ struct player
     uint8_t pos;
     char username[65];
     int is_dev;
+    char tag[MS_TAG_SIZE]; // the tag of the account (db.h), "" for none
     double xp;
-    int checkpoint; // see struct ms_db_rysteria
+    int checkpoint; // see struct ms_db_parteria
     int64_t pvp_points;
     uint64_t nonce; // picked by the game server, echoed so it can match replies
     char token[MS_PL_P_SIZE];
@@ -109,7 +110,7 @@ struct player
     // leaderboards (leaderboard.c): what is on the boards for this player (-1 =
     // not known yet), the highest PvP score the game server saw, and the Ancient
     // craft attempts and PvP kills it has told us about that no board has yet
-    double lb_last[MS_LB_RYSTERIA_BOARDS];
+    double lb_last[MS_LB_PARTERIA_BOARDS];
     int64_t pvp_best;
     struct ms_lb_counters lb_count;
 };
@@ -125,7 +126,7 @@ struct join
     // filled by the worker
     enum ms_auth_result verdict;
     struct ms_db_account account;
-    struct ms_db_rysteria rys;
+    struct ms_db_parteria rys;
     int64_t deadline;
 };
 
@@ -134,12 +135,12 @@ struct flush
     char uuid[MS_UUID_SIZE];
     char username[65];
     uint64_t version;
-    struct ms_db_rysteria rys;
+    struct ms_db_parteria rys;
     int rc;
     int is_dev;
     // leaderboards
-    double lb_prev[MS_LB_RYSTERIA_BOARDS];
-    double lb_now[MS_LB_RYSTERIA_BOARDS];
+    double lb_prev[MS_LB_PARTERIA_BOARDS];
+    double lb_now[MS_LB_PARTERIA_BOARDS];
     int64_t pvp_best;
     struct ms_lb_counters count;
     int lb_rc;
@@ -317,6 +318,9 @@ static void send_join_ok(struct ms_gconn *c, struct player *p)
     write_counts(&w, p->mob_kills);
     write_loadout(&w, p->loadout);
     ms_writer_string(&w, p->nickname);
+    // after the nickname since the game servers read what they know in order: one from before
+    // the tags stops reading before it, and a new one finding nothing here has no tag to give
+    ms_writer_string(&w, p->tag);
     queue_message(c, &w);
 }
 
@@ -325,12 +329,12 @@ static void send_join_ok(struct ms_gconn *c, struct player *p)
 static void flush_run(void *arg)
 {
     struct flush *f = arg;
-    f->rc = MS_DB->rysteria_put(MS_DB, f->uuid, &f->rys);
+    f->rc = MS_DB->parteria_put(MS_DB, f->uuid, &f->rys);
     // the leaderboards follow what was just saved
     memcpy(f->lb_now, f->lb_prev, sizeof f->lb_now);
     f->lb_rc = 0;
     if (f->rc == MS_DB_OK && !f->is_dev)
-        f->lb_rc = ms_lb_push_rysteria(f->uuid, f->username, &f->rys,
+        f->lb_rc = ms_lb_push_parteria(f->uuid, f->username, &f->rys,
                                        f->pvp_best, &f->count, f->lb_prev,
                                        f->lb_now);
 }
@@ -360,11 +364,11 @@ static void flush_done(void *arg)
         else
             ms_log("games", "save failed for %s, will retry", f->uuid);
     }
-    ms_db_rysteria_free(&f->rys);
+    ms_db_parteria_free(&f->rys);
     free(f);
 }
 
-static void snapshot(struct player const *p, struct ms_db_rysteria *r)
+static void snapshot(struct player const *p, struct ms_db_parteria *r)
 {
     memset(r, 0, sizeof *r);
     r->xp = p->xp;
@@ -409,7 +413,7 @@ static void adopt(struct join *j, struct ms_gconn *c)
         p->checkpoint = j->rys.checkpoint;
         p->pvp_points = j->rys.pvp_points;
         p->pvp_best = j->rys.pvp_points;
-        for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
+        for (int b = 0; b < MS_LB_PARTERIA_BOARDS; ++b)
             p->lb_last[b] = -1;
         p->petals = parse_object(j->rys.petals);
         p->failed_crafts = parse_object(j->rys.failed_crafts);
@@ -432,6 +436,7 @@ static void adopt(struct join *j, struct ms_gconn *c)
     ms_strlcpy(p->token, j->pl_p, sizeof p->token);
     p->nonce = j->nonce;
     p->is_dev = j->account.is_dev;
+    ms_strlcpy(p->tag, j->account.tag, sizeof p->tag);
     p->conn = c;
     p->pos = j->pos;
     ms_strlcpy(c->uuids[j->pos], j->uuid, MS_UUID_SIZE);
@@ -441,18 +446,18 @@ static void adopt(struct join *j, struct ms_gconn *c)
 
 static void join_free(struct join *j)
 {
-    ms_db_rysteria_free(&j->rys);
+    ms_db_parteria_free(&j->rys);
     free(j);
 }
 
 static void join_run(void *arg)
 {
     struct join *j = arg;
-    ms_db_rysteria_init(&j->rys);
+    ms_db_parteria_init(&j->rys);
     j->verdict = ms_auth_verify(j->uuid, NULL, j->pl_p, &j->account);
     if (j->verdict != ms_auth_ok)
         return;
-    int rc = MS_DB->rysteria_get(MS_DB, j->uuid, &j->rys);
+    int rc = MS_DB->parteria_get(MS_DB, j->uuid, &j->rys);
     if (rc == MS_DB_NOT_FOUND)
     {
         // new account: same starting inventory the old master gave
@@ -463,7 +468,7 @@ static void join_run(void *arg)
         j->verdict = ms_auth_error;
     // the player is online now: their numbers on the leaderboards are put right
     else if (!j->account.is_dev)
-        ms_lb_push_rysteria(j->uuid, j->account.username, &j->rys, 0, NULL, NULL,
+        ms_lb_push_parteria(j->uuid, j->account.username, &j->rys, 0, NULL, NULL,
                             NULL);
 }
 
@@ -1253,19 +1258,19 @@ void ms_games_shutdown()
     {
         if (p->version == p->flushed_version)
             continue;
-        struct ms_db_rysteria r;
+        struct ms_db_parteria r;
         snapshot(p, &r);
-        if (MS_DB->rysteria_put(MS_DB, p->uuid, &r) == MS_DB_OK)
+        if (MS_DB->parteria_put(MS_DB, p->uuid, &r) == MS_DB_OK)
         {
             p->flushed_version = p->version;
             ++saved;
             if (!p->is_dev)
-                ms_lb_push_rysteria(p->uuid, p->username, &r, p->pvp_best,
+                ms_lb_push_parteria(p->uuid, p->username, &r, p->pvp_best,
                                     &p->lb_count, p->lb_last, NULL);
         }
         else
             ms_log("games", "FAILED to save %s on shutdown", p->uuid);
-        ms_db_rysteria_free(&r);
+        ms_db_parteria_free(&r);
     }
     ms_log("games", "shutdown saved %d players", saved);
 }

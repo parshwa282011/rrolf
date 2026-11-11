@@ -233,7 +233,12 @@ enum rr_mob_id
     rr_mob_id_baby_ant,           // 26
     rr_mob_id_snail,              // 27
 
-    rr_mob_id_max,                // 28
+    // From the picture of the bugs. They go on the end: an id is what the saved mob gallery of
+    // every account and the server's messages say, so the ones that exist keep theirs
+    rr_mob_id_beetle,             // 28
+    rr_mob_id_mantis,             // 29
+
+    rr_mob_id_max,                // 30
 };
 
 struct rr_petal_base_stat_scale

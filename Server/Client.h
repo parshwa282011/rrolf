@@ -16,12 +16,14 @@
 
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include <Shared/Bitset.h>
 #include <Shared/Entity.h>
 #include <Shared/Rivet.h>
 #include <Shared/StaticData.h>
+#include <Shared/Tags.h>
 
 #define dev_cheat_enabled(simulation, entity, cheat_name)                      \
     (rr_simulation_entity_alive(simulation,                                    \
@@ -56,6 +58,7 @@ struct rr_server_client_dev_cheats
 struct rr_server_client
 {
     struct rr_rivet_account rivet_account;
+    char tag[RR_TAG_SIZE]; // the tag of the account (Shared/Tags.h), "" for none
     uint64_t clientbound_encryption_key;
     uint64_t serverbound_encryption_key;
     uint64_t requested_verification;
@@ -151,6 +154,8 @@ void rr_server_client_craft_petal(struct rr_server_client *, struct rr_server *,
 // a record is wiped when a match ends, see Server/Ctf.c
 void rr_server_client_reset_ctf_data(struct rr_server_client *);
 #endif
+// `size` is how long the master's message is: what it says after the nickname (the tag) is
+// only read when it is there, so a master from before the tags still works
 int rr_server_client_read_from_api(struct rr_server_client *,
-                                   struct rr_binary_encoder *);
+                                   struct rr_binary_encoder *, size_t size);
 void rr_server_client_write_to_api(struct rr_server_client *);

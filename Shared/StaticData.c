@@ -163,11 +163,15 @@ struct rr_mob_data RR_MOB_DATA[rr_mob_id_max] = {
     // the garden update
     {rr_mob_id_bush,               rr_rarity_id_common, rr_rarity_id_ancient,  15,  5, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_leaf,    0.15},{rr_petal_id_azalea,    0.15},{rr_petal_id_berry,     0.1}}},
     {rr_mob_id_ant_hole,           rr_rarity_id_common, rr_rarity_id_ancient,   0,  0, 45.0f, rr_rarity_id_common, rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,  0.05},{rr_petal_id_mandible,  0.05}}},
-    {rr_mob_id_queen_ant,          rr_rarity_id_common, rr_rarity_id_ancient, 120, 40, 36.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_mandible, 0.1},{rr_petal_id_pellet,     0.1},{rr_petal_id_sand,      0.03},{rr_petal_id_egg, 0.03}}},
+    {rr_mob_id_queen_ant,          rr_rarity_id_common, rr_rarity_id_ancient, 120, 40, 30.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_mandible, 0.1},{rr_petal_id_pellet,     0.1},{rr_petal_id_sand,      0.03},{rr_petal_id_egg, 0.03}}},
     {rr_mob_id_ant_egg,            rr_rarity_id_common, rr_rarity_id_ancient,   8,  0, 14.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{rr_petal_id_pellet,  0.02}}},
     {rr_mob_id_baby_ant,           rr_rarity_id_common, rr_rarity_id_ancient,   4,  5, 12.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_common,  {{rr_petal_id_pellet,  0.03}}},
     // the snail comes from the snail run (Server/Snail.c), it never drops anything
     {rr_mob_id_snail,              rr_rarity_id_common, rr_rarity_id_ancient,  60,  0, 30.0f, rr_rarity_id_max,    rr_rarity_id_max,    rr_rarity_id_max,     {{0, 0}}},
+    // the bugs of the picture: a hard one that bites
+    {rr_mob_id_beetle,             rr_rarity_id_common, rr_rarity_id_ancient,  45, 20, 28.0f, rr_rarity_id_common, rr_rarity_id_unusual, rr_rarity_id_rare,        {{rr_petal_id_shell,    0.05},{rr_petal_id_mandible,  0.05}}},
+    // long and thin, and it waits for what comes near
+    {rr_mob_id_mantis,             rr_rarity_id_common, rr_rarity_id_ancient,  25, 18, 26.0f, rr_rarity_id_common, rr_rarity_id_common, rr_rarity_id_unusual,     {{rr_petal_id_peas,     0.1},{rr_petal_id_mandible,   0.05}}},
 };
 
 char const *RR_MOB_NAMES[rr_mob_id_max] = {
@@ -176,7 +180,7 @@ char const *RR_MOB_NAMES[rr_mob_id_max] = {
 "Quetzalcoatlus","Edmontosaurus","Ant","Fighter Bee","Dragonfly",
 "Honeybee","Beehive","Spider","House Centipede","Lanternfly","Queen Bee",
 "Beehive Core","Bush","Ant Hole","Queen Ant","Ant Egg","Baby Ant",
-"Snail"
+"Snail","Beetle","Mantis"
 };
 
 uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
@@ -208,6 +212,8 @@ uint32_t RR_MOB_DIFFICULTY_COEFFICIENTS[rr_mob_id_max] = {
     0, //ant egg
     0, //baby ant
     0, //snail
+    3, //beetle
+    3, //mantis
 };
 
 double RR_HELL_CREEK_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
@@ -252,6 +258,13 @@ double RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max] = {
     0,    //queen bee
     0,    //beehive core
     3,   //bush
+    0,    //ant hole
+    0,    //queen ant
+    0,    //ant egg
+    0,    //baby ant
+    0,    //snail
+    6,    //beetle
+    5,    //mantis
 };
 
 struct rr_petal_rarity_scale RR_PETAL_RARITY_SCALE[rr_rarity_id_max] = {

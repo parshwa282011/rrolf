@@ -21,7 +21,7 @@
 #include <Client/Assets/Mob/HandPart.h>
 #include <Client/Renderer/Renderer.h>
 
-// What the hand-drawn mobs (Mob/Lanternfly.c, Mob/Spider.c) are made with.
+// What the hand-drawn mobs (Mob/Lanternfly.c, Mob/Spider.c, Mob/Beetle.c, Mob/Mantis.c) are made with.
 //
 // They are drawn after a picture, in separate parts, and every number is a place in that
 // picture, measured in pixels from the top left corner of the bug (u to the right, v down,

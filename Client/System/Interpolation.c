@@ -20,6 +20,7 @@
 
 #include <Shared/Entity.h>
 #include <Shared/SimulationCommon.h>
+#include <Shared/Tags.h>
 #include <Shared/Vector.h>
 
 struct function_captures
@@ -102,6 +103,12 @@ void system_interpolation_for_each_function(EntityIdx entity, void *_captures)
             flower->lerp_eye_y = flower->eye_y;
         if (flower->lerp_mouth == 0)
             flower->lerp_mouth = 15;
+        // the legs of a spider flower step faster the faster it goes, and stand still when it does
+        if (flower->skin == rr_flower_skin_spider)
+        {
+            float speed = fminf(rr_vector_get_magnitude(&physical->lerp_velocity), 20);
+            flower->leg_phase = fmodf(flower->leg_phase + delta * speed * 1.1f, 2 * (float)M_PI);
+        }
         flower->lerp_eye_x =
             rr_lerp(flower->lerp_eye_x, flower->eye_x, 20 * delta);
         flower->lerp_eye_y =

@@ -248,10 +248,10 @@ static void send_by_email(struct ms_tmp *reset, char const *address,
         reset->expires = ms_now() + OTP_TTL;
         char text[500];
         snprintf(text, sizeof text,
-                 "Your Rysteria %s code is %s. It expires in 10 minutes and "
+                 "Your Parteria %s code is %s. It expires in 10 minutes and "
                  "works once. If you did not ask for it, ignore this email.%s",
                  purpose_label(reset->s2), code, purpose_warning(reset->s2));
-        int sent = ms_email_send(address, "Your Rysteria code", text, code);
+        int sent = ms_email_send(address, "Your Parteria code", text, code);
         sodium_memzero(code, sizeof code);
         if (sent != 0)
         {
@@ -445,7 +445,7 @@ void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
 
         char message[500];
         snprintf(message, sizeof message,
-                 "Your Rysteria %s code is **%s**. It expires in "
+                 "Your Parteria %s code is **%s**. It expires in "
                  "10 minutes. If you did not ask for this, ignore it.%s",
                  purpose_label(reset.s2), code, purpose_warning(reset.s2));
         sodium_memzero(code, sizeof code);
@@ -454,7 +454,7 @@ void ms_h_reset_send(struct ms_req *req, struct ms_res *res)
             reset.s1[0] = 0;
             ms_tmp_update(&reset);
             ms_res_error(res, 502, "dm_failed",
-                         "Could not send a Discord message. Join the Rysteria "
+                         "Could not send a Discord message. Join the Parteria "
                          "Discord server and allow direct messages, then try "
                          "again.");
         }
@@ -740,11 +740,11 @@ void ms_h_verify_send(struct ms_req *req, struct ms_res *res)
         v.expires = now + OTP_TTL;
         char text[300];
         snprintf(text, sizeof text,
-                 "Your Rysteria email verification code is %s. It expires in 10 "
+                 "Your Parteria email verification code is %s. It expires in 10 "
                  "minutes and works once. If you did not sign up, ignore this "
                  "email.",
                  code);
-        int sent = ms_email_send(a.email, "Verify your Rysteria email", text, code);
+        int sent = ms_email_send(a.email, "Verify your Parteria email", text, code);
         sodium_memzero(code, sizeof code);
         sodium_memzero(text, sizeof text);
         if (sent != 0)

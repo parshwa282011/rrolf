@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Rysteria Leaderboards</title>
+<title>Parteria Leaderboards</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="/favicon.ico" rel="icon" sizes="any">
 <link href="/logo.png" rel="icon" type="image/png">
@@ -168,7 +168,7 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
     <header>
         <div class="brand">
             <img src="/logo.png" alt="">
-            <h1 class="outline">Leaderboards<small class="outline" id="sub">Rysteria</small></h1>
+            <h1 class="outline">Leaderboards<small class="outline" id="sub">Parteria</small></h1>
         </div>
         <nav id="nav"></nav>
     </header>
@@ -186,7 +186,7 @@ header nav { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 <script>
 "use strict";
 // ---------------------------------------------------------------- settings
-// /leaderboard shows Rysteria, /gardn/leaderboard shows gardn. Nothing here limits
+// /leaderboard shows Parteria, /gardn/leaderboard shows gardn. Nothing here limits
 // the number of asks: the master does (60 a minute for an address, answers 429).
 const GAME = location.pathname.indexOf("/gardn") === 0 ? "gardn" : "rysteria";
 const REFRESH_SECONDS = 15;
@@ -208,13 +208,13 @@ const me = (() => {
 const $ = (id) => document.getElementById(id);
 // the buttons: the other pages of this game, and the other game
 $("nav").innerHTML = (GAME === "gardn"
-    ? '<a class="btn warn" href="/gardn/">Play Gardn</a><a class="btn" href="/gardn/stats">Petal stats</a><a class="btn" href="/leaderboard">Rysteria leaderboards</a>'
-    : '<a class="btn" href="/">Play Rysteria</a><a class="btn" href="/status">My stats</a><a class="btn" href="/stats">Find a player</a><a class="btn warn" href="/gardn/leaderboard">Gardn leaderboards</a>') +
+    ? '<a class="btn warn" href="/gardn/">Play Gardn</a><a class="btn" href="/gardn/stats">Petal stats</a><a class="btn" href="/leaderboard">Parteria leaderboards</a>'
+    : '<a class="btn" href="/">Play Parteria</a><a class="btn" href="/status">My stats</a><a class="btn" href="/stats">Find a player</a><a class="btn warn" href="/gardn/leaderboard">Gardn leaderboards</a>') +
     '<button class="btn alt" id="refresh" type="button">Refresh</button>';
-$("sub").textContent = GAME === "gardn" ? "Gardn" : "Rysteria";
-document.title = (GAME === "gardn" ? "Gardn" : "Rysteria") + " Leaderboards";
+$("sub").textContent = GAME === "gardn" ? "Gardn" : "Parteria";
+document.title = (GAME === "gardn" ? "Gardn" : "Parteria") + " Leaderboards";
 const GAMES = {
-    rysteria: { title: "Rysteria", cls: "rysteria" },
+    rysteria: { title: "Parteria", cls: "rysteria" },
     gardn: { title: "Gardn", cls: "gardn" },
 };
 // colour and picture of every board: the rarities of the game

@@ -13,6 +13,9 @@
 == November 11th 2026
 [gardn] Fixed how score is saved in gardn on death so leaderbaord should update correctly
 [rysteria] Fixed spider animation as it was borken when it ran at player
+[rysteria] Two new mobs in the Garden: the Beetle and the Mantis, with their textures added. The beetle's legs and horns move, the mantis rocks its arms, sways its antennae and steps with its legs.
+[rysteria] The full rename of Rysteria to Parteria has started.
+By: Parshwa
 
 == November 8th 2026
 [all] The stats pages show the icon of every petal: the loadout of a player in Rysteria, the petals that are saved in Gardn.

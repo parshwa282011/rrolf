@@ -39,7 +39,7 @@ const levelOf = (xp) => { const f = (l) => { if (l <= 60) return (l + 5) * Math.
     const mine = (id) => board(id)?.me;
     check(Math.floor(mine("rr_level")?.score) === levelOf(xp), `level ${Math.floor(mine("rr_level")?.score)} == ${levelOf(xp)}`);
     check(mine("rr_ancients")?.score === 2, "ancients owned 2");
-    check(mine("rr_mythics") === undefined && board("rr_mythics") === undefined, "no Rysteria mythic board");
+    check(mine("rr_mythics") === undefined && board("rr_mythics") === undefined, "no Parteria mythic board");
     check(mine("rr_pvp_kills")?.score === 4, "pvp kills 4");
     check(lb.games[0].boards.slice(0, 3).map((b) => b.id).join() === "rr_level,rr_pvp_kills,rr_pvp_best", "level, pvp kills, pvp best come first");
     check(mine("rr_kills")?.score === 13, "kills 13: " + mine("rr_kills")?.score);

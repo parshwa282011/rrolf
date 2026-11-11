@@ -159,6 +159,8 @@ static void read_account(bson_t const *doc, struct ms_db_account *out)
     out->is_dev = bool_field(doc, "is_dev");
     out->created_at = int_field(doc, "created_at");
     out->last_login_at = int_field(doc, "last_login_at");
+    // documents from before the tag existed have no such field: no tag
+    ms_strlcpy(out->tag, str_field(doc, "tag", ""), sizeof out->tag);
 }
 
 // finds one document; returns MS_DB_OK / MS_DB_NOT_FOUND / MS_DB_ERROR and
@@ -205,6 +207,7 @@ static int mg_account_create(struct ms_db *db, struct ms_db_account const *a)
     BSON_APPEND_BOOL(doc, "is_dev", a->is_dev);
     BSON_APPEND_INT64(doc, "created_at", a->created_at);
     BSON_APPEND_INT64(doc, "last_login_at", a->last_login_at);
+    BSON_APPEND_UTF8(doc, "tag", a->tag);
 
     bson_error_t error;
     int result;
@@ -527,8 +530,8 @@ static int mg_links_get(struct ms_db *db, char const *uuid,
     return result;
 }
 
-static int mg_rysteria_get(struct ms_db *db, char const *uuid,
-                           struct ms_db_rysteria *out)
+static int mg_parteria_get(struct ms_db *db, char const *uuid,
+                           struct ms_db_parteria *out)
 {
     struct mg *mg = db->ctx;
     mongoc_client_t *client = mongoc_client_pool_pop(mg->pool);
@@ -538,7 +541,7 @@ static int mg_rysteria_get(struct ms_db *db, char const *uuid,
     int result = find_one(c, filter, &doc);
     if (result == MS_DB_OK)
     {
-        ms_db_rysteria_free(out);
+        ms_db_parteria_free(out);
         out->xp = double_field(doc, "xp");
         out->checkpoint = (int)int_field(doc, "checkpoint");
         out->pvp_points = (int64_t)int_field(doc, "pvp_points");
@@ -556,8 +559,8 @@ static int mg_rysteria_get(struct ms_db *db, char const *uuid,
     return result;
 }
 
-static int mg_rysteria_put(struct ms_db *db, char const *uuid,
-                           struct ms_db_rysteria const *v)
+static int mg_parteria_put(struct ms_db *db, char const *uuid,
+                           struct ms_db_parteria const *v)
 {
     bson_t *filter = BCON_NEW("_id", BCON_UTF8(uuid));
     bson_t set;
@@ -574,14 +577,14 @@ static int mg_rysteria_put(struct ms_db *db, char const *uuid,
     int result;
     if (!ok)
     {
-        ms_log("db", "mongo rysteria_put: invalid json in record");
+        ms_log("db", "mongo parteria_put: invalid json in record");
         result = MS_DB_ERROR;
     }
     else
     {
         bson_t *update = bson_new();
         BSON_APPEND_DOCUMENT(update, "$set", &set);
-        result = mg_update_one(db, "rysteria", filter, update, "rysteria_put", 1);
+        result = mg_update_one(db, "rysteria", filter, update, "parteria_put", 1);
         bson_destroy(update);
     }
     bson_destroy(&set);
@@ -1185,8 +1188,8 @@ struct ms_db *ms_db_mongo_open()
     db->link_delete = mg_link_delete;
     db->account_delete = mg_account_delete;
     db->links_get = mg_links_get;
-    db->rysteria_get = mg_rysteria_get;
-    db->rysteria_put = mg_rysteria_put;
+    db->parteria_get = mg_parteria_get;
+    db->parteria_put = mg_parteria_put;
     db->gardn_list = mg_gardn_list;
     db->gardn_apply = mg_gardn_apply;
     db->gardn_take = mg_gardn_take;

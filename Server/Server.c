@@ -1610,7 +1610,7 @@ static int api_lws_callback(struct lws *ws, enum lws_callback_reasons reason,
                 printf("<rr_api::client_nonexistent::%d>\n", pos);
                 break;
             }
-            if (!rr_server_client_read_from_api(client, &decoder))
+            if (!rr_server_client_read_from_api(client, &decoder, size))
             {
                 printf("<rr_server::account_failed_read::%s>\n",
                        client->rivet_account.uuid);

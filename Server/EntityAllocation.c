@@ -27,6 +27,7 @@
 #include <string.h>
 
 #include <Shared/Squad.h>
+#include <Shared/Tags.h>
 #include <Shared/Utilities.h>
 
 static struct rr_maze_grid DEFAULT_GRID = {0};
@@ -54,7 +55,8 @@ EntityIdx rr_simulation_alloc_player(struct rr_simulation *this,
     physical->mass = 10;
     physical->arena = arena_id;
     physical->friction = 0.75;
-    if (player_info->client->dev || player_info->squad_member->role[0])
+    if (player_info->client->dev ||
+        rr_tag_flips_flower(player_info->squad_member->role))
         rr_component_physical_set_angle(physical, M_PI);
     // easter egg
     if (rr_frand() < 0.001)
@@ -63,6 +65,9 @@ EntityIdx rr_simulation_alloc_player(struct rr_simulation *this,
     memcpy(rr_simulation_add_flower(this, flower_id)->nickname,
            player_info->squad_member->nickname,
            sizeof player_info->squad_member->nickname);
+    rr_component_flower_set_skin(
+        rr_simulation_get_flower(this, flower_id),
+        rr_flower_skin_from_tag(player_info->squad_member->role));
     rr_component_flower_set_level(rr_simulation_get_flower(this, flower_id),
                                   player_info->level);
     rr_simulation_get_flower(this, flower_id)->saved_angle = physical->angle;

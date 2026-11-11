@@ -34,6 +34,36 @@
 
 struct rr_renderer_spritesheet background_tiles;
 
+// The legs of the spider flower: four on each side, every one a root under the flower, a knee that
+// is up and forward, and a foot that is out and back, like the legs of the spider mob seen from
+// above. In the flower's own units (its radius is 25, up is -y) and in the colour of its eyes, so
+// they read as part of it. The legs of the two sides and the neighbours of a side step in turns.
+void rr_renderer_draw_flower_legs(struct rr_renderer *renderer, float phase)
+{
+    // where each leg leaves the body, as an angle from the side (x) towards the back (+y)
+    static float const root_angle[4] = {-0.91f, -0.30f, 0.30f, 0.91f};
+    rr_renderer_set_stroke(renderer, 0xff222222);
+    rr_renderer_set_line_width(renderer, 4);
+    rr_renderer_set_line_cap(renderer, 1);
+    rr_renderer_set_line_join(renderer, 1);
+    for (uint8_t side = 0; side < 2; ++side)
+    {
+        float s = side ? -1.0f : 1.0f;
+        for (uint8_t i = 0; i < 4; ++i)
+        {
+            float swing = 0.13f * sinf(phase + ((i + side) & 1) * (float)M_PI);
+            float a = root_angle[i];
+            float knee = a - 0.28f + swing;
+            float foot = a + 0.12f + 1.3f * swing;
+            rr_renderer_begin_path(renderer);
+            rr_renderer_move_to(renderer, s * 17 * cosf(a), 17 * sinf(a));
+            rr_renderer_line_to(renderer, s * 33 * cosf(knee), 33 * sinf(knee));
+            rr_renderer_line_to(renderer, s * 49 * cosf(foot), 49 * sinf(foot));
+            rr_renderer_stroke(renderer);
+        }
+    }
+}
+
 static void asset_web_draw(struct rr_renderer *renderer)
 {
     rr_renderer_scale(renderer, 10);

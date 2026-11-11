@@ -58,7 +58,7 @@ static struct board const BOARDS[] = {
     {"rr_ancient_kills", "rysteria", "Ancients killed", "", "int",
      "Ancient mobs killed"},
     {"rr_kills", "rysteria", "Mob kills", "", "int",
-     "Mobs killed in Rysteria"},
+     "Mobs killed in Parteria"},
     {"gardn_kills", "gardn", "Gardn kills", "", "int", "Kills in gardn"},
     {"gardn_best_score", "gardn", "Highest score", "", "int",
      "Best score of a gardn save"},
@@ -129,10 +129,10 @@ static double sum_counts(cJSON const *map, int rarity, double *all)
     return total;
 }
 
-void ms_lb_rysteria_values(struct ms_db_rysteria const *rys,
-                           double out[MS_LB_RYSTERIA_BOARDS])
+void ms_lb_parteria_values(struct ms_db_parteria const *rys,
+                           double out[MS_LB_PARTERIA_BOARDS])
 {
-    memset(out, 0, sizeof(double) * MS_LB_RYSTERIA_BOARDS);
+    memset(out, 0, sizeof(double) * MS_LB_PARTERIA_BOARDS);
     out[0] = level_score(rys->xp);
     out[2] = rys->pvp_points > 0 ? (double)rys->pvp_points : 0;
     cJSON *petals = cJSON_Parse(rys->petals ? rys->petals : "{}");
@@ -162,18 +162,18 @@ static int apply(int board, char const *uuid, double value,
                : -1;
 }
 
-int ms_lb_push_rysteria(char const *uuid, char const *username,
-                        struct ms_db_rysteria const *rys, int64_t pvp_best,
+int ms_lb_push_parteria(char const *uuid, char const *username,
+                        struct ms_db_parteria const *rys, int64_t pvp_best,
                         struct ms_lb_counters const *counts, double const *prev,
-                        double now[MS_LB_RYSTERIA_BOARDS])
+                        double now[MS_LB_PARTERIA_BOARDS])
 {
-    double v[MS_LB_RYSTERIA_BOARDS];
-    ms_lb_rysteria_values(rys, v);
+    double v[MS_LB_PARTERIA_BOARDS];
+    ms_lb_parteria_values(rys, v);
     if ((double)pvp_best > v[2])
         v[2] = (double)pvp_best;
     char *extra = name_json(username);
     int failed = 0;
-    for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
+    for (int b = 0; b < MS_LB_PARTERIA_BOARDS; ++b)
     {
         if (b == 1 || b == 3)
             continue; // counted below
@@ -209,7 +209,7 @@ int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
         return 0; // no such account, or one with everything: not on the boards
     char *extra = name_json(a.username);
     int failed = 0;
-    int const kills_board = MS_LB_RYSTERIA_BOARDS;
+    int const kills_board = MS_LB_PARTERIA_BOARDS;
     if (kills > 0 && apply(kills_board, uuid, (double)kills, ms_lb_add, extra))
         ++failed;
     if (have_stats)
@@ -231,7 +231,7 @@ int ms_lb_push_gardn_best(char const *uuid, uint64_t best_score)
         a.is_dev)
         return 0;
     char *extra = name_json(a.username);
-    int failed = apply(MS_LB_RYSTERIA_BOARDS + 1, uuid, (double)best_score,
+    int failed = apply(MS_LB_PARTERIA_BOARDS + 1, uuid, (double)best_score,
                        ms_lb_max, extra);
     free(extra);
     return failed ? -1 : 0;
@@ -263,16 +263,16 @@ static void verify_run(void *arg)
             if (a->is_dev)
                 continue;
             ++v->accounts;
-            struct ms_db_rysteria rys;
-            ms_db_rysteria_init(&rys);
-            if (MS_DB->rysteria_get(MS_DB, a->uuid, &rys) == MS_DB_OK)
+            struct ms_db_parteria rys;
+            ms_db_parteria_init(&rys);
+            if (MS_DB->parteria_get(MS_DB, a->uuid, &rys) == MS_DB_OK)
             {
                 // everything a save can prove, without the counters it can not
-                if (ms_lb_push_rysteria(a->uuid, a->username, &rys, 0, NULL, NULL,
+                if (ms_lb_push_parteria(a->uuid, a->username, &rys, 0, NULL, NULL,
                                         NULL) != 0)
                     ++v->corrected;
             }
-            ms_db_rysteria_free(&rys);
+            ms_db_parteria_free(&rys);
             // gardn: the best of the saves still there; the player's kills and
             // the rarity of their petals only gardn knows, it reports them
             struct ms_db_gsave *saves = calloc(MS_GARDN_MAX_SAVES, sizeof *saves);
@@ -285,7 +285,7 @@ static void verify_run(void *arg)
                         best = saves[s].score;
                 char *extra = name_json(a->username);
                 if (best > 0)
-                    apply(MS_LB_RYSTERIA_BOARDS + 1, a->uuid, (double)best,
+                    apply(MS_LB_PARTERIA_BOARDS + 1, a->uuid, (double)best,
                           ms_lb_max, extra);
                 free(extra);
                 ms_db_gsave_free(saves, count);
@@ -514,9 +514,9 @@ void ms_h_profile(struct ms_req *req, struct ms_res *res)
         return;
     }
 
-    struct ms_db_rysteria rys;
-    ms_db_rysteria_init(&rys);
-    int have_rys = MS_DB->rysteria_get(MS_DB, a.uuid, &rys) == MS_DB_OK;
+    struct ms_db_parteria rys;
+    ms_db_parteria_init(&rys);
+    int have_rys = MS_DB->parteria_get(MS_DB, a.uuid, &rys) == MS_DB_OK;
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddBoolToObject(root, "ok", 1);
@@ -528,9 +528,9 @@ void ms_h_profile(struct ms_req *req, struct ms_res *res)
     if (have_rys && rys.nickname[0])
         cJSON_AddStringToObject(root, "nickname", rys.nickname);
 
-    // the Rysteria boards, in the order of the leaderboard page
+    // the Parteria boards, in the order of the leaderboard page
     cJSON *stats = cJSON_AddArrayToObject(root, "stats");
-    for (int b = 0; b < MS_LB_RYSTERIA_BOARDS; ++b)
+    for (int b = 0; b < MS_LB_PARTERIA_BOARDS; ++b)
     {
         int64_t rank;
         double score = board_score(b, a.uuid, &rank);
@@ -569,7 +569,7 @@ void ms_h_profile(struct ms_req *req, struct ms_res *res)
     cJSON *loadout = have_rys && rys.loadout ? cJSON_Parse(rys.loadout) : NULL;
     cJSON_AddItemToObject(root, "loadout",
                           loadout != NULL ? loadout : cJSON_CreateObject());
-    ms_db_rysteria_free(&rys);
+    ms_db_parteria_free(&rys);
     ms_res_json(res, 200, root);
 }
 

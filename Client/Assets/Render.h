@@ -132,6 +132,14 @@ void rr_lanternfly_sheet_init(struct rr_renderer_spritesheet *);
 extern struct rr_hand_part const RR_LANTERNFLY_PARTS[];
 extern uint8_t const RR_LANTERNFLY_PART_COUNT;
 
+// the bugs of the picture, drawn by hand in parts like the two above: Mob/Beetle.c, Mob/Mantis.c
+void rr_mantis_sheet_init(struct rr_renderer_spritesheet *);
+extern struct rr_hand_part const RR_MANTIS_PARTS[];
+extern uint8_t const RR_MANTIS_PART_COUNT;
+void rr_beetle_sheet_init(struct rr_renderer_spritesheet *);
+extern struct rr_hand_part const RR_BEETLE_PARTS[];
+extern uint8_t const RR_BEETLE_PART_COUNT;
+
 void rr_hc_tile_1_draw(struct rr_renderer *);
 void rr_hc_tile_2_draw(struct rr_renderer *);
 void rr_hc_tile_3_draw(struct rr_renderer *);

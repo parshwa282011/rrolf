@@ -39,6 +39,8 @@ set(SRCS
     Assets/Mob/BeehivePost.c
     Assets/Mob/HouseCentipede.c
     Assets/Mob/Lanternfly.c
+    Assets/Mob/Beetle.c
+    Assets/Mob/Mantis.c
     Assets/Mob/Ornithomimus.c
     Assets/Mob/Pachycephalosaurus.c
     Assets/Mob/Pteranodon.c

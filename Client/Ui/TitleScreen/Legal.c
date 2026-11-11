@@ -81,7 +81,7 @@ struct rr_ui_element *rr_ui_legal_container_init(struct rr_game *game)
                         LINE("Discord (the button on the title screen)."),
                         rr_ui_static_space_init(5),
                         HEADING("Source code"),
-                        LINE("Rysteria is open source under the AGPL-3.0 licence:"),
+                        LINE("Parteria is open source under the AGPL-3.0 licence:"),
                         LINE("github.com/parshwa282011/rrolf"),
                         NULL
                     ), -1, -1

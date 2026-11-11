@@ -22,6 +22,7 @@
 #include <Client/Game.h>
 #include <Client/Renderer/Renderer.h>
 #include <Client/Simulation.h>
+#include <Shared/Tags.h>
 
 void rr_component_flower_render(EntityIdx entity, struct rr_game *game,
                                 struct rr_simulation *simulation)
@@ -40,6 +41,9 @@ void rr_component_flower_render(EntityIdx entity, struct rr_game *game,
     rr_renderer_scale(renderer, 1 + physical->deletion_animation * 0.5);
     rr_renderer_scale(renderer, physical->radius / 25);
     rr_renderer_rotate(renderer, physical->lerp_angle);
+    // a spider's legs go under the flower
+    if (flower->skin == rr_flower_skin_spider)
+        rr_renderer_draw_flower_legs(renderer, flower->dead ? 0 : flower->leg_phase);
     rr_renderer_set_stroke(renderer, 0xffcfbb50);
     rr_renderer_set_fill(renderer, 0xffffe763);
     rr_renderer_set_line_width(renderer, 3);

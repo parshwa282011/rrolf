@@ -208,7 +208,7 @@ static uint8_t describe(struct rr_game *game, struct view *view)
     switch (stage)
     {
     case st_welcome:
-        set(view, "Welcome to Rysteria!",
+        set(view, "Welcome to Parteria!",
             "Fight mobs, collect petals and grow stronger. Here is a quick "
             "tour of how everything works.");
         view->info = 1;

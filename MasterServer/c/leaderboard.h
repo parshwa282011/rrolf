@@ -31,13 +31,13 @@
 // changes the servers send. When the master starts it walks through every
 // account once and puts right whatever the saves can prove.
 //
-// Rysteria boards:  rr_level  rr_pvp_kills  rr_pvp_best  rr_ancient_attempts
+// Parteria boards:  rr_level  rr_pvp_kills  rr_pvp_best  rr_ancient_attempts
 //                   rr_ancients  rr_ancient_kills  rr_kills
 // Gardn boards:     gardn_kills (players killed)  gardn_best_score  gardn_mythics
-// Minigame boards:  mg_ctf_wins mg_tdm_wins mg_has_wins (on the Rysteria page),
+// Minigame boards:  mg_ctf_wins mg_tdm_wins mg_has_wins (on the Parteria page),
 //                   mg_*_played (only in the profile)
 
-#define MS_LB_RYSTERIA_BOARDS 7
+#define MS_LB_PARTERIA_BOARDS 7
 
 // What the game server counted since its last save and no save holds. Each is
 // added to its board.
@@ -47,23 +47,23 @@ struct ms_lb_counters
     uint64_t attempts;  // Ancient craft attempts
 };
 
-// The values of the Rysteria boards that follow from a save (see
-// ms_lb_rysteria_values): [0] level with the way to the next one as a fraction,
+// The values of the Parteria boards that follow from a save (see
+// ms_lb_parteria_values): [0] level with the way to the next one as a fraction,
 // [1] unused (PvP kills are counted, not derived), [2] pvp points now, [3]
 // unused (attempts are counted), [4] Ancient petals owned, [5] Ancients killed,
 // [6] kills.
-void ms_lb_rysteria_values(struct ms_db_rysteria const *rys,
-                           double out[MS_LB_RYSTERIA_BOARDS]);
+void ms_lb_parteria_values(struct ms_db_parteria const *rys,
+                           double out[MS_LB_PARTERIA_BOARDS]);
 
-// Writes a player's Rysteria numbers. `prev` holds what was written last (-1 =
+// Writes a player's Parteria numbers. `prev` holds what was written last (-1 =
 // not known) and only what changed is written; NULL writes everything. `now`
 // receives what is on the boards afterwards. `pvp_best` is the highest score the
 // game server saw, `counts` what it counted since the last save (NULL for
 // none). Returns 0 when everything went through. Any thread.
-int ms_lb_push_rysteria(char const *uuid, char const *username,
-                        struct ms_db_rysteria const *rys, int64_t pvp_best,
+int ms_lb_push_parteria(char const *uuid, char const *username,
+                        struct ms_db_parteria const *rys, int64_t pvp_best,
                         struct ms_lb_counters const *counts, double const *prev,
-                        double now[MS_LB_RYSTERIA_BOARDS]);
+                        double now[MS_LB_PARTERIA_BOARDS]);
 
 // gardn's numbers: kills since its last report, and (when `have_stats`) the
 // Mythic petals in the player's saves and their best save. Any thread.

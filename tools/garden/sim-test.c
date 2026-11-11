@@ -24,16 +24,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <Server/Client.h>
 #include <Server/EntityAllocation.h>
 #include <Server/EntityDetection.h>
 #include <Server/Server.h>
 #include <Server/Simulation.h>
 #include <Server/Snail.h>
+#include <Server/Waves.h>
 #include <Shared/Component/Arena.h>
 #include <Shared/Component/Drop.h>
+#include <Shared/Binary.h>
+#include <Shared/Component/Flower.h>
 #include <Shared/Component/Health.h>
 #include <Shared/Component/Mob.h>
 #include <Shared/StaticData.h>
+#include <Shared/Tags.h>
+#include <Shared/pb.h>
 
 static struct rr_server server;
 static int failures = 0;
@@ -55,6 +61,50 @@ static int checks = 0;
     } while (0)
 
 static struct rr_simulation *sim() { return &server.simulation; }
+
+// what the master sends a game server when a player joins (MasterServer/c/games.c send_join_ok,
+// after the byte that says it is a join), to try how the server reads it. `mob` is an id of the mob
+// gallery (id + 1 as in the message), `tag` is NULL for the master from before the tags
+static size_t fake_join(uint8_t *out, uint64_t nonce, uint8_t gallery_id, char const *tag)
+{
+    struct rr_binary_encoder e;
+    rr_binary_encoder_init(&e, out);
+    rr_binary_encoder_write_varuint(&e, nonce);
+    rr_binary_encoder_write_nt_string(&e, "uuid-1");
+    rr_binary_encoder_write_nt_string(&e, "token");
+    rr_binary_encoder_write_nt_string(&e, "Name");
+    rr_binary_encoder_write_nt_string(&e, "");
+    rr_binary_encoder_write_nt_string(&e, "");
+    rr_binary_encoder_write_uint8(&e, 0); // not a dev
+    rr_binary_encoder_write_float64(&e, 1234);
+    rr_binary_encoder_write_varuint(&e, 0);
+    for (uint8_t b = 0; b < RR_CLIENT_SAVED_BIOMES; ++b)
+        rr_binary_encoder_write_uint8(&e, 0);
+    rr_binary_encoder_write_uint8(&e, rr_petal_id_basic); // one petal
+    rr_binary_encoder_write_uint8(&e, 0);
+    rr_binary_encoder_write_varuint(&e, 5);
+    rr_binary_encoder_write_uint8(&e, 0);
+    rr_binary_encoder_write_uint8(&e, 0); // no failed crafts
+    rr_binary_encoder_write_uint8(&e, gallery_id); // one mob kill count
+    rr_binary_encoder_write_uint8(&e, rr_rarity_id_rare);
+    rr_binary_encoder_write_varuint(&e, 7);
+    rr_binary_encoder_write_uint8(&e, 0);
+    rr_binary_encoder_write_uint8(&e, 0); // no loadout
+    rr_binary_encoder_write_nt_string(&e, "Nick");
+    if (tag != NULL)
+        rr_binary_encoder_write_nt_string(&e, (char *)tag);
+    return (size_t)(e.at - e.start);
+}
+
+static uint8_t flower_state_high_bit(struct rr_component_flower *flower, uint8_t is_creation)
+{
+    static uint8_t buffer[256];
+    struct proto_bug pb;
+    proto_bug_init(&pb, buffer);
+    rr_component_flower_write(flower, &pb, is_creation, NULL);
+    proto_bug_init(&pb, buffer);
+    return (proto_bug_read_varuint(&pb, "state") & 0x100) != 0;
+}
 
 // A hive or hole nobody is near unloads after 30 seconds, and there are no
 // players here, so the holes are told that somebody is
@@ -676,6 +726,111 @@ int main()
             CHECK(health->health > 0, "and it always saves");
         }
         CHECK(RR_NAZAR_CONSUME_PERCENT[0] == 100 && RR_NAZAR_CONSUME_PERCENT[rr_rarity_id_ancient] == 60, "100%% for common, 60%% for ancient");
+    }
+
+
+    printf("the beetle and the mantis are on the end of the mob list, the others keep their ids\n");
+    {
+        CHECK(rr_mob_id_snail == 27 && rr_mob_id_beetle == 28 && rr_mob_id_mantis == 29 && rr_mob_id_max == 30,
+              "ids 0 to 27 are the ones that were, the new ones follow");
+        uint32_t wrong = 0, unnamed = 0;
+        for (uint32_t id = 0; id < rr_mob_id_max; ++id)
+        {
+            wrong += RR_MOB_DATA[id].id != id;
+            unnamed += RR_MOB_NAMES[id] == NULL || RR_MOB_NAMES[id][0] == 0;
+        }
+        CHECK(wrong == 0 && unnamed == 0, "every id has its own row and name (%u wrong, %u unnamed)", wrong, unnamed);
+        CHECK(strcmp(RR_MOB_NAMES[rr_mob_id_beetle], "Beetle") == 0 &&
+                  strcmp(RR_MOB_NAMES[rr_mob_id_mantis], "Mantis") == 0,
+              "named");
+        for (uint8_t id = rr_mob_id_beetle; id <= rr_mob_id_mantis; ++id)
+        {
+            for (uint8_t rarity = 0; rarity < rr_rarity_id_max; ++rarity)
+            {
+                EntityIdx mob = rr_simulation_alloc_mob(sim(), 1, 9000, 9000, id, rarity, rr_simulation_team_id_mobs);
+                CHECK(rr_simulation_get_health(sim(), mob)->max_health > 0 && rr_simulation_get_mob(sim(), mob)->id == id,
+                      "%s of rarity %u is made with health", RR_MOB_NAMES[id], rarity);
+                rr_simulation_request_entity_deletion(sim(), mob);
+            }
+            tick(30);
+        }
+        // the garden's table gives them, and is still a table that ends at 1
+        double top = RR_GARDEN_MOB_ID_RARITY_COEFFICIENTS[rr_mob_id_max - 1];
+        CHECK(top > 0.999 && top < 1.001, "the garden table ends at 1 (%f)", top);
+        uint32_t seen[rr_mob_id_max] = {0};
+        for (uint32_t i = 0; i < 20000; ++i)
+            ++seen[get_spawn_id(rr_biome_id_garden, NULL)];
+        CHECK(seen[rr_mob_id_beetle] > 0 && seen[rr_mob_id_mantis] > 0,
+              "the garden spawns both (%u beetles, %u mantises of 20000)", seen[rr_mob_id_beetle], seen[rr_mob_id_mantis]);
+        CHECK(seen[rr_mob_id_ant] > 0 && seen[rr_mob_id_spider] > 0, "and the ants and spiders still");
+        uint32_t hell_new = 0;
+        for (uint32_t i = 0; i < 20000; ++i)
+        {
+            uint8_t hid = get_spawn_id(rr_biome_id_hell_creek, NULL);
+            hell_new += hid == rr_mob_id_beetle || hid == rr_mob_id_mantis;
+        }
+        CHECK(hell_new == 0, "hell creek does not (%u)", hell_new);
+    }
+
+    printf("a player's tag: the skin of the flower, and the old master and old data\n");
+    {
+        CHECK(rr_flower_skin_from_tag("Spider") == rr_flower_skin_spider && rr_flower_skin_from_tag("spider") == rr_flower_skin_spider &&
+                  rr_flower_skin_from_tag("SPIDER") == rr_flower_skin_spider,
+              "Spider, in any case, is the spider skin");
+        CHECK(rr_flower_skin_from_tag("") == rr_flower_skin_normal && rr_flower_skin_from_tag("Supporter") == rr_flower_skin_normal &&
+                  rr_flower_skin_from_tag("Spiders") == rr_flower_skin_normal && rr_flower_skin_from_tag("Spide") == rr_flower_skin_normal &&
+                  rr_flower_skin_from_tag(NULL) == rr_flower_skin_normal,
+              "no tag, other tags, and near misses are the normal flower");
+        CHECK(rr_tag_flips_flower("Supporter") == 1 && rr_tag_flips_flower("") == 0 && rr_tag_flips_flower("Spider") == 0,
+              "a name only tag still turns the flower round, none and the skin do not");
+        // the flower sends its skin when it has one, and not otherwise
+        EntityIdx f = rr_simulation_alloc_entity(sim());
+        struct rr_component_flower *flower = rr_simulation_add_flower(sim(), f);
+        CHECK(flower->skin == rr_flower_skin_normal, "a flower starts normal");
+        CHECK(flower_state_high_bit(flower, 0) == 0, "and an unchanged one sends nothing about it");
+        rr_component_flower_set_skin(flower, rr_flower_skin_spider);
+        CHECK(flower_state_high_bit(flower, 0) == 1, "setting the spider skin is sent");
+        CHECK(flower_state_high_bit(flower, 1) == 1, "and so is a new flower");
+        rr_simulation_request_entity_deletion(sim(), f);
+        tick(2);
+
+        // what the master says when a player joins
+        static uint8_t message[512];
+        struct rr_server_client *c = &server.clients[5];
+        uint8_t gallery_beetle = rr_mob_id_beetle + 1;
+        c->nonce = 99;
+        size_t size = fake_join(message, 99, gallery_beetle, "Spider");
+        struct rr_binary_encoder d;
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && strcmp(c->tag, "Spider") == 0 && strcmp(c->saved_nickname, "Nick") == 0,
+              "the tag after the nickname is read (%s)", c->tag);
+        CHECK(c->mob_gallery[rr_mob_id_beetle][rr_rarity_id_rare] == 7 && c->inventory[rr_petal_id_basic][0] == 5, "with the rest as before");
+        size = fake_join(message, 99, gallery_beetle, NULL);
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && c->tag[0] == 0 && strcmp(c->saved_nickname, "Nick") == 0,
+              "a master from before the tags ends at the nickname: no tag, the rest as it was");
+        // a message of the master and a stale buffer after it: the end of the message is the end
+        memset(message + size, 'x', 40);
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && c->tag[0] == 0, "what is after the end is not read");
+        // an older save knows fewer mobs: the ones it has are kept; a mob this server does not know is left out
+        size = fake_join(message, 99, rr_mob_id_snail + 1, "");
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && c->mob_gallery[rr_mob_id_snail][rr_rarity_id_rare] == 7 &&
+                  c->mob_gallery[rr_mob_id_beetle][rr_rarity_id_rare] == 0 && c->tag[0] == 0,
+              "a save from before the new mobs reads as it did");
+        size = fake_join(message, 99, 200, "Spider");
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && strcmp(c->tag, "Spider") == 0, "a mob id from a newer game is skipped, not written out of the table");
+        // a tag that is too long is cut to what a tag holds
+        size = fake_join(message, 99, gallery_beetle, "AVeryLongTagNameThatDoesNotFit");
+        rr_binary_encoder_init(&d, message);
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 1 && strlen(c->tag) == RR_TAG_SIZE - 1, "cut to %d letters (%zu)", RR_TAG_SIZE - 1, strlen(c->tag));
+        // the nonce is the one the game server gave: another one is turned away
+        rr_binary_encoder_init(&d, message);
+        c->nonce = 100;
+        CHECK(rr_server_client_read_from_api(c, &d, size) == 0, "a message for another nonce is refused");
+        memset(c, 0, sizeof *c);
     }
 
     printf("\n%d checks, %d failed\n", checks, failures);

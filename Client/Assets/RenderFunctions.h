@@ -44,6 +44,9 @@ void rr_renderer_draw_web(struct rr_renderer *);
 void rr_renderer_draw_nest_stick(struct rr_renderer *);
 void rr_renderer_draw_nest(struct rr_renderer *);
 void rr_renderer_draw_third_eye(struct rr_renderer *, float, float);
+// the eight legs of a spider flower (Shared/Tags.h), to be drawn before the flower so that it covers
+// their roots. The float is how far they are in their step, in radians: 0 is a flower at rest
+void rr_renderer_draw_flower_legs(struct rr_renderer *, float);
 
 void rr_renderer_petal_cache_init();
 void rr_renderer_background_cache_init();

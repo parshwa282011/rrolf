@@ -103,7 +103,7 @@ int ms_account_delete_now(char const *uuid)
         // Apple's rule: the token of a Sign in with Apple is revoked when the account goes
         if (strcmp(links[i].provider, "apple") == 0 && links[i].token[0] &&
             ms_apple_revoke(links[i].token) != 0)
-            ms_email_send_admin("Rysteria: an Apple token could not be revoked",
+            ms_email_send_admin("Parteria: an Apple token could not be revoked",
                                 "An account was deleted but Apple did not accept the "
                                 "revocation of its Sign in with Apple token. The player can "
                                 "revoke it in Settings > Apple Account > Sign in with Apple.");
@@ -117,10 +117,10 @@ int ms_account_delete_now(char const *uuid)
     {
         char text[400];
         snprintf(text, sizeof text,
-                 "The Rysteria account \"%s\" and its progress were deleted at your "
+                 "The Parteria account \"%s\" and its progress were deleted at your "
                  "request. If this was not you, write to %s right away.",
                  a.username, MS_CONFIG.admin_email[0] ? MS_CONFIG.admin_email : "the address in our privacy policy");
-        ms_email_send(notice_to, "Your Rysteria account was deleted", text, NULL);
+        ms_email_send(notice_to, "Your Parteria account was deleted", text, NULL);
     }
     return 0;
 }
@@ -184,7 +184,7 @@ void ms_h_apple_notify(struct ms_req *req, struct ms_res *res)
     {
         // signed by Apple but not something we know: say so, change nothing
         ms_log("apple", "a notification from Apple without a type or user");
-        ms_email_send_admin("Rysteria: an unreadable notice from Apple",
+        ms_email_send_admin("Parteria: an unreadable notice from Apple",
                             "Apple sent a signed notification that has no event type or user.");
         ms_res_error(res, 400, "bad_request", NULL);
         cJSON_Delete(ev);
@@ -202,7 +202,7 @@ void ms_h_apple_notify(struct ms_req *req, struct ms_res *res)
     ms_log("apple", "notification %s (%s)", type, found ? "known account" : "no such account");
 
     char subject[160], text[700];
-    snprintf(subject, sizeof subject, "Rysteria: Apple notice \"%s\"", type);
+    snprintf(subject, sizeof subject, "Parteria: Apple notice \"%s\"", type);
     snprintf(text, sizeof text,
              "Apple sent a notice about Sign in with Apple.\n\nEvent: %s\nAccount: %s%s%s\n"
              "Apple's Sign in link removed: %s\n",

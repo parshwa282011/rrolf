@@ -1,4 +1,4 @@
-# CrazyGames requirements for Rysteria
+# CrazyGames requirements for Parteria
 
 Written 2026-10-24 from the current CrazyGames docs, for the `gardn-update` branch. This file lives in `scripts/`, which is gitignored, so it is not in any commit.
 
@@ -14,7 +14,7 @@ Marks: `[x]` the code or setup is there (looked at in the tree, not re-tested on
   - day 1 retention (strong games 10-15%)
   - conversion = players who play at least one minute after starting (top games 80%+, load under 10 s, build under 20 MB)
 - **Full Launch** after that for games with strong numbers: SDK events, ads, account integration and the multiplayer features below.
-- Rysteria is an iframe of `https://game.parshwa.blog` (servers on the Mac `c1` behind the `rysteria-cg` cloudflared tunnel).
+- Parteria is an iframe of `https://game.parshwa.blog` (servers on the Mac `c1` behind the `rysteria-cg` cloudflared tunnel).
 
 ## 1. Technical
 

@@ -228,7 +228,7 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
     case rr_mob_id_ant:
         rr_renderer_scale(renderer, 0.27f);
         // the thorax, put so the middle of the whole ant is the hitbox centre
-        rr_renderer_translate(renderer, 15, 0);
+        rr_renderer_translate(renderer, 2, 0);
         // three legs a side, drawn first so the body covers their roots. The
         // legs of a pair and of the two sides swing in turns
         for (uint8_t side = 0; side < 2; ++side)
@@ -244,9 +244,14 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
                 render_sprite(renderer, id, 3, flags);
                 rr_renderer_context_state_free(renderer, &state);
             }
-        rr_renderer_translate(renderer, -95, 0);
+        // the abdomen is about as big as the thorax in the picture of the ant (a bug of the
+        // sheet, 30 x 34 pixels to the thorax's 29 x 30), so it is drawn smaller than it was made:
+        // three quarters as long and nine tenths as wide
+        rr_renderer_context_state_init(renderer, &state);
+        rr_renderer_translate(renderer, -88, 0);
+        rr_renderer_scale2(renderer, 0.75f, 0.9f);
         render_sprite(renderer, id, 2, flags); // abdomen
-        rr_renderer_translate(renderer, 95, 0);
+        rr_renderer_context_state_free(renderer, &state);
         render_sprite(renderer, id, 1, flags); // thorax
         rr_renderer_translate(renderer, 70, 0);
         render_sprite(renderer, id, 0, flags); // head
@@ -417,6 +422,16 @@ void rr_renderer_draw_mob(struct rr_renderer *renderer, uint8_t id,
         render_hand_parts(renderer, id, RR_LANTERNFLY_PARTS,
                           RR_LANTERNFLY_PART_COUNT, raw_animation_tick, flags);
         break;
+    case rr_mob_id_mantis:
+        rr_renderer_scale(renderer, 0.2f);
+        render_hand_parts(renderer, id, RR_MANTIS_PARTS, RR_MANTIS_PART_COUNT,
+                          raw_animation_tick, flags);
+        break;
+    case rr_mob_id_beetle:
+        rr_renderer_scale(renderer, 0.2f);
+        render_hand_parts(renderer, id, RR_BEETLE_PARTS, RR_BEETLE_PART_COUNT,
+                          raw_animation_tick, flags);
+        break;
     }
 
     rr_renderer_context_state_free(renderer, &original_state);
@@ -567,4 +582,8 @@ void rr_renderer_mob_cache_init()
     rr_renderer_spritesheet_init(&mob_sprites[rr_mob_id_snail], NULL, 288, 144,
                                  rr_snail_body_draw, 192, 192,
                                  rr_snail_shell_draw, 0);
+
+    // the bugs of the picture
+    rr_beetle_sheet_init(&mob_sprites[rr_mob_id_beetle]);
+    rr_mantis_sheet_init(&mob_sprites[rr_mob_id_mantis]);
 }

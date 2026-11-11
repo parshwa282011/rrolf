@@ -135,14 +135,17 @@ uint32_t rr_local_storage_get_bytes(char *label, void *bytes)
         }                                                                      \
     }
 
-#define GET_ID_RARITY(encoder, start)                                          \
+// the ids and rarities that are in the table are kept, the others (a cache written by a newer
+// client, which has more mobs or petals) are read and left out
+#define GET_ID_RARITY(encoder, start, id_count, rarity_count)                  \
     {                                                                          \
         uint8_t id = rr_binary_encoder_read_uint8(encoder);                    \
         while (id)                                                             \
         {                                                                      \
             uint8_t rarity = rr_binary_encoder_read_uint8(encoder);            \
             uint64_t count = rr_binary_encoder_read_varuint(encoder);          \
-            start[id - 1][rarity] = count;                                     \
+            if (id - 1 < (id_count) && rarity < (rarity_count))                \
+                start[id - 1][rarity] = count;                                 \
             id = rr_binary_encoder_read_uint8(encoder);                        \
         }                                                                      \
     }
@@ -175,8 +178,9 @@ void rr_game_cache_load(struct rr_game *this)
     rr_local_storage_get_bytes("rrolf_account_data", storage_buf2);
     rr_binary_encoder_init(&decoder, (uint8_t *)storage_buf2);
     READ_LOADOUT;
-    GET_ID_RARITY(&decoder, this->inventory);
-    GET_ID_RARITY(&decoder, this->cache.mob_kills);
+    GET_ID_RARITY(&decoder, this->inventory, rr_petal_id_max, rr_rarity_id_max);
+    GET_ID_RARITY(&decoder, this->cache.mob_kills, rr_mob_id_max,
+                  rr_rarity_id_max);
     this->cache.show_coordinates = rr_binary_encoder_read_uint8(&decoder) & 1;
     this->cache.screen_shake = rr_binary_encoder_read_uint8(&decoder) & 1;
     this->cache.show_hitboxes = rr_binary_encoder_read_uint8(&decoder) & 1;

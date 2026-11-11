@@ -96,6 +96,8 @@ int main()
     CHECK(memcmp(got.token_key, a.token_key, 32) == 0);
     CHECK(strcmp(got.pw_hash, a.pw_hash) == 0);
     CHECK(!got.is_dev);
+    // an account has no tag until one is given (also what the accounts made before the tags read as)
+    CHECK(got.tag[0] == 0);
     char lower[80];
     ms_str_lower(lower, name1, sizeof lower);
     CHECK(db->account_get(db, ms_db_by_username, lower, NULL, &got) ==
@@ -145,9 +147,9 @@ int main()
     CHECK(db->link_put(db, b.uuid, &link) == MS_DB_OK); // free again
 
     // rysteria
-    struct ms_db_rysteria r;
-    ms_db_rysteria_init(&r);
-    CHECK(db->rysteria_get(db, a.uuid, &r) == MS_DB_NOT_FOUND);
+    struct ms_db_parteria r;
+    ms_db_parteria_init(&r);
+    CHECK(db->parteria_get(db, a.uuid, &r) == MS_DB_NOT_FOUND);
     r.xp = 1.5e22;
     r.checkpoint = 0x020103;
     r.pvp_points = 5000000000LL;
@@ -160,12 +162,12 @@ int main()
     free(r.loadout);
     r.loadout = strdup("{\"1\":[2,3],\"2\":[4,5]}");
     strcpy(r.nickname, "Nick");
-    CHECK(db->rysteria_put(db, a.uuid, &r) == MS_DB_OK);
+    CHECK(db->parteria_put(db, a.uuid, &r) == MS_DB_OK);
     r.xp = 2.5e22;
-    CHECK(db->rysteria_put(db, a.uuid, &r) == MS_DB_OK); // upsert
-    ms_db_rysteria_free(&r);
-    ms_db_rysteria_init(&r);
-    CHECK(db->rysteria_get(db, a.uuid, &r) == MS_DB_OK);
+    CHECK(db->parteria_put(db, a.uuid, &r) == MS_DB_OK); // upsert
+    ms_db_parteria_free(&r);
+    ms_db_parteria_init(&r);
+    CHECK(db->parteria_get(db, a.uuid, &r) == MS_DB_OK);
     CHECK(r.xp == 2.5e22);
     CHECK(r.checkpoint == 0x020103);
     CHECK(r.pvp_points == 5000000000LL);
@@ -174,7 +176,7 @@ int main()
     CHECK(strstr(r.mob_kills, "\"1:0\"") != NULL);
     CHECK(strstr(r.loadout, "\"2\"") != NULL);
     CHECK(strcmp(r.nickname, "Nick") == 0);
-    ms_db_rysteria_free(&r);
+    ms_db_parteria_free(&r);
 
     // gardn saves: add, idempotent re-add, remove, limit
     struct ms_db_gsave s[3];

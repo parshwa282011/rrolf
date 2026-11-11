@@ -112,6 +112,11 @@ static char const SCHEMA_SQL[] =
     " is_dev boolean NOT NULL DEFAULT false,"
     " created_at bigint NOT NULL,"
     " last_login_at bigint NOT NULL DEFAULT 0);"
+    // Added later: the rows that were there get '' (no tag), nothing else changes. It may be NULL
+    // (read as no tag) on purpose: the standby copies rows as jsonb (dual-server-syncing/store.js),
+    // and one that comes from a master from before the tags has no "tag" in it, which fills the
+    // column with NULL; a NOT NULL column would refuse that row
+    "ALTER TABLE accounts.accounts ADD COLUMN IF NOT EXISTS tag text DEFAULT '';"
     "CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower_idx"
     " ON accounts.accounts (username_lower);"
     "CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_lower_idx"
@@ -209,6 +214,7 @@ static void read_account(PGresult *r, struct ms_db_account *out)
     out->is_dev = PQgetvalue(r, 0, 6)[0] == 't';
     out->created_at = atoll(PQgetvalue(r, 0, 7));
     out->last_login_at = atoll(PQgetvalue(r, 0, 8));
+    ms_strlcpy(out->tag, PQgetvalue(r, 0, 9), sizeof out->tag);
 }
 
 static int pg_account_create(struct ms_db *db, struct ms_db_account const *a)
@@ -264,7 +270,8 @@ static int pg_account_get(struct ms_db *db, enum ms_db_account_key key,
     struct pg *pg = db->ctx;
     static char const columns[] =
         "SELECT a.uuid, a.username, a.email, a.email_verified, a.pw_hash,"
-        " a.token_key, a.is_dev, a.created_at, a.last_login_at"
+        " a.token_key, a.is_dev, a.created_at, a.last_login_at,"
+        " COALESCE(a.tag, '')"
         " FROM accounts.accounts a";
     char sql[512];
     char const *params[2] = {a, b};
@@ -501,8 +508,8 @@ static int pg_links_get(struct ms_db *db, char const *uuid,
     return result;
 }
 
-static int pg_rysteria_get(struct ms_db *db, char const *uuid,
-                           struct ms_db_rysteria *out)
+static int pg_parteria_get(struct ms_db *db, char const *uuid,
+                           struct ms_db_parteria *out)
 {
     struct pg *pg = db->ctx;
     int slot;
@@ -515,12 +522,12 @@ static int pg_rysteria_get(struct ms_db *db, char const *uuid,
                       1, params);
     int result;
     if (PQresultStatus(r) != PGRES_TUPLES_OK)
-        result = log_failure("rysteria_get", r);
+        result = log_failure("parteria_get", r);
     else if (PQntuples(r) == 0)
         result = MS_DB_NOT_FOUND;
     else
     {
-        ms_db_rysteria_free(out);
+        ms_db_parteria_free(out);
         out->xp = atof(PQgetvalue(r, 0, 0));
         out->checkpoint = atoi(PQgetvalue(r, 0, 1));
         out->pvp_points = strtoll(PQgetvalue(r, 0, 2), NULL, 10);
@@ -536,8 +543,8 @@ static int pg_rysteria_get(struct ms_db *db, char const *uuid,
     return result;
 }
 
-static int pg_rysteria_put(struct ms_db *db, char const *uuid,
-                           struct ms_db_rysteria const *v)
+static int pg_parteria_put(struct ms_db *db, char const *uuid,
+                           struct ms_db_parteria const *v)
 {
     char xp[64];
     snprintf(xp, sizeof xp, "%.17g", v->xp);
@@ -550,7 +557,7 @@ static int pg_rysteria_put(struct ms_db *db, char const *uuid,
     char const *params[] = {uuid,           xp,        checkpoint, pvp_points,
                             v->petals,      v->failed_crafts, v->mob_kills,
                             v->loadout,     v->nickname,      updated};
-    return pg_simple(db, "rysteria_put",
+    return pg_simple(db, "parteria_put",
                      "INSERT INTO rysteria.players (uuid, xp, checkpoint,"
                      " pvp_points, petals, failed_crafts, mob_kills, loadout,"
                      " nickname, updated_at) VALUES ($1,$2::double precision,"
@@ -1455,8 +1462,8 @@ struct ms_db *ms_db_postgres_open()
     db->link_delete = pg_link_delete;
     db->account_delete = pg_account_delete;
     db->links_get = pg_links_get;
-    db->rysteria_get = pg_rysteria_get;
-    db->rysteria_put = pg_rysteria_put;
+    db->parteria_get = pg_parteria_get;
+    db->parteria_put = pg_parteria_put;
     db->gardn_list = pg_gardn_list;
     db->gardn_apply = pg_gardn_apply;
     db->gardn_take = pg_gardn_take;

@@ -97,7 +97,9 @@ static void rr_game_read_account(struct rr_game *this, struct proto_bug *decoder
     {
         uint8_t rarity = proto_bug_read_uint8(decoder, "rarity");
         uint64_t count = proto_bug_read_varuint(decoder, "count");
-        this->cache.mob_kills[id - 1][rarity] = count;
+        // an id this client does not know (a newer server) is skipped, not written past the table
+        if (id - 1 < rr_mob_id_max && rarity < rr_rarity_id_max)
+            this->cache.mob_kills[id - 1][rarity] = count;
     }
     // the account also remembers the loadout and nickname
     struct rr_id_rarity_pair saved[20];
@@ -542,7 +544,7 @@ void rr_game_init(struct rr_game *this)
                 rr_ui_v_container_init(rr_ui_container_init(), 10, 20,
                     rr_ui_v_container_init(rr_ui_container_init(), 0, 10,
                         rr_ui_v_container_init(rr_ui_container_init(), 0, 10,
-                            rr_ui_text_init("Rysteria", 96, 0xffffffff),
+                            rr_ui_text_init("Parteria", 96, 0xffffffff),
                             rr_ui_h_container_init(
                                 rr_ui_container_init(), 0, 20,
                                 rr_ui_link_toggle(
@@ -649,7 +651,7 @@ void rr_game_init(struct rr_game *this)
                         rr_ui_title_screen_loadout_button_init(23),
                         NULL
                     ),
-                    // rr_ui_text_init("https://github.com/maxnest0x0/rysteria", 15, 0xffffffff),
+                    rr_ui_text_init("https://github.com/parshwa282011/rrolf", 15, 0xffffffff),
                     NULL
                 ),
             0x00000000),

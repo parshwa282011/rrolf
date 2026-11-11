@@ -33,6 +33,7 @@
 #include <Shared/Api.h>
 #include <Shared/Rivet.h>
 #include <Shared/Squad.h>
+#include <Shared/Tags.h>
 #include <Shared/Utilities.h>
 #include <Shared/pb.h>
 
@@ -53,9 +54,12 @@ void render_flower(struct rr_ui_element *element, struct rr_game *game)
 {
     struct rr_renderer *renderer = game->renderer;
     struct squad_flower_metadata *data = element->data;
-    if (data->member->is_dev || data->member->role[0])
+    if (data->member->is_dev || rr_tag_flips_flower(data->member->role))
         rr_renderer_rotate(renderer, -M_PI);
     rr_renderer_scale(renderer, renderer->scale);
+    // the role of a player with the spider tag is Shared/Tags.h's: legs under the flower
+    if (rr_flower_skin_from_tag(data->member->role) == rr_flower_skin_spider)
+        rr_renderer_draw_flower_legs(renderer, 0);
     rr_renderer_set_stroke(renderer, 0xffcfbb50);
     rr_renderer_set_fill(renderer, 0xffffe763);
     rr_renderer_set_line_width(renderer, 3);

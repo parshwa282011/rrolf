@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Rysteria: log in</title>
+<title>Parteria: log in</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link href="/favicon.ico" rel="icon" sizes="any">
 <link href="/logo.png" rel="icon" type="image/png">
@@ -91,7 +91,7 @@ a.link, button.link {
 </head>
 <body>
 <main>
-<h1 class="outline">Rysteria</h1>
+<h1 class="outline">Parteria</h1>
 <div class="panel">
 
 <section class="view" id="v-checking">
@@ -288,7 +288,7 @@ function show(name, keepMessage) {
     for (const v of document.querySelectorAll(".view")) v.classList.toggle("on", v.id === "v-" + name);
     if (!keepMessage) msg("");
     $("social").style.display = (name === "login" || name === "signup") && socialAny ? "block" : "none";
-    document.title = "Rysteria: " + ({ login: "log in", signup: "sign up", verify: "confirm your email", forgot: "forgot", reset: "reset", profile: "finish your account", checking: "signing in" }[name] || "log in");
+    document.title = "Parteria: " + ({ login: "log in", signup: "sign up", verify: "confirm your email", forgot: "forgot", reset: "reset", profile: "finish your account", checking: "signing in" }[name] || "log in");
     const first = document.querySelector("#v-" + name + " input:not([type=radio])");
     if (first && name !== "checking") try { first.focus(); } catch (e) {}
 }

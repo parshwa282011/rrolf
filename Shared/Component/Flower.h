@@ -37,7 +37,8 @@ struct rr_component_flower
     uint8_t crest_count;
     uint8_t third_eye_count;
     uint8_t nazar_charges; // hits the nazar petals still block, see Health.h
-    RR_SERVER_ONLY(uint8_t protocol_state;)
+    uint8_t skin;          // enum rr_flower_skin (Shared/Tags.h): 0 is the flower of everybody
+    RR_SERVER_ONLY(uint16_t protocol_state;)
     RR_SERVER_ONLY(float saved_angle;)
     float eye_angle;
     uint32_t level;
@@ -46,6 +47,7 @@ struct rr_component_flower
     RR_CLIENT_ONLY(float eye_y;)
     RR_CLIENT_ONLY(float lerp_eye_y;)
     RR_CLIENT_ONLY(float lerp_mouth;)
+    RR_CLIENT_ONLY(float leg_phase;) // how far the legs of a spider flower are in their step
     char nickname[16];
 };
 
@@ -70,3 +72,4 @@ RR_DECLARE_PUBLIC_FIELD(flower, float, eye_angle)
 RR_DECLARE_PUBLIC_FIELD(flower, uint8_t, crest_count)
 RR_DECLARE_PUBLIC_FIELD(flower, uint8_t, third_eye_count)
 RR_DECLARE_PUBLIC_FIELD(flower, uint8_t, nazar_charges)
+RR_DECLARE_PUBLIC_FIELD(flower, uint8_t, skin)

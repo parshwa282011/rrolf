@@ -22,6 +22,7 @@
 #include <Server/Server.h>
 #include <Shared/Entity.h>
 #include <Shared/SimulationCommon.h>
+#include <Shared/Tags.h>
 #include <Shared/pb.h>
 
 #define FOR_EACH_PUBLIC_FIELD                                                  \
@@ -31,7 +32,8 @@
     X(dead, uint8)                                                             \
     X(crest_count, uint8)                                                      \
     X(third_eye_count, uint8)                                                  \
-    X(nazar_charges, uint8)
+    X(nazar_charges, uint8)                                                    \
+    X(skin, uint8)
 
 enum
 {
@@ -43,7 +45,9 @@ enum
     state_flags_crest_count = 0b100000,
     state_flags_third_eye_count = 0b1000000,
     state_flags_nazar_charges = 0b10000000,
-    state_flags_all = 0b11111111
+    // the ninth bit: the state is sent as a varuint, so it fits
+    state_flags_skin = 0b100000000,
+    state_flags_all = 0b111111111
 };
 
 void rr_component_flower_init(struct rr_component_flower *this,
@@ -101,7 +105,8 @@ void rr_component_flower_set_dead(struct rr_component_flower *this,
         player_info->input = 0;
         player_info->client->player_accel_x = 0;
         player_info->client->player_accel_y = 0;
-        if (player_info->client->dev || player_info->squad_member->role[0])
+        if (player_info->client->dev ||
+            rr_tag_flips_flower(player_info->squad_member->role))
             rr_component_flower_set_face_flags(this, this->face_flags & ~3);
         else
             rr_component_flower_set_face_flags(this, this->face_flags | 1);
@@ -218,6 +223,7 @@ RR_DEFINE_PUBLIC_FIELD(flower, uint32_t, level)
 RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, crest_count)
 RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, third_eye_count)
 RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, nazar_charges)
+RR_DEFINE_PUBLIC_FIELD(flower, uint8_t, skin)
 #endif
 
 #ifdef RR_CLIENT

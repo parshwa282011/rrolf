@@ -52,8 +52,13 @@ void rr_squad_add_client(struct rr_squad *this, struct rr_server_client *client)
         this->members[i].level = level_from_xp(client->experience);
         this->members[i].kick_vote_pos = -1;
         strcpy(this->members[i].nickname, "Anonymous");
-        if (strcmp(client->rivet_account.uuid, "fca3a5bc-9d1c-42a7-9114-cbaf7fbc9670") == 0)
-            strcpy(this->members[i].role, "Supporter");
+        // the tag of the account (the database). The one supporter that was made one
+        // before the tags existed keeps theirs while their account has none
+        if (client->tag[0])
+            memcpy(this->members[i].role, client->tag,
+                   sizeof this->members[i].role - 1);
+        else if (strcmp(client->rivet_account.uuid, "fca3a5bc-9d1c-42a7-9114-cbaf7fbc9670") == 0) //Lets see who roles this first ig
+            strcpy(this->members[i].role, RR_TAG_SUPPORTER);
         return;
     }
 }
