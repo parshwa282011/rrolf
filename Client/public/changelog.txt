@@ -15,7 +15,7 @@
 [gardn] New mythic petal, the Sponge: it has no collisions, so it can't be broken, and it soaks up unlimited damage and slowly deals it back over 20 seconds. If you take it off, the damage it still holds hits you at once.
 [gardn] Both sponges (the legendary one and the new mythic one) show in their loadout slot how much damage they are holding.
 [gardn] New legendary petal, the Dandelion: it stops healing on whatever it hits like the rare one, and you can shoot it at your enemies like the epic Missile.
-[gardn] New legendary petal, the Fastest: a better Faster petal (8 health, 10 damage) that makes your other petals spin twice as fast as the Faster does.
+[gardn] New legendary petal, the Fastest: a big Faster petal (8 health, 10 damage) that makes your other petals spin twice as fast as the Faster does.
 [gardn] With an Antennae or an Observer equipped you can scroll to zoom between the normal view and the full view of the petal.
 [gardn] In the Petal Gallery a new button lets you select petals to auto-delete: click the petals you don't want and, with Auto-delete drops on in the settings, they are deleted when you touch them while your loadout and inventory are full.
 [gardn] Auto attack (K) and auto defend (L), like in Rysteria: they hold the button for you while you press neither. With both on you attack and defend at the same time, and the petals that only defend stay in close while the others go out. They are also in the settings.
