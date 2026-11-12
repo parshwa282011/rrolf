@@ -19,6 +19,7 @@
 [gardn] With an Antennae or an Observer equipped you can scroll to zoom between the normal view and the full view of the petal.
 [gardn] In the Petal Gallery a new button lets you select petals to auto-delete: click the petals you don't want and, with Auto-delete drops on in the settings, they are deleted when you touch them while your loadout and inventory are full.
 [gardn] Auto attack (K) and auto defend (L), like in Rysteria: they hold the button for you while you press neither. With both on you attack and defend at the same time, and the petals that only defend stay in close while the others go out. They are also in the settings.
+[gardn] Hold ' to see what each petal color means (common to unique) under the leaderboard.
 [gardn] New Observer ability: in the Mob Gallery you can select mobs, and with an Observer equipped each selected mob shows as a dot of its own color on the minimap.
 By: Parshwa
 
