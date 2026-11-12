@@ -13,7 +13,8 @@
 == November 12th 2026
 [gardn] New mythic petal, the Iris: 25 health, same reload as the epic Iris, and it deals 10 poison damage over 18 seconds.
 [gardn] New mythic petal, the Sponge: it has no collisions, so it can't be broken, and it soaks up unlimited damage and slowly deals it back over 20 seconds. If you take it off, the damage it still holds hits you at once.
-[gardn] Both sponges (the legendary one and the new mythic one) show above them how much damage they are holding.
+[gardn] Both sponges (the legendary one and the new mythic one) show in their loadout slot how much damage they are holding.
+[gardn] New legendary petal, the Dandelion: it stops healing on whatever it hits like the rare one, and you can shoot it at your enemies like the epic Missile.
 [gardn] New legendary petal, the Fastest: a better Faster petal (8 health, 10 damage) that makes your other petals spin twice as fast as the Faster does.
 [gardn] With an Antennae or an Observer equipped you can scroll to zoom between the normal view and the full view of the petal.
 [gardn] In the Petal Gallery a new button lets you select petals to auto-delete: click the petals you don't want and, with Auto-delete drops on in the settings, they are deleted when you touch them while your loadout and inventory are full.
