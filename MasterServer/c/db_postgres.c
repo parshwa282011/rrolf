@@ -164,8 +164,12 @@ static char const SCHEMA_SQL[] =
     " updated_at bigint NOT NULL,"
     " PRIMARY KEY (board, uuid));"
     "CREATE INDEX IF NOT EXISTS leaderboards_entries_score_idx"
-    " ON leaderboards.entries (board, score DESC);"
-    // ---- change log for the backup servers (see pg_backup) ----
+    " ON leaderboards.entries (board, score DESC);";
+
+// The change log for the backup servers (see pg_backup). Only made when syncd is in use
+// (SYNC_STATE_FILE is set), so that a master on its own database, or on one that every
+// master shares, does not log every write and never has to prune the log.
+static char const SYNC_LOG_SQL[] =
     "CREATE SCHEMA IF NOT EXISTS sync;"
     "CREATE TABLE IF NOT EXISTS sync.meta ("
     " key text PRIMARY KEY, value text NOT NULL);"
@@ -1436,6 +1440,15 @@ struct ms_db *ms_db_postgres_open()
         ms_log("db", "postgres schema bootstrap failed: %s",
                PQresultErrorMessage(r));
     PQclear(r);
+    if (ok && MS_CONFIG.sync_state_file[0] != '\0')
+    {
+        r = PQexec(pg->conns[0], SYNC_LOG_SQL);
+        ok = PQresultStatus(r) == PGRES_COMMAND_OK;
+        if (!ok)
+            ms_log("db", "postgres sync log bootstrap failed: %s",
+                   PQresultErrorMessage(r));
+        PQclear(r);
+    }
     r = PQexec(pg->conns[0], "SELECT pg_advisory_unlock(7203947)");
     PQclear(r);
     if (!ok)
