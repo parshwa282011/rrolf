@@ -11,18 +11,20 @@
 # quick-deploy.sh) - no client has to be rebuilt for it, a reload shows the change.
 
 == November 12th 2026
-[gardn] New mythic petal, the Iris: 25 health, same reload as the epic Iris, and it deals 10 poison damage over 18 seconds.
-[gardn] New mythic petal, the Sponge: it has no collisions, so it can't be broken, and it soaks up unlimited damage and slowly deals it back over 20 seconds. If you take it off, the damage it still holds hits you at once.
-[gardn] Both sponges (the legendary one and the new mythic one) show in their loadout slot how much damage they are holding.
-[gardn] New legendary petal, the Dandelion: it stops healing on whatever it hits like the rare one, and you can shoot it at your enemies like the epic Missile.
-[gardn] New legendary petal, the Fastest: a big Faster petal (8 health, 10 damage) that makes your other petals spin twice as fast as the Faster does.
+[gardn] New petals to try in the sandbox (developer menu): no mob drops them yet. A legendary Iris (5 health, 5 damage, 5 second reload) whose poison deals 10 damage per second for 18 seconds, 180 in total. A mythic Sponge. A legendary Fastest. An epic Dandelion. A legendary Clover.
+[gardn] The mythic Sponge has no collisions, so it can't be broken, and it soaks up unlimited damage and slowly deals it back over time. If you take it off, the damage it still holds hits you at once.
+[gardn] Both sponges (the legendary one and the mythic one) show in their loadout slot how much damage they are holding.
+[gardn] The Fastest is a big Faster petal (5 health, 14 damage) that makes your other petals spin twice as fast as the Faster does.
+[gardn] The Dandelion stops healing on whatever it hits like the rare one, and you can shoot it at your enemies like the epic Missile.
+[gardn] The Clover (4 leaves) brings drop luck to the biome you are in while you have it equipped, broken or not: each Clover makes every drop of a mob 5% more likely. The luck of several clovers adds up, up to 24 points of luck, which is 60% more likely.
 [gardn] With an Antennae or an Observer equipped you can scroll to zoom between the normal view and the full view of the petal.
 [gardn] In the Petal Gallery a new button lets you select petals to auto-delete: click the petals you don't want and, with Auto-delete drops on in the settings, they are deleted when you touch them while your loadout and inventory are full.
 [gardn] Auto attack (K) and auto defend (L), like in Rysteria: they hold the button for you while you press neither. With both on you attack and defend at the same time, and the petals that only defend stay in close while the others go out. They are also in the settings.
+[gardn] New Observer ability: in the Mob Gallery you can select mobs, and with an Observer equipped each selected mob shows as a dot of its own color on the minimap.
 [gardn] Hold ' to see what each dot color of the observer means (the mobs you selected) under the leaderboard.
 [gardn] Every mob can spawn in the PVP area of the sandbox now (the worker, soldier and queen ants and the digger too), not only the ones of the first zone.
-[gardn] Three clovers that bring luck to the biome you are in, and keep it while you have them equipped (broken or not): the legendary Mob Clover (3 leaves) makes rarer mobs spawn more often, the legendary Drop Clover (4 leaves) makes mobs drop their petals very slightly more often, and the mythic Clover (5 leaves) does both, with 0.75 times the luck of the two legendaries together. The luck of several clovers adds up, up to a limit.
-[gardn] New Observer ability: in the Mob Gallery you can select mobs, and with an Observer equipped each selected mob shows as a dot of its own color on the minimap.
+[gardn] The leader's curse works in the sandbox now too (the mobs going for the highest level flower, the minimap dot, the damage at level 90).
+[gardn] The curse's damage at level 90 is based on the base health of the flower's level, not on its current health.
 By: Parshwa
 
 == November 11th 2026
