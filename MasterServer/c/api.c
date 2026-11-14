@@ -33,8 +33,7 @@ struct ms_db *MS_DB;
 enum route_kind
 {
     route_public,  // browser facing, JSON, CORS allow-list
-    route_server,  // game/gardn servers only, X-Server-Secret, no CORS
-    route_clone    // backup servers only, X-Clone-Secret, no CORS
+    route_server   // game/gardn servers only, X-Server-Secret, no CORS
 };
 
 struct route
@@ -51,7 +50,6 @@ struct route
 
 static struct route const ROUTES[] = {
     {"GET", "/health", 0, ms_h_health, route_public, "health", 120, 60},
-    {"GET", "/backup", 0, ms_h_backup, route_clone, NULL, 0, 0},
     // read by the leaderboard and stats pages. The master limits them, the page
     // does not have to behave: 60 a minute for an address, all routes together
     {"GET", "/leaderboard", 0, ms_h_leaderboard, route_public, "leaderboard",
@@ -133,8 +131,6 @@ static struct route const ROUTES[] = {
      0},
     {"POST", "/srv/gardn/backup", 0, ms_h_srv_gardn_backup, route_server, NULL,
      0, 0},
-    {"POST", "/srv/gardn/backup/restore", 0, ms_h_srv_gardn_backup_restore,
-     route_server, NULL, 0, 0},
     {"POST", "/srv/leaderboard/submit", 0, ms_h_srv_lb_submit, route_server,
      NULL, 0, 0},
     {"GET", "/srv/leaderboard/top", 0, ms_h_srv_lb_top, route_server, NULL, 0,
@@ -274,12 +270,6 @@ void ms_h_health(struct ms_req *req, struct ms_res *res)
     cJSON *o = cJSON_CreateObject();
     cJSON_AddBoolToObject(o, "ok", ok);
     cJSON_AddStringToObject(o, "db", MS_DB ? MS_DB->name : "none");
-    // which machine answered, and whether it can feed backup servers
-    if (MS_CONFIG.node_name[0])
-        cJSON_AddStringToObject(o, "node", MS_CONFIG.node_name);
-    cJSON_AddBoolToObject(o, "backup",
-                          MS_DB != NULL && MS_DB->backup_pull != NULL &&
-                              strlen(MS_CONFIG.clone_secret) >= 16);
     ms_res_json(res, ok ? 200 : 503, o);
 }
 
@@ -324,20 +314,13 @@ void ms_route(struct ms_req *req, struct ms_res *res)
     }
 
     char key[128];
-    if (route->kind == route_server || route->kind == route_clone)
+    if (route->kind == route_server)
     {
-        int clone = route->kind == route_clone;
-        char const *secret =
-            clone ? MS_CONFIG.clone_secret : MS_CONFIG.server_secret;
+        char const *secret = MS_CONFIG.server_secret;
         // never reachable from a browser
         if (req->origin[0])
         {
             ms_res_error(res, 403, "forbidden", NULL);
-            return;
-        }
-        if (clone && strlen(secret) < 16)
-        {
-            ms_res_error(res, 503, "backup_disabled", "CLONE_SECRET is not set");
             return;
         }
         snprintf(key, sizeof key, "badsecret:%s", req->ip);
@@ -346,8 +329,7 @@ void ms_route(struct ms_req *req, struct ms_res *res)
             ms_res_error(res, 429, "rate_limited", NULL);
             return;
         }
-        if (!ms_ct_str_equal(clone ? req->clone_secret : req->server_secret,
-                             secret))
+        if (!ms_ct_str_equal(req->server_secret, secret))
         {
             ms_rl_add(key, 60);
             ms_res_error(res, 403, "forbidden", NULL);

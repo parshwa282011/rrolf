@@ -83,6 +83,13 @@ struct ms_db_parteria
     char nickname[MS_NICKNAME_SIZE];
 };
 
+// One player's progress in a batch (parteria_put_many)
+struct ms_db_parteria_row
+{
+    char uuid[MS_UUID_SIZE];
+    struct ms_db_parteria const *v;
+};
+
 struct ms_db_gsave
 {
     char save_id[40];
@@ -124,6 +131,16 @@ enum ms_lb_mode
 };
 
 // who an account is, for walking through all of them
+// One change of a leaderboard in a batch (lb_apply_many): what lb_apply takes
+struct ms_db_lb_op
+{
+    char board[48];
+    char uuid[MS_UUID_SIZE];
+    double value;
+    enum ms_lb_mode mode;
+    char extra_json[200]; // {"name": ...}
+};
+
 struct ms_db_account_ref
 {
     char uuid[MS_UUID_SIZE];
@@ -178,6 +195,10 @@ struct ms_db
                         struct ms_db_parteria *out);
     int (*parteria_put)(struct ms_db *, char const *uuid,
                         struct ms_db_parteria const *);
+    // The progress of several players in ONE request to the database (one
+    // statement on PostgreSQL). All or nothing. MS_DB_OK, MS_DB_ERROR
+    int (*parteria_put_many)(struct ms_db *, struct ms_db_parteria_row const *rows,
+                             int count);
 
     int (*gardn_list)(struct ms_db *, char const *uuid, struct ms_db_gsave *out,
                       int max);
@@ -219,6 +240,9 @@ struct ms_db
     int (*lb_apply)(struct ms_db *, char const *board, char const *uuid,
                     double value, enum ms_lb_mode mode,
                     char const *extra_json);
+    // Many lb_apply in ONE request to the database (one statement on PostgreSQL).
+    // Every (board, uuid) at most once. All or nothing. MS_DB_OK, MS_DB_ERROR
+    int (*lb_apply_many)(struct ms_db *, struct ms_db_lb_op const *ops, int count);
     // a player's own place on a board (1 = best): MS_DB_OK, MS_DB_NOT_FOUND
     // (not listed) or MS_DB_ERROR
     int (*lb_rank)(struct ms_db *, char const *board, char const *uuid,
@@ -239,14 +263,6 @@ struct ms_db
     // `limit`) or MS_DB_ERROR. For the stats page search
     int (*account_search)(struct ms_db *, char const *prefix, int limit,
                           struct ms_db_account_ref *out);
-
-    // Change feed for backup servers (GET /backup). `since` / `source` are the
-    // cursor and source id from the previous answer (NULL for the first pull).
-    // Fills *out with a malloc'd newline-delimited json document: a head line,
-    // one line per row change (or per row of a full snapshot) and an end line.
-    // NULL when the backend has no feed (MongoDB).
-    int (*backup_pull)(struct ms_db *, char const *since, char const *source,
-                       char **out, size_t *out_len);
 
     int (*ping)(struct ms_db *);
     void (*close)(struct ms_db *);

@@ -245,6 +245,93 @@ int main()
     }
     ms_db_lb_free(top, n);
 
+    // several players saved with one request
+    {
+        struct ms_db_parteria ra, rb;
+        ms_db_parteria_init(&ra);
+        ms_db_parteria_init(&rb);
+        ra.xp = 111.5;
+        ra.checkpoint = 0x010203;
+        ra.pvp_points = 7;
+        ra.petals = strdup("{\"1:0\":1}");
+        ra.failed_crafts = strdup("{}");
+        ra.mob_kills = strdup("{\"2:1\":3}");
+        ra.loadout = strdup("{\"1\":[9,1]}");
+        strcpy(ra.nickname, "BatchA");
+        rb.xp = 222.25;
+        rb.pvp_points = 8;
+        rb.petals = strdup("{}");
+        rb.failed_crafts = strdup("{}");
+        rb.mob_kills = strdup("{}");
+        rb.loadout = strdup("{}");
+        strcpy(rb.nickname, "BatchB");
+        struct ms_db_parteria_row rows[2];
+        memset(rows, 0, sizeof rows);
+        ms_strlcpy(rows[0].uuid, a.uuid, sizeof rows[0].uuid);
+        rows[0].v = &ra;
+        ms_strlcpy(rows[1].uuid, b.uuid, sizeof rows[1].uuid);
+        rows[1].v = &rb;
+        CHECK(db->parteria_put_many(db, rows, 2) == MS_DB_OK);
+        CHECK(db->parteria_put_many(db, rows, 0) == MS_DB_OK);
+        struct ms_db_parteria g;
+        ms_db_parteria_init(&g);
+        CHECK(db->parteria_get(db, a.uuid, &g) == MS_DB_OK);
+        CHECK(g.xp == 111.5 && g.checkpoint == 0x010203 && g.pvp_points == 7);
+        CHECK(strstr(g.mob_kills, "\"2:1\"") != NULL);
+        CHECK(strcmp(g.nickname, "BatchA") == 0);
+        ms_db_parteria_free(&g);
+        ms_db_parteria_init(&g);
+        CHECK(db->parteria_get(db, b.uuid, &g) == MS_DB_OK);
+        CHECK(g.xp == 222.25 && strcmp(g.nickname, "BatchB") == 0);
+        ms_db_parteria_free(&g);
+        ms_db_parteria_free(&ra);
+        ms_db_parteria_free(&rb);
+    }
+
+    // several leaderboard changes with one request: set, max and add side by side
+    {
+        char b2[48], b3[48], b4[48];
+        snprintf(b2, sizeof b2, "tset_%s", suffix);
+        snprintf(b3, sizeof b3, "tmax_%s", suffix);
+        snprintf(b4, sizeof b4, "tadd_%s", suffix);
+        struct ms_db_lb_op ops[6];
+        memset(ops, 0, sizeof ops);
+        ms_strlcpy(ops[0].board, b2, sizeof ops[0].board);
+        ms_strlcpy(ops[0].uuid, a.uuid, sizeof ops[0].uuid);
+        ops[0].value = 10; ops[0].mode = ms_lb_set; strcpy(ops[0].extra_json, "{\"name\":\"A\"}");
+        ms_strlcpy(ops[1].board, b3, sizeof ops[1].board);
+        ms_strlcpy(ops[1].uuid, a.uuid, sizeof ops[1].uuid);
+        ops[1].value = 20; ops[1].mode = ms_lb_max; strcpy(ops[1].extra_json, "{\"name\":\"A\"}");
+        ms_strlcpy(ops[2].board, b4, sizeof ops[2].board);
+        ms_strlcpy(ops[2].uuid, a.uuid, sizeof ops[2].uuid);
+        ops[2].value = 3; ops[2].mode = ms_lb_add; strcpy(ops[2].extra_json, "{\"name\":\"A\"}");
+        ms_strlcpy(ops[3].board, b2, sizeof ops[3].board);
+        ms_strlcpy(ops[3].uuid, b.uuid, sizeof ops[3].uuid);
+        ops[3].value = 40; ops[3].mode = ms_lb_set; strcpy(ops[3].extra_json, "{\"name\":\"B\"}");
+        CHECK(db->lb_apply_many(db, ops, 4) == MS_DB_OK);
+        // second round: set lower, max lower (kept), add more, B leaves the set board (0)
+        ops[0].value = 12;
+        ops[1].value = 5;
+        ops[2].value = 4;
+        ops[3].value = 0;
+        CHECK(db->lb_apply_many(db, ops, 4) == MS_DB_OK);
+        struct ms_db_lb_entry t[5];
+        int c = db->lb_top(db, b2, 5, t);
+        CHECK(c == 1);
+        if (c == 1) CHECK(t[0].score == 12 && strcmp(t[0].uuid, a.uuid) == 0);
+        ms_db_lb_free(t, c);
+        c = db->lb_top(db, b3, 5, t);
+        CHECK(c == 1);
+        if (c == 1) CHECK(t[0].score == 20);
+        ms_db_lb_free(t, c);
+        c = db->lb_top(db, b4, 5, t);
+        CHECK(c == 1);
+        if (c == 1) CHECK(t[0].score == 7);
+        ms_db_lb_free(t, c);
+        // the same through the single call gives the same numbers
+        CHECK(db->lb_apply_many(db, ops, 0) == MS_DB_OK);
+    }
+
     ms_db_close(db);
     if (failures)
     {

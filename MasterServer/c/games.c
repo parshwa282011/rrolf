@@ -130,20 +130,30 @@ struct join
     int64_t deadline;
 };
 
+// What is saved for one player, copied when the save starts. Every save carries
+// every player that is due: they go to the database together
 struct flush
 {
     char uuid[MS_UUID_SIZE];
     char username[65];
     uint64_t version;
     struct ms_db_parteria rys;
-    int rc;
     int is_dev;
     // leaderboards
     double lb_prev[MS_LB_PARTERIA_BOARDS];
     double lb_now[MS_LB_PARTERIA_BOARDS];
     int64_t pvp_best;
     struct ms_lb_counters count;
-    int lb_rc;
+};
+
+#define MAX_BATCH 256
+
+struct flush_batch
+{
+    int count;
+    int rc;    // the players' progress (one request)
+    int lb_rc; // the leaderboards (one request)
+    struct flush f[MAX_BATCH];
 };
 
 static struct lws_context *context;
@@ -328,44 +338,68 @@ static void send_join_ok(struct ms_gconn *c, struct player *p)
 
 static void flush_run(void *arg)
 {
-    struct flush *f = arg;
-    f->rc = MS_DB->parteria_put(MS_DB, f->uuid, &f->rys);
-    // the leaderboards follow what was just saved
-    memcpy(f->lb_now, f->lb_prev, sizeof f->lb_now);
-    f->lb_rc = 0;
-    if (f->rc == MS_DB_OK && !f->is_dev)
-        f->lb_rc = ms_lb_push_parteria(f->uuid, f->username, &f->rys,
-                                       f->pvp_best, &f->count, f->lb_prev,
-                                       f->lb_now);
+    struct flush_batch *batch = arg;
+    // everybody's progress in one request ...
+    struct ms_db_parteria_row rows[MAX_BATCH];
+    for (int i = 0; i < batch->count; ++i)
+    {
+        ms_strlcpy(rows[i].uuid, batch->f[i].uuid, sizeof rows[i].uuid);
+        rows[i].v = &batch->f[i].rys;
+    }
+    batch->rc = MS_DB->parteria_put_many(MS_DB, rows, batch->count);
+    for (int i = 0; i < batch->count; ++i)
+        memcpy(batch->f[i].lb_now, batch->f[i].lb_prev, sizeof batch->f[i].lb_now);
+    batch->lb_rc = 0;
+    if (batch->rc != MS_DB_OK)
+        return;
+    // ... and what the leaderboards follow from it in another
+    struct ms_lb_batch lb = {0};
+    for (int i = 0; i < batch->count; ++i)
+        if (!batch->f[i].is_dev)
+            ms_lb_collect_parteria(&lb, batch->f[i].uuid, batch->f[i].username,
+                                   &batch->f[i].rys, batch->f[i].pvp_best,
+                                   &batch->f[i].count, batch->f[i].lb_prev,
+                                   batch->f[i].lb_now);
+    batch->lb_rc = ms_lb_batch_write(&lb);
+    ms_lb_batch_free(&lb);
+    if (batch->lb_rc != 0)
+        // none of it was written
+        for (int i = 0; i < batch->count; ++i)
+            memcpy(batch->f[i].lb_now, batch->f[i].lb_prev,
+                   sizeof batch->f[i].lb_now);
 }
 
 static void flush_done(void *arg)
 {
-    struct flush *f = arg;
-    struct player *p = find_player(f->uuid);
-    if (p != NULL)
+    struct flush_batch *batch = arg;
+    for (int i = 0; i < batch->count; ++i)
     {
-        p->flushing = 0;
-        memcpy(p->lb_last, f->lb_now, sizeof p->lb_last);
-        // counts no board got (the save or the board failed) are told again
-        if (f->rc != MS_DB_OK || f->lb_rc != 0)
+        struct flush *f = &batch->f[i];
+        struct player *p = find_player(f->uuid);
+        if (p != NULL)
         {
-            p->lb_count.attempts += f->count.attempts;
-            p->lb_count.pvp_kills += f->count.pvp_kills;
+            p->flushing = 0;
+            memcpy(p->lb_last, f->lb_now, sizeof p->lb_last);
+            // counts no board got (the save or the board failed) are told again
+            if (batch->rc != MS_DB_OK || batch->lb_rc != 0)
+            {
+                p->lb_count.attempts += f->count.attempts;
+                p->lb_count.pvp_kills += f->count.pvp_kills;
+            }
+            if (batch->rc == MS_DB_OK)
+            {
+                if (f->version > p->flushed_version)
+                    p->flushed_version = f->version;
+                // a player who already left and has nothing newer is done
+                if (p->conn == NULL && p->flushed_version == p->version)
+                    free_player(p);
+            }
+            else
+                ms_log("games", "save failed for %s, will retry", f->uuid);
         }
-        if (f->rc == MS_DB_OK)
-        {
-            if (f->version > p->flushed_version)
-                p->flushed_version = f->version;
-            // a player who already left and has nothing newer is done
-            if (p->conn == NULL && p->flushed_version == p->version)
-                free_player(p);
-        }
-        else
-            ms_log("games", "save failed for %s, will retry", f->uuid);
+        ms_db_parteria_free(&f->rys);
     }
-    ms_db_parteria_free(&f->rys);
-    free(f);
+    free(batch);
 }
 
 static void snapshot(struct player const *p, struct ms_db_parteria *r)
@@ -381,11 +415,15 @@ static void snapshot(struct player const *p, struct ms_db_parteria *r)
     ms_strlcpy(r->nickname, p->nickname, sizeof r->nickname);
 }
 
-static void start_flush(struct player *p)
+// Copies what is to be saved of a player into the batch. Not for a player who is
+// being saved already, or who has nothing new
+static int batch_add_player(struct flush_batch *batch, struct player *p)
 {
-    if (p->deleted || p->flushing || p->version == p->flushed_version)
-        return;
-    struct flush *f = calloc(1, sizeof *f);
+    if (p->deleted || p->flushing || p->version == p->flushed_version ||
+        batch->count >= MAX_BATCH)
+        return 0;
+    struct flush *f = &batch->f[batch->count++];
+    memset(f, 0, sizeof *f);
     ms_strlcpy(f->uuid, p->uuid, sizeof f->uuid);
     ms_strlcpy(f->username, p->username, sizeof f->username);
     f->version = p->version;
@@ -397,7 +435,25 @@ static void start_flush(struct player *p)
     snapshot(p, &f->rys);
     p->flushing = 1;
     p->last_flush_ms = ms_now_ms();
-    ms_jobs_submit(flush_run, flush_done, f);
+    return 1;
+}
+
+static void batch_start(struct flush_batch *batch)
+{
+    if (batch->count == 0)
+    {
+        free(batch);
+        return;
+    }
+    ms_jobs_submit(flush_run, flush_done, batch);
+}
+
+// one player (who left, for example)
+static void start_flush(struct player *p)
+{
+    struct flush_batch *batch = calloc(1, sizeof *batch);
+    batch_add_player(batch, p);
+    batch_start(batch);
 }
 
 // ------------------------------------------------------------------ joins
@@ -1224,16 +1280,30 @@ void ms_games_tick()
         if (!c->closing &&
             (c->dir_sent != dir_version || now_ms - c->dir_sent_ms >= DIR_REFRESH_MS))
             send_directory(c);
-    struct player *next;
-    for (struct player *p = players; p; p = next)
+    // Every FLUSH_INTERVAL_MS the progress of all the players who changed since is
+    // saved together (one request, and one for their leaderboards). A player who
+    // left is saved at once
+    static int64_t last_batch_ms;
+    int round_due = now_ms - last_batch_ms >= (int64_t)MS_CONFIG.flush_interval_ms;
+    struct flush_batch *batch = calloc(1, sizeof *batch);
+    int saving_round = 0;
+    for (struct player *p = players; p; p = p->next)
     {
-        next = p->next;
         if (p->flushing || p->version == p->flushed_version)
             continue;
-        if (p->conn == NULL ||
-            now_ms - p->last_flush_ms >= (int64_t)MS_CONFIG.flush_interval_ms)
-            start_flush(p);
+        if (p->conn != NULL && !round_due)
+            continue;
+        if (batch->count >= MAX_BATCH)
+        {
+            batch_start(batch);
+            batch = calloc(1, sizeof *batch);
+        }
+        if (batch_add_player(batch, p) && p->conn != NULL)
+            saving_round = 1;
     }
+    batch_start(batch);
+    if (round_due && saving_round)
+        last_batch_ms = now_ms;
 
     if (now_ms - last_count_log >= 15000)
     {

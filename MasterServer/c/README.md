@@ -65,10 +65,7 @@ that were made before also have to confirm at their next login. Accounts made wi
 have no address and never wait. It only applies while the email service works
 (`REQUIRE_EMAIL_VERIFICATION=1`, the default). The pages for all of this are `Client/public/login.html`.
 
-`GET /health` answers `{"ok","db","node","backup"}` (503 when the database is down).
-Backup servers only (`X-Clone-Secret` = `CLONE_SECRET`): `GET /backup?since=&source=&node=`,
-the change feed described in `db_postgres.c` (PostgreSQL only). Used by
-`dual-server-syncing/`.
+`GET /health` answers `{"ok","db"}` (503 when the database is down).
 
 Server only (`X-Server-Secret`): `POST /srv/verify`, `/srv/gardn/{load,flush}`,
 `/srv/leaderboard/submit`, `GET /srv/leaderboard/top`.

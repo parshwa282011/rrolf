@@ -34,8 +34,6 @@ struct ms_config
     char bind_address[64]; // "" = all interfaces
     char allowed_origins[512]; // comma separated, exact match
     char server_secret[128];
-    char clone_secret[128]; // X-Clone-Secret for /backup (backup servers)
-    char node_name[48];     // this machine's name, shown by /health
     char token_secret_1[128];
     char token_secret_2[128];
     char otp_pepper[128];
@@ -75,10 +73,6 @@ struct ms_config
     // 1 = on start-up every account is checked against its saves and the
     // leaderboards are corrected (leaderboard.c)
     uint32_t leaderboard_verify;
-    // syncd's state file (sync-state.json, "wasPrimary"). A standby keeps the crash
-    // backups of the primary for a takeover and does not turn them into saves when
-    // it starts. "" = no sync, the backups are always moved
-    char sync_state_file[512];
 };
 
 extern struct ms_config MS_CONFIG;

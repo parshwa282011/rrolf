@@ -45,7 +45,6 @@ pkg_check_modules(OPENSSL REQUIRED IMPORTED_TARGET openssl)
 set(MS_SOURCES
     api.c
     auth.c
-    backup.c
     config.c
     db.c
     discord.c

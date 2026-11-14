@@ -882,6 +882,11 @@ static int mg_gardn_petal_stats(struct ms_db *db, struct ms_db_petal_stat *out,
     return result;
 }
 
+static int mg_parteria_put_many(struct ms_db *db,
+                                struct ms_db_parteria_row const *rows, int count);
+static int mg_lb_apply_many(struct ms_db *db, struct ms_db_lb_op const *ops,
+                            int count);
+
 static int mg_lb_apply(struct ms_db *db, char const *board, char const *uuid,
                        double value, enum ms_lb_mode mode,
                        char const *extra_json)
@@ -1107,6 +1112,28 @@ static int create_index(struct mg *mg, mongoc_client_t *client,
     return ok;
 }
 
+// MongoDB: one document after the other (there is no batch of these)
+static int mg_parteria_put_many(struct ms_db *db,
+                                struct ms_db_parteria_row const *rows, int count)
+{
+    int result = MS_DB_OK;
+    for (int i = 0; i < count; ++i)
+        if (mg_parteria_put(db, rows[i].uuid, rows[i].v) != MS_DB_OK)
+            result = MS_DB_ERROR;
+    return result;
+}
+
+static int mg_lb_apply_many(struct ms_db *db, struct ms_db_lb_op const *ops,
+                            int count)
+{
+    int result = MS_DB_OK;
+    for (int i = 0; i < count; ++i)
+        if (mg_lb_apply(db, ops[i].board, ops[i].uuid, ops[i].value, ops[i].mode,
+                        ops[i].extra_json) != MS_DB_OK)
+            result = MS_DB_ERROR;
+    return result;
+}
+
 struct ms_db *ms_db_mongo_open()
 {
     mongoc_init();
@@ -1190,12 +1217,14 @@ struct ms_db *ms_db_mongo_open()
     db->links_get = mg_links_get;
     db->parteria_get = mg_parteria_get;
     db->parteria_put = mg_parteria_put;
+    db->parteria_put_many = mg_parteria_put_many;
     db->gardn_list = mg_gardn_list;
     db->gardn_apply = mg_gardn_apply;
     db->gardn_take = mg_gardn_take;
     db->lb_submit = mg_lb_submit;
     db->lb_top = mg_lb_top;
     db->lb_apply = mg_lb_apply;
+    db->lb_apply_many = mg_lb_apply_many;
     db->lb_rank = mg_lb_rank;
     db->gardn_petal_stats = mg_gardn_petal_stats;
     db->account_page = mg_account_page;

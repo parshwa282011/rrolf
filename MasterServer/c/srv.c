@@ -501,46 +501,8 @@ int ms_gardn_backup_restore()
 }
 
 // Every start: what the gardn server last reported (its players when it was
-// stopped or died) becomes saves before anything is served. A standby does not:
-// its backups are the primary's, kept for the day it takes over
+// stopped or died) becomes saves before anything is served
 void ms_gardn_backup_restore_at_start()
 {
-    if (MS_CONFIG.sync_state_file[0] != 0)
-    {
-        FILE *f = fopen(MS_CONFIG.sync_state_file, "r");
-        if (f != NULL)
-        {
-            char text[2048];
-            size_t n = fread(text, 1, sizeof text - 1, f);
-            fclose(f);
-            text[n] = 0;
-            cJSON *state = cJSON_Parse(text);
-            cJSON const *was_primary =
-                state ? cJSON_GetObjectItemCaseSensitive(state, "wasPrimary") : NULL;
-            int standby = cJSON_IsFalse(was_primary);
-            cJSON_Delete(state);
-            if (standby)
-            {
-                ms_log("backup", "standby: the crash backups are kept for a takeover");
-                return;
-            }
-        }
-    }
     ms_gardn_backup_restore();
-}
-
-// syncd calls this on the machine that takes over, before its tunnel starts
-void ms_h_srv_gardn_backup_restore(struct ms_req *req, struct ms_res *res)
-{
-    (void)req;
-    int n = ms_gardn_backup_restore();
-    if (n < 0)
-        ms_res_error(res, 500, "server_error", NULL);
-    else
-    {
-        cJSON *o = cJSON_CreateObject();
-        cJSON_AddBoolToObject(o, "ok", 1);
-        cJSON_AddNumberToObject(o, "moved", n);
-        ms_res_json(res, 200, o);
-    }
 }

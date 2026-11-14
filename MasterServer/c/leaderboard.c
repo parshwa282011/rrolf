@@ -162,17 +162,58 @@ static int apply(int board, char const *uuid, double value,
                : -1;
 }
 
-int ms_lb_push_parteria(char const *uuid, char const *username,
-                        struct ms_db_parteria const *rys, int64_t pvp_best,
-                        struct ms_lb_counters const *counts, double const *prev,
-                        double now[MS_LB_PARTERIA_BOARDS])
+// ---- several changes in one request
+
+void ms_lb_batch_free(struct ms_lb_batch *b)
+{
+    free(b->ops);
+    memset(b, 0, sizeof *b);
+}
+
+static void batch_add(struct ms_lb_batch *b, int board, char const *uuid,
+                      double value, enum ms_lb_mode mode, char const *extra)
+{
+    if (b->count == b->capacity)
+    {
+        int capacity = b->capacity ? b->capacity * 2 : 16;
+        struct ms_db_lb_op *ops = realloc(b->ops, (size_t)capacity * sizeof *ops);
+        if (ops == NULL)
+            return;
+        b->ops = ops;
+        b->capacity = capacity;
+    }
+    struct ms_db_lb_op *op = &b->ops[b->count++];
+    memset(op, 0, sizeof *op);
+    ms_strlcpy(op->board, BOARDS[board].id, sizeof op->board);
+    ms_strlcpy(op->uuid, uuid, sizeof op->uuid);
+    op->value = value;
+    op->mode = mode;
+    // a name that does not fit is not cut in the middle of the json
+    if (strlen(extra) < sizeof op->extra_json)
+        ms_strlcpy(op->extra_json, extra, sizeof op->extra_json);
+    else
+        ms_strlcpy(op->extra_json, "{\"name\":\"?\"}", sizeof op->extra_json);
+}
+
+int ms_lb_batch_write(struct ms_lb_batch *b)
+{
+    if (b->count == 0)
+        return 0;
+    return MS_DB->lb_apply_many(MS_DB, b->ops, b->count) == MS_DB_OK ? 0 : -1;
+}
+
+void ms_lb_collect_parteria(struct ms_lb_batch *batch, char const *uuid,
+                            char const *username,
+                            struct ms_db_parteria const *rys, int64_t pvp_best,
+                            struct ms_lb_counters const *counts,
+                            double const *prev,
+                            double now[MS_LB_PARTERIA_BOARDS])
 {
     double v[MS_LB_PARTERIA_BOARDS];
     ms_lb_parteria_values(rys, v);
     if ((double)pvp_best > v[2])
         v[2] = (double)pvp_best;
     char *extra = name_json(username);
-    int failed = 0;
     for (int b = 0; b < MS_LB_PARTERIA_BOARDS; ++b)
     {
         if (b == 1 || b == 3)
@@ -182,22 +223,34 @@ int ms_lb_push_parteria(char const *uuid, char const *username,
         // what has not changed is not written again
         if (prev != NULL && prev[b] == v[b])
             continue;
-        if (apply(b, uuid, v[b], b == 2 ? ms_lb_max : ms_lb_set, extra) != 0)
-            ++failed;
-        else if (now != NULL)
+        batch_add(batch, b, uuid, v[b], b == 2 ? ms_lb_max : ms_lb_set, extra);
+        if (now != NULL)
             now[b] = v[b];
     }
     if (counts != NULL)
     {
-        if (counts->pvp_kills > 0 &&
-            apply(1, uuid, (double)counts->pvp_kills, ms_lb_add, extra) != 0)
-            ++failed;
-        if (counts->attempts > 0 &&
-            apply(3, uuid, (double)counts->attempts, ms_lb_add, extra) != 0)
-            ++failed;
+        if (counts->pvp_kills > 0)
+            batch_add(batch, 1, uuid, (double)counts->pvp_kills, ms_lb_add, extra);
+        if (counts->attempts > 0)
+            batch_add(batch, 3, uuid, (double)counts->attempts, ms_lb_add, extra);
     }
     free(extra);
-    return failed ? -1 : 0;
+}
+
+int ms_lb_push_parteria(char const *uuid, char const *username,
+                        struct ms_db_parteria const *rys, int64_t pvp_best,
+                        struct ms_lb_counters const *counts, double const *prev,
+                        double now[MS_LB_PARTERIA_BOARDS])
+{
+    struct ms_lb_batch batch = {0};
+    ms_lb_collect_parteria(&batch, uuid, username, rys, pvp_best, counts, prev,
+                           now);
+    int rc = ms_lb_batch_write(&batch);
+    ms_lb_batch_free(&batch);
+    if (rc != 0 && now != NULL)
+        for (int b = 0; b < MS_LB_PARTERIA_BOARDS; ++b)
+            now[b] = prev != NULL ? prev[b] : -1; // nothing of it was written
+    return rc;
 }
 
 int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
@@ -208,17 +261,17 @@ int ms_lb_push_gardn(char const *uuid, uint64_t kills, int have_stats,
         a.is_dev)
         return 0; // no such account, or one with everything: not on the boards
     char *extra = name_json(a.username);
-    int failed = 0;
     int const kills_board = MS_LB_PARTERIA_BOARDS;
-    if (kills > 0 && apply(kills_board, uuid, (double)kills, ms_lb_add, extra))
-        ++failed;
+    struct ms_lb_batch batch = {0};
+    if (kills > 0)
+        batch_add(&batch, kills_board, uuid, (double)kills, ms_lb_add, extra);
     if (have_stats)
     {
-        if (apply(kills_board + 1, uuid, (double)best_score, ms_lb_max, extra))
-            ++failed;
-        if (apply(kills_board + 2, uuid, (double)mythics, ms_lb_set, extra))
-            ++failed;
+        batch_add(&batch, kills_board + 1, uuid, (double)best_score, ms_lb_max, extra);
+        batch_add(&batch, kills_board + 2, uuid, (double)mythics, ms_lb_set, extra);
     }
+    int failed = ms_lb_batch_write(&batch);
+    ms_lb_batch_free(&batch);
     free(extra);
     return failed ? -1 : 0;
 }

@@ -55,6 +55,26 @@ struct ms_lb_counters
 void ms_lb_parteria_values(struct ms_db_parteria const *rys,
                            double out[MS_LB_PARTERIA_BOARDS]);
 
+// Board changes that are written together with ONE request to the database.
+struct ms_lb_batch
+{
+    struct ms_db_lb_op *ops;
+    int count;
+    int capacity;
+};
+void ms_lb_batch_free(struct ms_lb_batch *);
+// Writes everything in the batch with one request (nothing to do for an empty
+// one). 0 = it went through. All or nothing. Any thread.
+int ms_lb_batch_write(struct ms_lb_batch *);
+// Adds what ms_lb_push_parteria writes for the player (same arguments) to the
+// batch. `now` receives what the boards hold once the batch is written.
+void ms_lb_collect_parteria(struct ms_lb_batch *, char const *uuid,
+                            char const *username,
+                            struct ms_db_parteria const *rys, int64_t pvp_best,
+                            struct ms_lb_counters const *counts,
+                            double const *prev,
+                            double now[MS_LB_PARTERIA_BOARDS]);
+
 // Writes a player's Parteria numbers. `prev` holds what was written last (-1 =
 // not known) and only what changed is written; NULL writes everything. `now`
 // receives what is on the boards afterwards. `pvp_best` is the highest score the
