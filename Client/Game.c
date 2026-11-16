@@ -496,7 +496,7 @@ void rr_game_init(struct rr_game *this)
                     rr_ui_changelog_button_init(),
                     rr_ui_gardn_toggle_button_init(),
                     // the Github and Discord buttons are off for now
-                    // rr_ui_github_toggle_button_init(),
+                    rr_ui_github_toggle_button_init(),
                     // rr_ui_discord_toggle_button_init(),
                     NULL
                 ),
